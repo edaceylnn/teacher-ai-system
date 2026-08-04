@@ -1,0 +1,22 @@
+.DS_Store
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+*.egg-info/
+
+# Frontend
+node_modules/
+dist/
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3

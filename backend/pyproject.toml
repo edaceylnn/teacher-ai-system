@@ -1,0 +1,23 @@
+[project]
+name = "teacher-ai-system-api"
+version = "0.1.0"
+description = "Backend API for the Teacher AI System portfolio project."
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.16.0",
+    "fastapi>=0.116.0",
+    "psycopg[binary]>=3.2.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn[standard]>=0.35.0",
+    "pydantic-settings>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=8.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
