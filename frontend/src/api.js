@@ -43,6 +43,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateStudent: (studentId, payload) =>
+    request(`/students/${studentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteStudent: (studentId) =>
+    request(`/students/${studentId}`, {
+      method: "DELETE",
+    }),
   getStudentProfile: (studentId) => request(`/students/${studentId}/profile`),
   listLessons: (teacherId) => request(`/lessons?teacher_id=${teacherId}`),
   createLesson: (payload) =>
@@ -50,14 +59,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateLesson: (lessonId, payload) =>
+    request(`/lessons/${lessonId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteLesson: (lessonId) =>
+    request(`/lessons/${lessonId}`, {
+      method: "DELETE",
+    }),
   createGrade: (payload) =>
     request("/grades", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  listGrades: () => request("/grades"),
+  updateGrade: (gradeId, payload) =>
+    request(`/grades/${gradeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteGrade: (gradeId) =>
+    request(`/grades/${gradeId}`, {
+      method: "DELETE",
+    }),
   createAttendance: (payload) =>
     request("/attendance-records", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  updateAttendance: (attendanceId, payload) =>
+    request(`/attendance-records/${attendanceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteAttendance: (attendanceId) =>
+    request(`/attendance-records/${attendanceId}`, {
+      method: "DELETE",
     }),
 };

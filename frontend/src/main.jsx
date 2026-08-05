@@ -37,7 +37,9 @@ function App() {
   const [classrooms, setClassrooms] = useState([]);
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
   const [students, setStudents] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [grades, setGrades] = useState([]);
   const [selectedClassroomId, setSelectedClassroomId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -57,24 +59,44 @@ function App() {
   });
   const [editingClassroom, setEditingClassroom] = useState(null);
   const [studentForm, setStudentForm] = useState({ first_name: "", last_name: "" });
+  const [studentEditForm, setStudentEditForm] = useState({
+    first_name: "",
+    last_name: "",
+    observation_notes: "",
+  });
+  const [editingStudent, setEditingStudent] = useState(null);
   const [lessonForm, setLessonForm] = useState({ name: "" });
+  const [lessonEditForm, setLessonEditForm] = useState({ name: "" });
+  const [editingLesson, setEditingLesson] = useState(null);
   const [gradeForm, setGradeForm] = useState({
+    student_id: "",
     lesson_id: "",
     exam_name: "",
     score: "",
   });
+  const [gradeEditForm, setGradeEditForm] = useState({
+    lesson_id: "",
+    exam_name: "",
+    score: "",
+  });
+  const [editingGrade, setEditingGrade] = useState(null);
   const [attendanceForm, setAttendanceForm] = useState({
     date: "",
     status: "present",
   });
+  const [attendanceEditForm, setAttendanceEditForm] = useState({
+    date: "",
+    status: "present",
+  });
+  const [editingAttendance, setEditingAttendance] = useState(null);
 
   const selectedClassroom = classrooms.find(
     (classroom) => classroom.id === selectedClassroomId,
   );
-  const selectedStudent = students.find(
+  const selectedStudent = allStudents.find(
     (student) => student.id === selectedStudentId,
   );
-  const filteredStudents = students.filter((student) =>
+  const filteredStudents = allStudents.filter((student) =>
     `${student.first_name} ${student.last_name}`
       .toLocaleLowerCase("tr")
       .includes(searchTerm.toLocaleLowerCase("tr")),
@@ -118,9 +140,10 @@ function App() {
     setIsLoading(true);
     setError("");
     try {
-      const [classroomData, lessonData] = await Promise.all([
+      const [classroomData, lessonData, gradeData] = await Promise.all([
         api.listClassrooms(DEMO_TEACHER_ID),
         api.listLessons(DEMO_TEACHER_ID),
+        api.listGrades(),
       ]);
       const studentLists = await Promise.all(
         classroomData.map((classroom) => api.listStudents(classroom.id)),
@@ -129,9 +152,12 @@ function App() {
         acc[classroom.id] = studentLists[index].length;
         return acc;
       }, {});
+      const allStudentData = studentLists.flat();
       setClassrooms(classroomData);
       setClassroomStudentCounts(studentCounts);
+      setAllStudents(allStudentData);
       setLessons(lessonData);
+      setGrades(gradeData);
       setSelectedClassroomId(
         (current) => current || classroomData[0]?.id || null,
       );
@@ -152,13 +178,21 @@ function App() {
 
     const studentData = await api.listStudents(classroomId);
     setStudents(studentData);
+    setAllStudents((current) => {
+      const otherClassStudents = current.filter(
+        (student) => student.classroom_id !== classroomId,
+      );
+      return [...otherClassStudents, ...studentData].sort(
+        (first, second) => first.id - second.id,
+      );
+    });
     setClassroomStudentCounts((current) => ({
       ...current,
       [classroomId]: studentData.length,
     }));
     setSelectedStudentId((current) => {
       if (studentData.some((student) => student.id === current)) return current;
-      return studentData[0]?.id || null;
+      return null;
     });
   }
 
@@ -168,6 +202,10 @@ function App() {
       return;
     }
     setProfile(await api.getStudentProfile(studentId));
+  }
+
+  async function loadGrades() {
+    setGrades(await api.listGrades());
   }
 
   useEffect(() => {
@@ -279,6 +317,7 @@ function App() {
         observation_notes: null,
       });
       setStudents((current) => [...current, created]);
+      setAllStudents((current) => [...current, created]);
       setClassroomStudentCounts((current) => ({
         ...current,
         [selectedClassroomId]: (current[selectedClassroomId] || 0) + 1,
@@ -287,6 +326,56 @@ function App() {
       setSelectedStudentId(created.id);
       setActiveModal(null);
       showNotice("Öğrenci eklendi.");
+    });
+  }
+
+  async function handleUpdateStudent(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingStudent) throw new Error("Düzenlenecek öğrenci bulunamadı.");
+      const updated = await api.updateStudent(editingStudent.id, {
+        first_name: studentEditForm.first_name.trim(),
+        last_name: studentEditForm.last_name.trim(),
+        observation_notes: studentEditForm.observation_notes.trim() || null,
+      });
+      setStudents((current) =>
+        current.map((student) =>
+          student.id === updated.id ? updated : student,
+        ),
+      );
+      setAllStudents((current) =>
+        current.map((student) =>
+          student.id === updated.id ? updated : student,
+        ),
+      );
+      if (selectedStudentId === updated.id) await loadProfile(updated.id);
+      setStudentEditForm({ first_name: "", last_name: "", observation_notes: "" });
+      setEditingStudent(null);
+      setActiveModal(null);
+      showNotice("Öğrenci güncellendi.");
+    });
+  }
+
+  async function handleDeleteStudent(studentId) {
+    await runAction(async () => {
+      const shouldDelete = window.confirm("Bu öğrenci silinsin mi?");
+      if (!shouldDelete) return;
+
+      await api.deleteStudent(studentId);
+      const nextStudents = students.filter((student) => student.id !== studentId);
+      setStudents(nextStudents);
+      setAllStudents((current) =>
+        current.filter((student) => student.id !== studentId),
+      );
+      await loadGrades();
+      setClassroomStudentCounts((current) => ({
+        ...current,
+        [selectedClassroomId]: Math.max((current[selectedClassroomId] || 1) - 1, 0),
+      }));
+      if (selectedStudentId === studentId) {
+        setSelectedStudentId(nextStudents[0]?.id || null);
+      }
+      showNotice("Öğrenci silindi.");
     });
   }
 
@@ -304,20 +393,83 @@ function App() {
     });
   }
 
+  async function handleUpdateLesson(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingLesson) throw new Error("Düzenlenecek ders bulunamadı.");
+      const updated = await api.updateLesson(editingLesson.id, {
+        name: lessonEditForm.name.trim(),
+      });
+      setLessons((current) =>
+        current.map((lesson) => (lesson.id === updated.id ? updated : lesson)),
+      );
+      if (selectedStudentId) await loadProfile(selectedStudentId);
+      setLessonEditForm({ name: "" });
+      setEditingLesson(null);
+      setActiveModal(null);
+      showNotice("Ders güncellendi.");
+    });
+  }
+
+  async function handleDeleteLesson(lessonId) {
+    await runAction(async () => {
+      const shouldDelete = window.confirm("Bu ders ve bağlı notlar silinsin mi?");
+      if (!shouldDelete) return;
+
+      await api.deleteLesson(lessonId);
+      setLessons((current) => current.filter((lesson) => lesson.id !== lessonId));
+      await loadGrades();
+      if (selectedStudentId) await loadProfile(selectedStudentId);
+      showNotice("Ders silindi.");
+    });
+  }
+
   async function handleCreateGrade(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!selectedStudentId) throw new Error("Önce bir öğrenci seçmelisin.");
+      if (!gradeForm.student_id) throw new Error("Önce bir öğrenci seçmelisin.");
       await api.createGrade({
-        student_id: selectedStudentId,
+        student_id: Number(gradeForm.student_id),
         lesson_id: Number(gradeForm.lesson_id),
         exam_name: gradeForm.exam_name.trim(),
         score: gradeForm.score,
       });
-      setGradeForm({ lesson_id: "", exam_name: "", score: "" });
+      setGradeForm({ student_id: "", lesson_id: "", exam_name: "", score: "" });
       setActiveModal(null);
-      await loadProfile(selectedStudentId);
+      setSelectedStudentId(Number(gradeForm.student_id));
+      await loadGrades();
+      await loadProfile(Number(gradeForm.student_id));
       showNotice("Not kaydedildi.");
+    });
+  }
+
+  async function handleUpdateGrade(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingGrade) throw new Error("Düzenlenecek not bulunamadı.");
+      await api.updateGrade(editingGrade.id, {
+        lesson_id: Number(gradeEditForm.lesson_id),
+        exam_name: gradeEditForm.exam_name.trim(),
+        score: gradeEditForm.score,
+      });
+      setGradeEditForm({ lesson_id: "", exam_name: "", score: "" });
+      setEditingGrade(null);
+      setActiveModal(null);
+      await loadGrades();
+      if (selectedStudentId) await loadProfile(selectedStudentId);
+      showNotice("Not güncellendi.");
+    });
+  }
+
+  async function handleDeleteGrade(gradeId) {
+    await runAction(async () => {
+      const shouldDelete = window.confirm("Bu not silinsin mi?");
+      if (!shouldDelete) return;
+
+      await api.deleteGrade(gradeId);
+      await loadGrades();
+      if (selectedStudentId) await loadProfile(selectedStudentId);
+      showNotice("Not silindi.");
     });
   }
 
@@ -337,8 +489,37 @@ function App() {
     });
   }
 
+  async function handleUpdateAttendance(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingAttendance)
+        throw new Error("Düzenlenecek devamsızlık kaydı bulunamadı.");
+      await api.updateAttendance(editingAttendance.id, {
+        date: attendanceEditForm.date,
+        status: attendanceEditForm.status,
+      });
+      setAttendanceEditForm({ date: "", status: "present" });
+      setEditingAttendance(null);
+      setActiveModal(null);
+      await loadProfile(selectedStudentId);
+      showNotice("Devamsızlık güncellendi.");
+    });
+  }
+
+  async function handleDeleteAttendance(attendanceId) {
+    await runAction(async () => {
+      const shouldDelete = window.confirm("Bu devamsızlık kaydı silinsin mi?");
+      if (!shouldDelete) return;
+
+      await api.deleteAttendance(attendanceId);
+      await loadProfile(selectedStudentId);
+      showNotice("Devamsızlık silindi.");
+    });
+  }
+
   const shared = {
     activePage,
+    allStudents,
     attendanceRate,
     classroomGradeFilter,
     classroomSearchTerm,
@@ -346,6 +527,7 @@ function App() {
     classrooms,
     filteredStudents,
     gradeAverages,
+    grades,
     isStudentPickerOpen,
     lessons,
     overallAverage,
@@ -357,16 +539,29 @@ function App() {
     selectedStudentId,
     setActiveModal,
     setActivePage,
+    setAttendanceEditForm,
     setClassroomGradeFilter,
     setClassroomSearchTerm,
     setClassroomEditForm,
+    setEditingAttendance,
     setEditingClassroom,
+    setEditingGrade,
+    setEditingLesson,
+    setEditingStudent,
+    setGradeEditForm,
+    setGradeForm,
     setIsStudentPickerOpen,
+    setLessonEditForm,
     setSearchTerm,
     setSelectedClassroomId,
     setSelectedStudentId,
+    setStudentEditForm,
     students,
+    handleDeleteAttendance,
     handleDeleteClassroom,
+    handleDeleteGrade,
+    handleDeleteLesson,
+    handleDeleteStudent,
   };
 
   return (
@@ -385,7 +580,9 @@ function App() {
         {activePage === "classroomDetail" && (
           <ClassroomDetailPage {...shared} />
         )}
+        {activePage === "students" && <StudentsPage {...shared} />}
         {activePage === "gradebook" && <GradebookPage {...shared} />}
+        {activePage === "studentDetail" && <StudentDetailPage {...shared} />}
         {activePage === "attendance" && <AttendancePage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
         {activePage === "settings" && <SettingsPage />}
@@ -488,6 +685,45 @@ function App() {
               </button>
             </FormPanel>
           )}
+          {activeModal === "editStudent" && (
+            <FormPanel title="Öğrenciyi Düzenle" onSubmit={handleUpdateStudent}>
+              <input
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    first_name: event.target.value,
+                  }))
+                }
+                placeholder="Ad"
+                required
+                value={studentEditForm.first_name}
+              />
+              <input
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    last_name: event.target.value,
+                  }))
+                }
+                placeholder="Soyad"
+                required
+                value={studentEditForm.last_name}
+              />
+              <textarea
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    observation_notes: event.target.value,
+                  }))
+                }
+                placeholder="Gözlem notu"
+                value={studentEditForm.observation_notes}
+              />
+              <button className="primary-button" type="submit">
+                Değişiklikleri Kaydet
+              </button>
+            </FormPanel>
+          )}
           {activeModal === "lesson" && (
             <FormPanel title="Ders Ekle" onSubmit={handleCreateLesson}>
               <input
@@ -503,8 +739,40 @@ function App() {
               </button>
             </FormPanel>
           )}
+          {activeModal === "editLesson" && (
+            <FormPanel title="Dersi Düzenle" onSubmit={handleUpdateLesson}>
+              <input
+                onChange={(event) =>
+                  setLessonEditForm({ name: event.target.value })
+                }
+                placeholder="Matematik"
+                required
+                value={lessonEditForm.name}
+              />
+              <button className="primary-button" type="submit">
+                Değişiklikleri Kaydet
+              </button>
+            </FormPanel>
+          )}
           {activeModal === "grade" && (
             <FormPanel title="Not Gir" onSubmit={handleCreateGrade}>
+              <select
+                onChange={(event) =>
+                  setGradeForm((form) => ({
+                    ...form,
+                    student_id: event.target.value,
+                  }))
+                }
+                required
+                value={gradeForm.student_id}
+              >
+                <option value="">Öğrenci seç</option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.first_name} {student.last_name}
+                  </option>
+                ))}
+              </select>
               <select
                 onChange={(event) =>
                   setGradeForm((form) => ({
@@ -552,6 +820,55 @@ function App() {
               </button>
             </FormPanel>
           )}
+          {activeModal === "editGrade" && (
+            <FormPanel title="Notu Düzenle" onSubmit={handleUpdateGrade}>
+              <select
+                onChange={(event) =>
+                  setGradeEditForm((form) => ({
+                    ...form,
+                    lesson_id: event.target.value,
+                  }))
+                }
+                required
+                value={gradeEditForm.lesson_id}
+              >
+                <option value="">Ders seç</option>
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                onChange={(event) =>
+                  setGradeEditForm((form) => ({
+                    ...form,
+                    exam_name: event.target.value,
+                  }))
+                }
+                placeholder="1. Yazılı"
+                required
+                value={gradeEditForm.exam_name}
+              />
+              <input
+                max="100"
+                min="0"
+                onChange={(event) =>
+                  setGradeEditForm((form) => ({
+                    ...form,
+                    score: event.target.value,
+                  }))
+                }
+                placeholder="85"
+                required
+                type="number"
+                value={gradeEditForm.score}
+              />
+              <button className="primary-button" type="submit">
+                Değişiklikleri Kaydet
+              </button>
+            </FormPanel>
+          )}
           {activeModal === "attendance" && (
             <FormPanel
               title="Devamsızlık Gir"
@@ -583,6 +900,40 @@ function App() {
               </select>
               <button className="primary-button" type="submit">
                 Kaydet
+              </button>
+            </FormPanel>
+          )}
+          {activeModal === "editAttendance" && (
+            <FormPanel
+              title="Devamsızlığı Düzenle"
+              onSubmit={handleUpdateAttendance}
+            >
+              <input
+                onChange={(event) =>
+                  setAttendanceEditForm((form) => ({
+                    ...form,
+                    date: event.target.value,
+                  }))
+                }
+                required
+                type="date"
+                value={attendanceEditForm.date}
+              />
+              <select
+                onChange={(event) =>
+                  setAttendanceEditForm((form) => ({
+                    ...form,
+                    status: event.target.value,
+                  }))
+                }
+                value={attendanceEditForm.status}
+              >
+                <option value="present">Var</option>
+                <option value="absent">Yok</option>
+                <option value="excused">Mazeretli</option>
+              </select>
+              <button className="primary-button" type="submit">
+                Değişiklikleri Kaydet
               </button>
             </FormPanel>
           )}
@@ -634,6 +985,12 @@ function Sidebar({
           icon="school"
           label="Sınıflarım"
           onClick={() => setActivePage("classrooms")}
+        />
+        <NavItem
+          active={activePage === "students" || activePage === "studentDetail"}
+          icon="groups"
+          label="Öğrencilerim"
+          onClick={() => setActivePage("students")}
         />
         <NavItem
           active={activePage === "gradebook"}
@@ -904,24 +1261,29 @@ function ClassroomsPage(props) {
 
 function ClassroomDetailPage(props) {
   const {
-    filteredStudents,
-    gradeAverages,
     isStudentPickerOpen,
-    profile,
     searchTerm,
     selectedClassroom,
     selectedStudent,
     selectedStudentId,
     setActiveModal,
     setActivePage,
+    setEditingStudent,
     setIsStudentPickerOpen,
     setSearchTerm,
     setSelectedStudentId,
+    setStudentEditForm,
     students,
+    handleDeleteStudent,
   } = props;
+  const filteredClassStudents = students.filter((student) =>
+    `${student.first_name} ${student.last_name}`
+      .toLocaleLowerCase("tr")
+      .includes(searchTerm.toLocaleLowerCase("tr")),
+  );
 
   return (
-    <div className="grid-layout detail-layout">
+    <div className="wide-page">
       <section className="main-column">
         <div className="class-title-row">
           <div>
@@ -948,7 +1310,7 @@ function ClassroomDetailPage(props) {
           </button>
         </div>
         <StudentSearch
-          filteredStudents={filteredStudents}
+          filteredStudents={filteredClassStudents}
           isStudentPickerOpen={isStudentPickerOpen}
           searchTerm={searchTerm}
           selectedStudent={selectedStudent}
@@ -958,31 +1320,206 @@ function ClassroomDetailPage(props) {
           setSelectedStudentId={setSelectedStudentId}
         />
         <StudentTable
+          handleDeleteStudent={handleDeleteStudent}
           selectedStudentId={selectedStudentId}
+          setActiveModal={setActiveModal}
+          setEditingStudent={setEditingStudent}
           setSelectedStudentId={setSelectedStudentId}
+          setStudentEditForm={setStudentEditForm}
           students={students}
         />
-        {profile && (
-          <StudentPreview gradeAverages={gradeAverages} profile={profile} />
-        )}
+      </section>
+    </div>
+  );
+}
+
+function StudentsPage({
+  allStudents,
+  classrooms,
+  filteredStudents,
+  searchTerm,
+  selectedStudentId,
+  setActiveModal,
+  setActivePage,
+  setEditingStudent,
+  setGradeForm,
+  setSearchTerm,
+  setSelectedStudentId,
+  setStudentEditForm,
+  handleDeleteStudent,
+}) {
+  const classroomById = useMemo(
+    () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
+    [classrooms],
+  );
+  const visibleStudents = searchTerm ? filteredStudents : allStudents;
+
+  return (
+    <div className="wide-page">
+      <section className="hero-card">
+        <div>
+          <h1>Öğrencilerim</h1>
+          <p>Öğrenci profilleri, öğretmen yorumu ve detay kayıtları.</p>
+        </div>
+        <button
+          className="primary-button"
+          onClick={() => setActiveModal("student")}
+          type="button"
+        >
+          <Icon name="person_add" /> Öğrenci Ekle
+        </button>
       </section>
 
-      <RightPanel
-        selectedStudent={selectedStudent}
-        setActiveModal={setActiveModal}
-      />
+      <div className="student-search">
+        <Icon name="search" />
+        <input
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Öğrenci ara"
+          value={searchTerm}
+        />
+      </div>
+
+      <section className="student-table-card">
+        <div className="students-head">
+          <span>Öğrenci</span>
+          <span>Sınıf</span>
+          <span>Öğretmen Yorumu</span>
+          <span>İşlem</span>
+        </div>
+        {visibleStudents.map((student) => (
+          <div
+            className={
+              student.id === selectedStudentId
+                ? "students-row active"
+                : "students-row"
+            }
+            key={student.id}
+            onClick={() => {
+              setSelectedStudentId(student.id);
+              setGradeForm((form) => ({
+                ...form,
+                student_id: String(student.id),
+              }));
+              setActivePage("studentDetail");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setSelectedStudentId(student.id);
+                setGradeForm((form) => ({
+                  ...form,
+                  student_id: String(student.id),
+                }));
+                setActivePage("studentDetail");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="student-name">
+              <span className="student-avatar">
+                {student.first_name[0]}
+                {student.last_name[0]}
+              </span>
+              <strong>
+                {student.first_name} {student.last_name}
+              </strong>
+            </span>
+            <span>{classroomById.get(student.classroom_id)?.name || "-"}</span>
+            <span>{student.observation_notes || "Yorum girilmedi."}</span>
+            <span className="row-actions">
+              <button
+                aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
+                className="icon-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setEditingStudent(student);
+                  setStudentEditForm({
+                    first_name: student.first_name,
+                    last_name: student.last_name,
+                    observation_notes: student.observation_notes || "",
+                  });
+                  setActiveModal("editStudent");
+                }}
+                type="button"
+              >
+                <Icon name="edit" />
+              </button>
+              <button
+                aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
+                className="icon-action danger-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteStudent(student.id);
+                }}
+                type="button"
+              >
+                <Icon name="delete" />
+              </button>
+            </span>
+          </div>
+        ))}
+        {!visibleStudents.length && (
+          <p className="empty-note">Öğrenci bulunamadı.</p>
+        )}
+      </section>
     </div>
   );
 }
 
 function GradebookPage({
-  gradeAverages,
+  handleDeleteGrade,
+  handleDeleteLesson,
+  grades,
   lessons,
-  profile,
-  selectedStudent,
+  selectedStudentId,
   setActiveModal,
+  setEditingGrade,
+  setEditingLesson,
+  setGradeEditForm,
+  setGradeForm,
+  setLessonEditForm,
+  setSelectedStudentId,
   students,
 }) {
+  const currentStudentIds = useMemo(
+    () => new Set(students.map((student) => student.id)),
+    [students],
+  );
+  const studentById = useMemo(
+    () => new Map(students.map((student) => [student.id, student])),
+    [students],
+  );
+  const lessonById = useMemo(
+    () => new Map(lessons.map((lesson) => [lesson.id, lesson])),
+    [lessons],
+  );
+  const visibleGrades = useMemo(
+    () => grades.filter((grade) => currentStudentIds.has(grade.student_id)),
+    [currentStudentIds, grades],
+  );
+  const studentLessonAverages = useMemo(() => {
+    const grouped = visibleGrades.reduce((acc, grade) => {
+      const key = `${grade.student_id}:${grade.lesson_id}`;
+      const current = acc.get(key) || { total: 0, count: 0 };
+      current.total += Number(grade.score);
+      current.count += 1;
+      acc.set(key, current);
+      return acc;
+    }, new Map());
+
+    return new Map(
+      Array.from(grouped.entries()).map(([key, item]) => [
+        key,
+        Math.round((item.total / item.count) * 10) / 10,
+      ]),
+    );
+  }, [visibleGrades]);
+  const lessonColumns = lessons.length
+    ? ` repeat(${lessons.length}, minmax(100px, 1fr))`
+    : "";
+  const gradebookColumns = `minmax(180px, 1.4fr)${lessonColumns} 100px`;
+
   return (
     <div className="wide-page">
       <section className="hero-card">
@@ -992,14 +1529,62 @@ function GradebookPage({
         </div>
         <button
           className="primary-button"
-          onClick={() => setActiveModal("grade")}
+          onClick={() => {
+            setGradeForm((form) => ({
+              ...form,
+              student_id: selectedStudentId ? String(selectedStudentId) : "",
+            }));
+            setActiveModal("grade");
+          }}
           type="button"
         >
           <Icon name="upload" /> Not Gir
         </button>
       </section>
+      <section className="card record-card">
+        <div className="section-heading">
+          <h2>Dersler</h2>
+          <button
+            className="outline-button compact"
+            onClick={() => setActiveModal("lesson")}
+            type="button"
+          >
+            <Icon name="add" /> Ders Ekle
+          </button>
+        </div>
+        <div className="lesson-list">
+          {lessons.map((lesson) => (
+            <div className="lesson-row" key={lesson.id}>
+              <strong>{lesson.name}</strong>
+              <span className="row-actions">
+                <button
+                  aria-label={`${lesson.name} dersini düzenle`}
+                  className="icon-action"
+                  onClick={() => {
+                    setEditingLesson(lesson);
+                    setLessonEditForm({ name: lesson.name });
+                    setActiveModal("editLesson");
+                  }}
+                  type="button"
+                >
+                  <Icon name="edit" />
+                </button>
+                <button
+                  aria-label={`${lesson.name} dersini sil`}
+                  className="icon-action danger-action"
+                  onClick={() => handleDeleteLesson(lesson.id)}
+                  type="button"
+                >
+                  <Icon name="delete" />
+                </button>
+              </span>
+            </div>
+          ))}
+          {!lessons.length && <p className="empty-note">Henüz ders yok.</p>}
+        </div>
+      </section>
       <section className="student-table-card gradebook-card">
-        <div className="gradebook-head">
+        <div className="gradebook-head" style={{ gridTemplateColumns: gradebookColumns }}>
           <span>Öğrenci</span>
           {lessons.map((lesson) => (
             <span key={lesson.id}>{lesson.name}</span>
@@ -1007,28 +1592,313 @@ function GradebookPage({
           <span>Durum</span>
         </div>
         {students.map((student) => (
-          <div className="gradebook-row" key={student.id}>
+          <button
+            className={
+              student.id === selectedStudentId
+                ? "gradebook-row active"
+                : "gradebook-row"
+            }
+            style={{ gridTemplateColumns: gradebookColumns }}
+            key={student.id}
+            onClick={() => {
+              setSelectedStudentId(student.id);
+              setGradeForm((form) => ({
+                ...form,
+                student_id: String(student.id),
+              }));
+            }}
+            type="button"
+          >
             <strong>
               {student.first_name} {student.last_name}
             </strong>
-            {lessons.map((lesson, index) => (
-              <span key={lesson.id}>{index % 2 === 0 ? "88" : "92"}</span>
+            {lessons.map((lesson) => (
+              <span key={lesson.id}>
+                {studentLessonAverages.get(`${student.id}:${lesson.id}`) || "-"}
+              </span>
             ))}
-            <span className="status-chip inline">İyi</span>
-          </div>
+            <span className="status-chip inline">
+              {student.id === selectedStudentId ? "Seçili" : "Seç"}
+            </span>
+          </button>
         ))}
       </section>
-      {selectedStudent && profile && (
-        <StudentPreview gradeAverages={gradeAverages} profile={profile} />
-      )}
+      <section className="student-table-card grade-record-card">
+        <div className="record-head grade-record-head">
+          <span>Öğrenci</span>
+          <span>Kayıt</span>
+          <span>Ders</span>
+          <span>Puan</span>
+          <span>İşlem</span>
+        </div>
+        {visibleGrades.map((grade) => (
+          <div className="record-row grade-record-row" key={grade.id}>
+            <strong>
+              {studentById.get(grade.student_id)?.first_name}{" "}
+              {studentById.get(grade.student_id)?.last_name}
+            </strong>
+            <strong>{grade.exam_name}</strong>
+            <span>{lessonById.get(grade.lesson_id)?.name || "Ders"}</span>
+            <span>{grade.score}</span>
+            <span className="row-actions">
+              <button
+                aria-label={`${grade.exam_name} notunu düzenle`}
+                className="icon-action"
+                onClick={() => {
+                  setEditingGrade(grade);
+                  setGradeEditForm({
+                    lesson_id: String(grade.lesson_id),
+                    exam_name: grade.exam_name,
+                    score: String(grade.score),
+                  });
+                  setActiveModal("editGrade");
+                }}
+                type="button"
+              >
+                <Icon name="edit" />
+              </button>
+              <button
+                aria-label={`${grade.exam_name} notunu sil`}
+                className="icon-action danger-action"
+                onClick={() => handleDeleteGrade(grade.id)}
+                type="button"
+              >
+                <Icon name="delete" />
+              </button>
+            </span>
+          </div>
+        ))}
+        {!visibleGrades.length && <p className="empty-note">Henüz not kaydı yok.</p>}
+      </section>
+    </div>
+  );
+}
+
+function StudentDetailPage({
+  attendanceRate,
+  gradeAverages,
+  overallAverage,
+  profile,
+  selectedStudent,
+  selectedStudentId,
+  setActiveModal,
+  setActivePage,
+  setEditingGrade,
+  setEditingStudent,
+  setGradeEditForm,
+  setGradeForm,
+  setStudentEditForm,
+  handleDeleteGrade,
+}) {
+  const gradesByLesson = useMemo(() => {
+    if (!profile?.grades?.length) return [];
+    const grouped = profile.grades.reduce((acc, grade) => {
+      const current = acc.get(grade.lesson_name) || [];
+      current.push(grade);
+      acc.set(grade.lesson_name, current);
+      return acc;
+    }, new Map());
+
+    return Array.from(grouped.entries()).map(([lessonName, grades]) => ({
+      lessonName,
+      grades,
+      average:
+        Math.round(
+          (grades.reduce((sum, grade) => sum + Number(grade.score), 0) /
+            grades.length) *
+            10,
+        ) / 10,
+    }));
+  }, [profile]);
+
+  if (!selectedStudent || !profile) {
+    return (
+      <section className="hero-card">
+        <div>
+          <h1>Öğrenci Detayı</h1>
+          <p>Detayları görmek için Öğrencilerim listesinden bir öğrenci seç.</p>
+        </div>
+        <button
+          className="outline-button"
+          onClick={() => setActivePage("students")}
+          type="button"
+        >
+          <Icon name="arrow_back" /> Öğrencilere Dön
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <div className="wide-page">
+      <section className="student-detail-hero">
+        <div>
+          <button
+            className="link-button back-link"
+            onClick={() => setActivePage("students")}
+            type="button"
+          >
+            <Icon name="arrow_back" /> Öğrencilere dön
+          </button>
+          <h1>
+            {profile.first_name} {profile.last_name}
+          </h1>
+          <p>
+            {profile.classroom.name} Sınıfı · Öğrenci kayıt no: {profile.id}
+          </p>
+        </div>
+        <div className="student-detail-actions">
+          <button
+            className="outline-button"
+            onClick={() => {
+              setEditingStudent(selectedStudent);
+              setStudentEditForm({
+                first_name: selectedStudent.first_name,
+                last_name: selectedStudent.last_name,
+                observation_notes: selectedStudent.observation_notes || "",
+              });
+              setActiveModal("editStudent");
+            }}
+            type="button"
+          >
+            <Icon name="edit" /> Öğrenciyi Düzenle
+          </button>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setGradeForm((form) => ({
+                ...form,
+                student_id: String(selectedStudentId),
+              }));
+              setActiveModal("grade");
+            }}
+            type="button"
+          >
+            <Icon name="upload" /> Not Gir
+          </button>
+        </div>
+      </section>
+
+      <section className="student-detail-stats">
+        <StatCard
+          icon="analytics"
+          label="Genel Ortalama"
+          trend="Kayıtlı notlar"
+          value={overallAverage}
+        />
+        <StatCard
+          icon="menu_book"
+          label="Ders Sayısı"
+          trend="Not girilen"
+          value={gradesByLesson.length}
+        />
+        <StatCard
+          icon="fact_check"
+          label="Devam Oranı"
+          trend="Seçili öğrenci"
+          value={attendanceRate}
+        />
+      </section>
+
+      <section className="student-detail-grid">
+        <div className="detail-main">
+          <section className="student-table-card">
+            <div className="detail-section-head">
+              <h2>Ders ve Notlar</h2>
+              <span>{profile.grades.length} kayıt</span>
+            </div>
+            {gradesByLesson.map((lessonGroup) => (
+              <div className="lesson-grade-group" key={lessonGroup.lessonName}>
+                <div className="lesson-grade-summary">
+                  <strong>{lessonGroup.lessonName}</strong>
+                  <span>Ortalama: {lessonGroup.average}</span>
+                </div>
+                {lessonGroup.grades.map((grade) => (
+                  <div className="student-grade-row" key={grade.id}>
+                    <span>{grade.exam_name}</span>
+                    <strong>{grade.score}</strong>
+                    <span className="row-actions">
+                      <button
+                        aria-label={`${grade.exam_name} notunu düzenle`}
+                        className="icon-action"
+                        onClick={() => {
+                          setEditingGrade(grade);
+                          setGradeEditForm({
+                            lesson_id: String(grade.lesson_id),
+                            exam_name: grade.exam_name,
+                            score: String(grade.score),
+                          });
+                          setActiveModal("editGrade");
+                        }}
+                        type="button"
+                      >
+                        <Icon name="edit" />
+                      </button>
+                      <button
+                        aria-label={`${grade.exam_name} notunu sil`}
+                        className="icon-action danger-action"
+                        onClick={() => handleDeleteGrade(grade.id)}
+                        type="button"
+                      >
+                        <Icon name="delete" />
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {!gradesByLesson.length && (
+              <p className="empty-note">Bu öğrenci için henüz not kaydı yok.</p>
+            )}
+          </section>
+        </div>
+
+        <aside className="detail-side">
+          <section className="card detail-note-card">
+            <div className="detail-section-head">
+              <h2>Öğretmen Yorumu</h2>
+            </div>
+            <p>{profile.observation_notes || "Henüz öğretmen yorumu girilmedi."}</p>
+          </section>
+
+          <section className="card detail-note-card">
+            <div className="detail-section-head">
+              <h2>Ders Ortalamaları</h2>
+            </div>
+            <div className="average-chips detail-average-chips">
+              {gradeAverages.map((item) => (
+                <span key={item.lessonName}>
+                  {item.lessonName}: {item.average}
+                </span>
+              ))}
+              {!gradeAverages.length && <p>Henüz ortalama yok.</p>}
+            </div>
+          </section>
+
+          <section className="card detail-note-card">
+            <div className="detail-section-head">
+              <h2>Devamsızlık</h2>
+            </div>
+            <div className="attendance-summary-list">
+              <span>Var: {profile.attendance_summary.present}</span>
+              <span>Yok: {profile.attendance_summary.absent}</span>
+              <span>Mazeretli: {profile.attendance_summary.excused}</span>
+              <span>Toplam: {profile.attendance_summary.total}</span>
+            </div>
+          </section>
+        </aside>
+      </section>
     </div>
   );
 }
 
 function AttendancePage({
+  handleDeleteAttendance,
   profile,
   selectedStudent,
   setActiveModal,
+  setAttendanceEditForm,
+  setEditingAttendance,
   students,
 }) {
   return (
@@ -1072,6 +1942,57 @@ function AttendancePage({
             </span>
           </div>
         ))}
+      </section>
+      <section className="student-table-card attendance-record-card">
+        <div className="record-head">
+          <span>Seçili Öğrenci Devamsızlıkları</span>
+          <span>Tarih</span>
+          <span>Durum</span>
+          <span>İşlem</span>
+        </div>
+        {profile?.attendance_records?.map((attendance) => (
+          <div className="record-row" key={attendance.id}>
+            <strong>
+              {selectedStudent
+                ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
+                : "Öğrenci"}
+            </strong>
+            <span>{attendance.date}</span>
+            <span>{attendanceLabels[attendance.status]}</span>
+            <span className="row-actions">
+              <button
+                aria-label={`${attendance.date} devamsızlık kaydını düzenle`}
+                className="icon-action"
+                onClick={() => {
+                  setEditingAttendance(attendance);
+                  setAttendanceEditForm({
+                    date: attendance.date,
+                    status: attendance.status,
+                  });
+                  setActiveModal("editAttendance");
+                }}
+                type="button"
+              >
+                <Icon name="edit" />
+              </button>
+              <button
+                aria-label={`${attendance.date} devamsızlık kaydını sil`}
+                className="icon-action danger-action"
+                onClick={() => handleDeleteAttendance(attendance.id)}
+                type="button"
+              >
+                <Icon name="delete" />
+              </button>
+            </span>
+          </div>
+        ))}
+        {!profile?.attendance_records?.length && (
+          <p className="empty-note">
+            {selectedStudent
+              ? "Henüz devamsızlık kaydı yok."
+              : "Öğrenci seçilmedi."}
+          </p>
+        )}
       </section>
     </div>
   );
@@ -1252,7 +2173,15 @@ function SearchableSelect({ label, onChange, options, placeholder, value }) {
   );
 }
 
-function StudentTable({ selectedStudentId, setSelectedStudentId, students }) {
+function StudentTable({
+  handleDeleteStudent,
+  selectedStudentId,
+  setActiveModal,
+  setEditingStudent,
+  setSelectedStudentId,
+  setStudentEditForm,
+  students,
+}) {
   return (
     <section className="student-table-card">
       <div className="table-head">
@@ -1262,7 +2191,7 @@ function StudentTable({ selectedStudentId, setSelectedStudentId, students }) {
         <span>İşlem</span>
       </div>
       {students.map((student) => (
-        <button
+        <div
           className={
             student.id === selectedStudentId
               ? "student-row active"
@@ -1270,7 +2199,14 @@ function StudentTable({ selectedStudentId, setSelectedStudentId, students }) {
           }
           key={student.id}
           onClick={() => setSelectedStudentId(student.id)}
-          type="button"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setSelectedStudentId(student.id);
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
           <span className="student-name">
             <span className="student-avatar">
@@ -1286,8 +2222,37 @@ function StudentTable({ selectedStudentId, setSelectedStudentId, students }) {
             <b>B+</b>
           </span>
           <span className="attendance-ok">● %98</span>
-          <span className="view-profile">Profili Gör</span>
-        </button>
+          <span className="row-actions">
+            <button
+              aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
+              className="icon-action"
+              onClick={(event) => {
+                event.stopPropagation();
+                setEditingStudent(student);
+                setStudentEditForm({
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  observation_notes: student.observation_notes || "",
+                });
+                setActiveModal("editStudent");
+              }}
+              type="button"
+            >
+              <Icon name="edit" />
+            </button>
+            <button
+              aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
+              className="icon-action danger-action"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDeleteStudent(student.id);
+              }}
+              type="button"
+            >
+              <Icon name="delete" />
+            </button>
+          </span>
+        </div>
       ))}
     </section>
   );
