@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student
+from app.schemas.pagination import PageResponse
 from app.schemas.student import (
     StudentCreate,
     StudentProfileAttendanceRecord,
@@ -28,6 +29,10 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> Stu
         classroom_id=payload.classroom_id,
         first_name=payload.first_name,
         last_name=payload.last_name,
+        parent_full_name=payload.parent_full_name,
+        parent_phone=payload.parent_phone,
+        parent_email=payload.parent_email,
+        home_address=payload.home_address,
         observation_notes=payload.observation_notes,
     )
     db.add(student)
@@ -36,13 +41,32 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> Stu
     return student
 
 
-@router.get("", response_model=list[StudentResponse])
-def list_students(classroom_id: int | None = None, db: Session = Depends(get_db)) -> list[Student]:
+@router.get("", response_model=PageResponse[StudentResponse])
+def list_students(
+    classroom_id: int | None = None,
+    search: str | None = None,
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> PageResponse[StudentResponse]:
     statement = select(Student).order_by(Student.id)
     if classroom_id is not None:
         statement = statement.where(Student.classroom_id == classroom_id)
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        statement = statement.where(
+            or_(
+                Student.first_name.ilike(search_pattern),
+                Student.last_name.ilike(search_pattern),
+            )
+        )
 
-    return list(db.scalars(statement).all())
+    total = (
+        db.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+        or 0
+    )
+    items = list(db.scalars(statement.limit(limit).offset(offset)).all())
+    return PageResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{student_id}", response_model=StudentResponse)

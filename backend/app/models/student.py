@@ -12,6 +12,10 @@ class Student(TimestampMixin, Base):
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), nullable=False, index=True)
     first_name: Mapped[str] = mapped_column(String(80), nullable=False)
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    parent_full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    parent_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    parent_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    home_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     observation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     classroom: Mapped["Classroom"] = relationship(back_populates="students")
@@ -27,4 +31,3 @@ class Student(TimestampMixin, Base):
         back_populates="student",
         cascade="all, delete-orphan",
     )
-

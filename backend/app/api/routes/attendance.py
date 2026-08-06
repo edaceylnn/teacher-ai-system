@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Attendance, Student
 from app.schemas.attendance import AttendanceCreate, AttendanceResponse, AttendanceUpdate
+from app.schemas.pagination import PageResponse
 
 router = APIRouter(prefix="/attendance-records", tags=["attendance"])
 
@@ -29,16 +30,23 @@ def create_attendance(payload: AttendanceCreate, db: Session = Depends(get_db)) 
     return attendance
 
 
-@router.get("", response_model=list[AttendanceResponse])
+@router.get("", response_model=PageResponse[AttendanceResponse])
 def list_attendance_records(
     student_id: int | None = None,
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-) -> list[Attendance]:
+) -> PageResponse[AttendanceResponse]:
     statement = select(Attendance).order_by(Attendance.date, Attendance.id)
     if student_id is not None:
         statement = statement.where(Attendance.student_id == student_id)
 
-    return list(db.scalars(statement).all())
+    total = (
+        db.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+        or 0
+    )
+    items = list(db.scalars(statement.limit(limit).offset(offset)).all())
+    return PageResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{attendance_id}", response_model=AttendanceResponse)

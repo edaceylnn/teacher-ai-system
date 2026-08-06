@@ -9,6 +9,10 @@ from app.models import AttendanceStatus
 class StudentBase(BaseModel):
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
+    parent_full_name: str | None = Field(default=None, max_length=120)
+    parent_phone: str | None = Field(default=None, max_length=40)
+    parent_email: str | None = Field(default=None, max_length=255)
+    home_address: str | None = None
     observation_notes: str | None = None
 
 
@@ -20,6 +24,10 @@ class StudentUpdate(BaseModel):
     classroom_id: int | None = None
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name: str | None = Field(default=None, min_length=1, max_length=80)
+    parent_full_name: str | None = Field(default=None, max_length=120)
+    parent_phone: str | None = Field(default=None, max_length=40)
+    parent_email: str | None = Field(default=None, max_length=255)
+    home_address: str | None = None
     observation_notes: str | None = None
 
 

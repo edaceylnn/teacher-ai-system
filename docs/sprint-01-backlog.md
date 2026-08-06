@@ -29,9 +29,9 @@ Sprint sonunda kullanıcı şu akışı tamamlayabilmeli:
 | DEV-003 | PostgreSQL modellerini oluştur | Developer | Must | Done |
 | DEV-004 | Öğrenci ve sınıf CRUD endpointleri yaz | Developer | Must | Done |
 | DEV-005 | Frontend dashboard iskeletini kur | Developer | Must | Done |
-| AI-001 | OpenAI servis katmanı tasarla | AI Engineer | Must | Todo |
-| AI-002 | Karne yorumu structured output şeması oluştur | AI Engineer | Must | Todo |
-| AI-003 | Veli mesajı prompt şablonu oluştur | AI Engineer | Must | Todo |
+| AI-001 | OpenAI servis katmanı tasarla | AI Engineer | Must | Done |
+| AI-002 | Karne yorumu structured output şeması oluştur | AI Engineer | Must | Done |
+| AI-003 | Veli mesajı prompt şablonu oluştur | AI Engineer | Must | Done |
 | QA-001 | Demo senaryosu için örnek veri hazırla | QA | Should | Todo |
 
 ## Günlük Plan
@@ -77,24 +77,24 @@ Sprint sonunda kullanıcı şu akışı tamamlayabilmeli:
 
 ### Gün 8
 
-- OpenAI servis katmanı
-- AI config ve model ayarları
+- OpenAI servis katmanı - Done
+- AI config ve model ayarları - Done
 
 ### Gün 9
 
-- Karne yorumu prompt ve JSON şeması
+- Karne yorumu prompt ve JSON şeması - Done
 
 ### Gün 10
 
-- AI karne yorumu endpointi
+- AI karne yorumu endpointi - Done
 
 ### Gün 11
 
-- Veli mesajı üretimi
+- Veli mesajı üretimi - Done
 
 ### Gün 12
 
-- AI çıktısını database'e kaydetme
+- AI çıktısını database'e kaydetme - Done
 
 ### Gün 13
 

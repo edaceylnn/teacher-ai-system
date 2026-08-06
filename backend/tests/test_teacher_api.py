@@ -101,4 +101,4 @@ def test_classrooms_can_be_filtered_by_teacher(client: TestClient) -> None:
     response = client.get("/classrooms", params={"teacher_id": first_teacher["id"]})
 
     assert response.status_code == 200
-    assert [classroom["name"] for classroom in response.json()] == ["5-A"]
+    assert [classroom["name"] for classroom in response.json()["items"]] == ["5-A"]

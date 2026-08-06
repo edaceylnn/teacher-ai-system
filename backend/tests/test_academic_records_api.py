@@ -78,7 +78,9 @@ def test_lesson_crud_flow(client: TestClient, teacher: Teacher) -> None:
 
     list_response = client.get("/lessons", params={"teacher_id": teacher.id})
     assert list_response.status_code == 200
-    assert [lesson["name"] for lesson in list_response.json()] == ["Matematik"]
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert [lesson["name"] for lesson in list_payload["items"]] == ["Matematik"]
 
     update_response = client.patch(f"/lessons/{created['id']}", json={"name": "Turkce"})
     assert update_response.status_code == 200
@@ -120,7 +122,9 @@ def test_grade_crud_flow(client: TestClient, teacher: Teacher, student: dict) ->
 
     list_response = client.get("/grades", params={"student_id": student["id"]})
     assert list_response.status_code == 200
-    assert [grade["exam_name"] for grade in list_response.json()] == ["1. Yazili"]
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert [grade["exam_name"] for grade in list_payload["items"]] == ["1. Yazili"]
 
     update_response = client.patch(f"/grades/{created['id']}", json={"score": "91.00"})
     assert update_response.status_code == 200
@@ -131,6 +135,64 @@ def test_grade_crud_flow(client: TestClient, teacher: Teacher, student: dict) ->
 
     missing_response = client.get(f"/grades/{created['id']}")
     assert missing_response.status_code == 404
+
+
+def test_grades_can_be_filtered_by_classroom(client: TestClient, teacher: Teacher) -> None:
+    first_classroom = client.post(
+        "/classrooms",
+        json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"},
+    ).json()
+    second_classroom = client.post(
+        "/classrooms",
+        json={"teacher_id": teacher.id, "name": "6-A", "grade_level": "6"},
+    ).json()
+    first_student = client.post(
+        "/students",
+        json={
+            "classroom_id": first_classroom["id"],
+            "first_name": "Ada",
+            "last_name": "Yilmaz",
+        },
+    ).json()
+    second_student = client.post(
+        "/students",
+        json={
+            "classroom_id": second_classroom["id"],
+            "first_name": "Mert",
+            "last_name": "Demir",
+        },
+    ).json()
+    lesson = client.post(
+        "/lessons",
+        json={"teacher_id": teacher.id, "name": "Matematik"},
+    ).json()
+    client.post(
+        "/grades",
+        json={
+            "student_id": first_student["id"],
+            "lesson_id": lesson["id"],
+            "exam_name": "1. Yazili",
+            "score": "80.00",
+        },
+    )
+    client.post(
+        "/grades",
+        json={
+            "student_id": second_student["id"],
+            "lesson_id": lesson["id"],
+            "exam_name": "2. Yazili",
+            "score": "90.00",
+        },
+    )
+
+    response = client.get("/grades", params={"classroom_id": first_classroom["id"]})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert [grade["student_id"] for grade in payload["items"]] == [
+        first_student["id"],
+    ]
 
 
 def test_create_grade_requires_existing_student_and_lesson(client: TestClient, teacher: Teacher, student: dict) -> None:
@@ -165,7 +227,9 @@ def test_attendance_crud_flow(client: TestClient, student: dict) -> None:
 
     list_response = client.get("/attendance-records", params={"student_id": student["id"]})
     assert list_response.status_code == 200
-    assert [record["status"] for record in list_response.json()] == ["present"]
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert [record["status"] for record in list_payload["items"]] == ["present"]
 
     update_response = client.patch(f"/attendance-records/{created['id']}", json={"status": "excused"})
     assert update_response.status_code == 200

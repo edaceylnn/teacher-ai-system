@@ -21,8 +21,44 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+function buildQuery(params) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, value);
+    }
+  });
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
+function pageItems(page) {
+  return Array.isArray(page) ? page : page.items;
+}
+
+function normalizePage(page, fallbackLimit = 25, fallbackOffset = 0) {
+  if (!Array.isArray(page)) return page;
+  return {
+    items: page,
+    total: page.length,
+    limit: fallbackLimit,
+    offset: fallbackOffset,
+  };
+}
+
 export const api = {
-  listClassrooms: (teacherId) => request(`/classrooms?teacher_id=${teacherId}`),
+  listClassroomsPage: (teacherId, pagination = {}) =>
+    request(
+      `/classrooms${buildQuery({
+        teacher_id: teacherId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  listClassrooms: async (teacherId, pagination = { limit: 500, offset: 0 }) =>
+    pageItems(await api.listClassroomsPage(teacherId, pagination)),
   createClassroom: (payload) =>
     request("/classrooms", {
       method: "POST",
@@ -37,7 +73,19 @@ export const api = {
     request(`/classrooms/${classroomId}`, {
       method: "DELETE",
     }),
-  listStudents: (classroomId) => request(`/students?classroom_id=${classroomId}`),
+  listStudentsPage: (classroomId, pagination = {}) =>
+    request(
+      `/students${buildQuery({
+        classroom_id: classroomId,
+        search: pagination.search,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  listStudents: async (classroomId, pagination = { limit: 500, offset: 0 }) =>
+    pageItems(await api.listStudentsPage(classroomId, pagination)),
   createStudent: (payload) =>
     request("/students", {
       method: "POST",
@@ -53,7 +101,18 @@ export const api = {
       method: "DELETE",
     }),
   getStudentProfile: (studentId) => request(`/students/${studentId}/profile`),
-  listLessons: (teacherId) => request(`/lessons?teacher_id=${teacherId}`),
+  listLessonsPage: (teacherId, pagination = {}) =>
+    request(
+      `/lessons${buildQuery({
+        teacher_id: teacherId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  listLessons: async (teacherId, pagination = { limit: 500, offset: 0 }) =>
+    pageItems(await api.listLessonsPage(teacherId, pagination)),
   createLesson: (payload) =>
     request("/lessons", {
       method: "POST",
@@ -73,7 +132,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  listGrades: () => request("/grades"),
+  listGradesPage: (pagination = {}) =>
+    request(
+      `/grades${buildQuery({
+        student_id: pagination.studentId,
+        lesson_id: pagination.lessonId,
+        classroom_id: pagination.classroomId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  listGrades: async (pagination = { limit: 500, offset: 0 }) =>
+    pageItems(await api.listGradesPage(pagination)),
   updateGrade: (gradeId, payload) =>
     request(`/grades/${gradeId}`, {
       method: "PATCH",
@@ -88,6 +160,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  listAttendancePage: (pagination = {}) =>
+    request(
+      `/attendance-records${buildQuery({
+        student_id: pagination.studentId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
   updateAttendance: (attendanceId, payload) =>
     request(`/attendance-records/${attendanceId}`, {
       method: "PATCH",
@@ -96,5 +178,21 @@ export const api = {
   deleteAttendance: (attendanceId) =>
     request(`/attendance-records/${attendanceId}`, {
       method: "DELETE",
+    }),
+  generateReportComment: (studentId) =>
+    request("/ai/report-comments", {
+      method: "POST",
+      body: JSON.stringify({ student_id: studentId }),
+    }),
+  generateParentMessage: (studentId) =>
+    request("/ai/parent-messages", {
+      method: "POST",
+      body: JSON.stringify({ student_id: studentId }),
+    }),
+  listAIOutputs: (studentId) => request(`/ai/outputs?student_id=${studentId}`),
+  updateAIOutput: (outputId, outputPayload) =>
+    request(`/ai/outputs/${outputId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ output_payload: outputPayload }),
     }),
 };

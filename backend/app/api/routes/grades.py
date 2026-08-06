@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Grade, Lesson, Student
 from app.schemas.grade import GradeCreate, GradeResponse, GradeUpdate
+from app.schemas.pagination import PageResponse
 
 router = APIRouter(prefix="/grades", tags=["grades"])
 
@@ -36,19 +37,31 @@ def create_grade(payload: GradeCreate, db: Session = Depends(get_db)) -> Grade:
     return grade
 
 
-@router.get("", response_model=list[GradeResponse])
+@router.get("", response_model=PageResponse[GradeResponse])
 def list_grades(
     student_id: int | None = None,
     lesson_id: int | None = None,
+    classroom_id: int | None = None,
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-) -> list[Grade]:
+) -> PageResponse[GradeResponse]:
     statement = select(Grade).order_by(Grade.id)
     if student_id is not None:
         statement = statement.where(Grade.student_id == student_id)
     if lesson_id is not None:
         statement = statement.where(Grade.lesson_id == lesson_id)
+    if classroom_id is not None:
+        statement = statement.join(Student, Student.id == Grade.student_id).where(
+            Student.classroom_id == classroom_id
+        )
 
-    return list(db.scalars(statement).all())
+    total = (
+        db.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+        or 0
+    )
+    items = list(db.scalars(statement.limit(limit).offset(offset)).all())
+    return PageResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{grade_id}", response_model=GradeResponse)

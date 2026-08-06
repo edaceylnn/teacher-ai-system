@@ -36,6 +36,15 @@ alembic upgrade head
 python -m app.db.seed
 ```
 
+## AI Configuration
+
+AI endpoints use the OpenAI Responses API when `OPENAI_API_KEY` is set.
+
+```bash
+OPENAI_API_KEY="your-api-key"
+OPENAI_MODEL="gpt-5"
+```
+
 ## Health Check
 
 ```bash
@@ -76,6 +85,8 @@ curl http://127.0.0.1:8000/health
 - `GET /attendance-records/{attendance_id}`
 - `PATCH /attendance-records/{attendance_id}`
 - `DELETE /attendance-records/{attendance_id}`
+- `POST /ai/report-comments`
+- `POST /ai/parent-messages`
 
 ## Current Models
 

@@ -110,6 +110,10 @@ p {
   padding: 0 16px;
 }
 
+.student-search:has(> .clear-search-button) {
+  grid-template-columns: 24px minmax(0, 1fr) 32px;
+}
+
 .global-search input,
 .student-search input {
   background: transparent;
@@ -567,6 +571,39 @@ p {
   position: relative;
 }
 
+.student-combobox input {
+  padding-right: 34px;
+}
+
+.clear-search-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+
+.student-combobox .clear-search-button {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.clear-search-button:hover {
+  background: #e7edfb;
+  color: var(--primary);
+}
+
+.clear-search-button .material-symbols-outlined {
+  font-size: 20px;
+}
+
 .student-options {
   background: var(--card);
   border: 1px solid var(--outline);
@@ -609,7 +646,11 @@ p {
 .students-row {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(180px, 1.4fr) 150px 120px 90px;
+}
+
+.table-head,
+.student-row {
+  grid-template-columns: minmax(220px, 1fr) 90px;
 }
 
 .students-head,
@@ -659,6 +700,16 @@ p {
   align-items: center;
   display: flex;
   gap: 12px;
+}
+
+.student-directory-info {
+  display: grid;
+  gap: 4px;
+}
+
+.student-directory-info small {
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .student-avatar {
@@ -963,6 +1014,17 @@ p {
   transform: translateY(-1px);
 }
 
+.icon-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.icon-action:disabled:hover {
+  background: var(--surface-low);
+  color: var(--primary);
+  transform: none;
+}
+
 .icon-action.danger-action {
   background: var(--error-container);
   color: var(--error);
@@ -1056,6 +1118,10 @@ p {
   padding: 16px 20px;
 }
 
+.success-note {
+  color: #00693d;
+}
+
 .gradebook-head,
 .gradebook-row,
 .attendance-head,
@@ -1102,11 +1168,198 @@ p {
   background: var(--surface-highest);
 }
 
+.attendance-title {
+  margin-bottom: 18px;
+}
+
+.attendance-title h1 {
+  font-size: 28px;
+  margin: 0;
+}
+
+.attendance-calendar-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.attendance-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 1fr) auto;
+}
+
+.attendance-student-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.attendance-student-picker > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.attendance-student-picker .student-search {
+  border-radius: 10px;
+  margin-bottom: 0;
+  max-width: 560px;
+}
+
+.attendance-student-picker .student-options {
+  left: 0;
+  right: 0;
+}
+
+.attendance-toolbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.calendar-controls {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid #d7e3ff;
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 8px;
+}
+
+.calendar-controls strong {
+  min-width: 150px;
+  text-align: center;
+}
+
+.attendance-calendar-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  margin-bottom: 18px;
+}
+
+.attendance-calendar-card,
+.attendance-summary-card {
+  background: var(--card);
+  border: 1px solid #d7e3ff;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(53, 37, 205, 0.06);
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  background: var(--surface-low);
+  border-bottom: 1px solid #e7edfb;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.calendar-weekdays span {
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.calendar-grid {
+  padding: 10px;
+}
+
+.calendar-day {
+  align-content: space-between;
+  background: #fbfcff;
+  border: 1px solid #e7edfb;
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  min-height: 92px;
+  padding: 10px;
+  text-align: left;
+}
+
+.calendar-day:hover {
+  border-color: var(--primary-container);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.calendar-day.empty {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  cursor: default;
+}
+
+.calendar-day span {
+  font-weight: 800;
+}
+
+.calendar-day strong {
+  border-radius: 999px;
+  font-size: 12px;
+  justify-self: start;
+  padding: 5px 8px;
+}
+
+.calendar-day.present strong {
+  background: #d7f8e6;
+  color: #00693d;
+}
+
+.calendar-day.absent strong {
+  background: var(--error-container);
+  color: var(--error);
+}
+
+.calendar-day.excused strong {
+  background: #fff2c6;
+  color: #765100;
+}
+
+.attendance-summary-card {
+  align-content: start;
+  display: grid;
+  overflow: hidden;
+}
+
+.attendance-summary-card h2 {
+  background: var(--surface-low);
+  border-bottom: 1px solid #e7edfb;
+  font-size: 17px;
+  padding: 16px 20px;
+}
+
 .status-chip.inline {
   display: inline-flex;
   justify-content: center;
   position: static;
   width: fit-content;
+}
+
+.pagination-controls {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 750;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.pagination-controls > div {
+  display: flex;
+  gap: 8px;
 }
 
 .attendance-head,
@@ -1229,6 +1482,28 @@ p {
   padding: 18px 20px;
 }
 
+.contact-summary-list {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.contact-summary-list span {
+  background: var(--surface-low);
+  border-radius: 8px;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  line-height: 1.4;
+  padding: 10px 12px;
+}
+
+.contact-summary-list strong {
+  color: var(--text);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
 .attendance-summary-list span {
   background: var(--surface-low);
   border-radius: 8px;
@@ -1257,6 +1532,52 @@ p {
   margin-top: 8px;
 }
 
+.report-student-picker {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 28px;
+  max-width: 720px;
+}
+
+.report-student-picker label,
+.editable-ai-output label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.report-student-picker .student-search {
+  background: linear-gradient(180deg, #f7f9ff 0%, #eef4ff 100%);
+  border: 1px solid #cdd9f5;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  min-height: 48px;
+  padding: 0 14px;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.report-student-picker .student-search:focus-within {
+  border-color: var(--primary-container);
+  box-shadow:
+    0 0 0 3px rgba(79, 70, 229, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.report-student-picker .student-search .material-symbols-outlined {
+  color: var(--primary);
+}
+
+.report-student-picker .student-options {
+  border-color: #cdd9f5;
+  border-radius: 10px;
+  left: 0;
+  right: 0;
+  top: 54px;
+}
+
 .report-section {
   border-top: 1px solid #e7edfb;
   margin-top: 28px;
@@ -1271,6 +1592,35 @@ p {
 .report-section p {
   color: var(--muted);
   line-height: 1.7;
+}
+
+.editable-ai-output {
+  display: grid;
+  gap: 14px;
+}
+
+.editable-ai-output label {
+  display: grid;
+  gap: 7px;
+}
+
+.editable-ai-output input,
+.editable-ai-output textarea {
+  background: #fbfcff;
+  border-color: #d5def2;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+.editable-ai-output textarea {
+  min-height: 112px;
+}
+
+.editable-ai-output input:focus,
+.editable-ai-output textarea:focus {
+  border-color: var(--primary-container);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  outline: 0;
 }
 
 .report-actions {
@@ -1409,6 +1759,11 @@ p {
   font-size: 20px;
 }
 
+.searchable-select-control .clear-search-button {
+  height: 28px;
+  width: 28px;
+}
+
 .searchable-select-options {
   background: var(--card);
   border: 1px solid var(--outline);
@@ -1481,6 +1836,10 @@ p {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .attendance-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+
   .topbar {
     grid-template-columns: 240px minmax(240px, 1fr) auto;
   }
@@ -1537,6 +1896,25 @@ p {
 
   .hero-search {
     width: 100%;
+  }
+
+  .attendance-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-toolbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .attendance-student-picker .student-search,
+  .calendar-controls {
+    max-width: none;
+    width: 100%;
+  }
+
+  .calendar-controls {
+    justify-content: space-between;
   }
 
   .table-head,

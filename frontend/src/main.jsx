@@ -5,17 +5,45 @@ import { api } from "./api";
 import "./styles.css";
 
 const DEMO_TEACHER_ID = 1;
+const TABLE_PAGE_SIZE = 10;
 
 const attendanceLabels = {
   present: "Var",
   absent: "Yok",
   excused: "Mazeretli",
 };
+const monthNames = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+];
+const weekDays = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
 const gradeLevelOptions = Array.from({ length: 12 }, (_, index) =>
   String(index + 1),
 );
 const sectionOptions = ["A", "B", "C", "D", "E", "F"];
+const emptyStudentForm = {
+  first_name: "",
+  last_name: "",
+  parent_full_name: "",
+  parent_phone: "",
+  parent_email: "",
+  home_address: "",
+};
+const emptyStudentEditForm = {
+  ...emptyStudentForm,
+  observation_notes: "",
+};
 
 function buildClassroomName(form) {
   return `${form.grade_level}-${form.section}`;
@@ -30,6 +58,30 @@ function classroomToForm(classroom) {
   };
 }
 
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function buildMonthDays(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingEmptyDays = (firstDay.getDay() + 6) % 7;
+  const days = Array.from({ length: leadingEmptyDays }, () => null);
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push(new Date(year, month, day));
+  }
+
+  while (days.length % 7 !== 0) {
+    days.push(null);
+  }
+
+  return days;
+}
+
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [classroomSearchTerm, setClassroomSearchTerm] = useState("");
@@ -38,8 +90,36 @@ function App() {
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
   const [students, setStudents] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
+  const [studentDirectoryPage, setStudentDirectoryPage] = useState({
+    items: [],
+    total: 0,
+    limit: TABLE_PAGE_SIZE,
+    offset: 0,
+  });
+  const [studentDirectoryOffset, setStudentDirectoryOffset] = useState(0);
+  const [classroomStudentPage, setClassroomStudentPage] = useState({
+    items: [],
+    total: 0,
+    limit: TABLE_PAGE_SIZE,
+    offset: 0,
+  });
+  const [classroomStudentOffset, setClassroomStudentOffset] = useState(0);
   const [lessons, setLessons] = useState([]);
   const [grades, setGrades] = useState([]);
+  const [gradeRecordPage, setGradeRecordPage] = useState({
+    items: [],
+    total: 0,
+    limit: TABLE_PAGE_SIZE,
+    offset: 0,
+  });
+  const [gradeRecordOffset, setGradeRecordOffset] = useState(0);
+  const [attendanceRecordPage, setAttendanceRecordPage] = useState({
+    items: [],
+    total: 0,
+    limit: TABLE_PAGE_SIZE,
+    offset: 0,
+  });
+  const [attendanceRecordOffset, setAttendanceRecordOffset] = useState(0);
   const [selectedClassroomId, setSelectedClassroomId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -58,12 +138,8 @@ function App() {
     section: "",
   });
   const [editingClassroom, setEditingClassroom] = useState(null);
-  const [studentForm, setStudentForm] = useState({ first_name: "", last_name: "" });
-  const [studentEditForm, setStudentEditForm] = useState({
-    first_name: "",
-    last_name: "",
-    observation_notes: "",
-  });
+  const [studentForm, setStudentForm] = useState(emptyStudentForm);
+  const [studentEditForm, setStudentEditForm] = useState(emptyStudentEditForm);
   const [editingStudent, setEditingStudent] = useState(null);
   const [lessonForm, setLessonForm] = useState({ name: "" });
   const [lessonEditForm, setLessonEditForm] = useState({ name: "" });
@@ -81,6 +157,7 @@ function App() {
   });
   const [editingGrade, setEditingGrade] = useState(null);
   const [attendanceForm, setAttendanceForm] = useState({
+    student_id: "",
     date: "",
     status: "present",
   });
@@ -93,10 +170,11 @@ function App() {
   const selectedClassroom = classrooms.find(
     (classroom) => classroom.id === selectedClassroomId,
   );
-  const selectedStudent = allStudents.find(
+  const normalizedAllStudents = allStudents.filter(Boolean);
+  const selectedStudent = normalizedAllStudents.find(
     (student) => student.id === selectedStudentId,
   );
-  const filteredStudents = allStudents.filter((student) =>
+  const filteredStudents = normalizedAllStudents.filter((student) =>
     `${student.first_name} ${student.last_name}`
       .toLocaleLowerCase("tr")
       .includes(searchTerm.toLocaleLowerCase("tr")),
@@ -135,6 +213,35 @@ function App() {
     if (!profile?.attendance_summary?.total) return "-";
     return `%${Math.round((profile.attendance_summary.present / profile.attendance_summary.total) * 100)}`;
   }, [profile]);
+  const studentOptions = useMemo(
+    () =>
+      students.map((student) => ({
+        label: `${student.first_name} ${student.last_name}`,
+        value: String(student.id),
+      })),
+    [students],
+  );
+  const lessonOptions = useMemo(
+    () =>
+      lessons.map((lesson) => ({
+        label: lesson.name,
+        value: String(lesson.id),
+      })),
+    [lessons],
+  );
+  const attendanceStatusOptions = [
+    { label: "Var", value: "present" },
+    { label: "Yok", value: "absent" },
+    { label: "Mazeretli", value: "excused" },
+  ];
+  const isGradeStudentLocked =
+    activeModal === "grade" &&
+    activePage === "studentDetail" &&
+    selectedStudentId;
+  const isAttendanceStudentLocked =
+    activeModal === "attendance" &&
+    activePage === "studentDetail" &&
+    selectedStudentId;
 
   async function loadInitialData() {
     setIsLoading(true);
@@ -145,14 +252,16 @@ function App() {
         api.listLessons(DEMO_TEACHER_ID),
         api.listGrades(),
       ]);
-      const studentLists = await Promise.all(
-        classroomData.map((classroom) => api.listStudents(classroom.id)),
+      const studentPages = await Promise.all(
+        classroomData.map((classroom) =>
+          api.listStudentsPage(classroom.id, { limit: 500, offset: 0 }),
+        ),
       );
       const studentCounts = classroomData.reduce((acc, classroom, index) => {
-        acc[classroom.id] = studentLists[index].length;
+        acc[classroom.id] = studentPages[index].total;
         return acc;
       }, {});
-      const allStudentData = studentLists.flat();
+      const allStudentData = studentPages.flatMap((page) => page.items);
       setClassrooms(classroomData);
       setClassroomStudentCounts(studentCounts);
       setAllStudents(allStudentData);
@@ -176,7 +285,11 @@ function App() {
       return;
     }
 
-    const studentData = await api.listStudents(classroomId);
+    const studentPage = await api.listStudentsPage(classroomId, {
+      limit: 500,
+      offset: 0,
+    });
+    const studentData = studentPage.items;
     setStudents(studentData);
     setAllStudents((current) => {
       const otherClassStudents = current.filter(
@@ -188,12 +301,39 @@ function App() {
     });
     setClassroomStudentCounts((current) => ({
       ...current,
-      [classroomId]: studentData.length,
+      [classroomId]: studentPage.total,
     }));
     setSelectedStudentId((current) => {
       if (studentData.some((student) => student.id === current)) return current;
       return null;
     });
+  }
+
+  async function loadStudentDirectoryPage() {
+    const page = await api.listStudentsPage(null, {
+      limit: TABLE_PAGE_SIZE,
+      offset: studentDirectoryOffset,
+      search: searchTerm,
+    });
+    setStudentDirectoryPage(page);
+  }
+
+  async function loadClassroomStudentPage() {
+    if (!selectedClassroomId) {
+      setClassroomStudentPage({
+        items: [],
+        total: 0,
+        limit: TABLE_PAGE_SIZE,
+        offset: 0,
+      });
+      return;
+    }
+
+    const page = await api.listStudentsPage(selectedClassroomId, {
+      limit: TABLE_PAGE_SIZE,
+      offset: classroomStudentOffset,
+    });
+    setClassroomStudentPage(page);
   }
 
   async function loadProfile(studentId) {
@@ -208,18 +348,69 @@ function App() {
     setGrades(await api.listGrades());
   }
 
+  async function loadGradeRecordPage() {
+    const page = await api.listGradesPage({
+      classroomId: selectedClassroomId,
+      limit: TABLE_PAGE_SIZE,
+      offset: gradeRecordOffset,
+    });
+    setGradeRecordPage(page);
+  }
+
+  async function loadAttendanceRecordPage() {
+    if (!selectedStudentId) {
+      setAttendanceRecordPage({
+        items: [],
+        total: 0,
+        limit: TABLE_PAGE_SIZE,
+        offset: 0,
+      });
+      return;
+    }
+
+    const page = await api.listAttendancePage({
+      studentId: selectedStudentId,
+      limit: TABLE_PAGE_SIZE,
+      offset: attendanceRecordOffset,
+    });
+    setAttendanceRecordPage(page);
+  }
+
   useEffect(() => {
     loadInitialData();
   }, []);
 
   useEffect(() => {
     loadStudents(selectedClassroomId).catch((err) => setError(err.message));
+    setClassroomStudentOffset(0);
+    setGradeRecordOffset(0);
     setSearchTerm("");
   }, [selectedClassroomId]);
 
   useEffect(() => {
+    setAttendanceRecordOffset(0);
     loadProfile(selectedStudentId).catch((err) => setError(err.message));
   }, [selectedStudentId]);
+
+  useEffect(() => {
+    if (activePage !== "students") return;
+    loadStudentDirectoryPage().catch((err) => setError(err.message));
+  }, [activePage, searchTerm, studentDirectoryOffset]);
+
+  useEffect(() => {
+    if (activePage !== "classroomDetail") return;
+    loadClassroomStudentPage().catch((err) => setError(err.message));
+  }, [activePage, selectedClassroomId, classroomStudentOffset]);
+
+  useEffect(() => {
+    if (activePage !== "gradebook") return;
+    loadGradeRecordPage().catch((err) => setError(err.message));
+  }, [activePage, selectedClassroomId, gradeRecordOffset]);
+
+  useEffect(() => {
+    if (activePage !== "attendance") return;
+    loadAttendanceRecordPage().catch((err) => setError(err.message));
+  }, [activePage, selectedStudentId, attendanceRecordOffset]);
 
   function showNotice(message) {
     setNotice(message);
@@ -314,6 +505,10 @@ function App() {
         classroom_id: selectedClassroomId,
         first_name: studentForm.first_name.trim(),
         last_name: studentForm.last_name.trim(),
+        parent_full_name: studentForm.parent_full_name.trim() || null,
+        parent_phone: studentForm.parent_phone.trim() || null,
+        parent_email: studentForm.parent_email.trim() || null,
+        home_address: studentForm.home_address.trim() || null,
         observation_notes: null,
       });
       setStudents((current) => [...current, created]);
@@ -322,9 +517,11 @@ function App() {
         ...current,
         [selectedClassroomId]: (current[selectedClassroomId] || 0) + 1,
       }));
-      setStudentForm({ first_name: "", last_name: "" });
+      setStudentForm(emptyStudentForm);
       setSelectedStudentId(created.id);
       setActiveModal(null);
+      await loadClassroomStudentPage();
+      await loadStudentDirectoryPage();
       showNotice("Öğrenci eklendi.");
     });
   }
@@ -336,7 +533,11 @@ function App() {
       const updated = await api.updateStudent(editingStudent.id, {
         first_name: studentEditForm.first_name.trim(),
         last_name: studentEditForm.last_name.trim(),
-        observation_notes: studentEditForm.observation_notes.trim() || null,
+        parent_full_name: studentEditForm.parent_full_name.trim() || null,
+        parent_phone: studentEditForm.parent_phone.trim() || null,
+        parent_email: studentEditForm.parent_email.trim() || null,
+        home_address: studentEditForm.home_address.trim() || null,
+        observation_notes: editingStudent.observation_notes || null,
       });
       setStudents((current) =>
         current.map((student) =>
@@ -349,7 +550,9 @@ function App() {
         ),
       );
       if (selectedStudentId === updated.id) await loadProfile(updated.id);
-      setStudentEditForm({ first_name: "", last_name: "", observation_notes: "" });
+      await loadClassroomStudentPage();
+      await loadStudentDirectoryPage();
+      setStudentEditForm(emptyStudentEditForm);
       setEditingStudent(null);
       setActiveModal(null);
       showNotice("Öğrenci güncellendi.");
@@ -362,7 +565,9 @@ function App() {
       if (!shouldDelete) return;
 
       await api.deleteStudent(studentId);
-      const nextStudents = students.filter((student) => student.id !== studentId);
+      const nextStudents = students.filter(
+        (student) => student.id !== studentId,
+      );
       setStudents(nextStudents);
       setAllStudents((current) =>
         current.filter((student) => student.id !== studentId),
@@ -370,11 +575,16 @@ function App() {
       await loadGrades();
       setClassroomStudentCounts((current) => ({
         ...current,
-        [selectedClassroomId]: Math.max((current[selectedClassroomId] || 1) - 1, 0),
+        [selectedClassroomId]: Math.max(
+          (current[selectedClassroomId] || 1) - 1,
+          0,
+        ),
       }));
       if (selectedStudentId === studentId) {
         setSelectedStudentId(nextStudents[0]?.id || null);
       }
+      await loadClassroomStudentPage();
+      await loadStudentDirectoryPage();
       showNotice("Öğrenci silindi.");
     });
   }
@@ -413,11 +623,15 @@ function App() {
 
   async function handleDeleteLesson(lessonId) {
     await runAction(async () => {
-      const shouldDelete = window.confirm("Bu ders ve bağlı notlar silinsin mi?");
+      const shouldDelete = window.confirm(
+        "Bu ders ve bağlı notlar silinsin mi?",
+      );
       if (!shouldDelete) return;
 
       await api.deleteLesson(lessonId);
-      setLessons((current) => current.filter((lesson) => lesson.id !== lessonId));
+      setLessons((current) =>
+        current.filter((lesson) => lesson.id !== lessonId),
+      );
       await loadGrades();
       if (selectedStudentId) await loadProfile(selectedStudentId);
       showNotice("Ders silindi.");
@@ -427,18 +641,22 @@ function App() {
   async function handleCreateGrade(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!gradeForm.student_id) throw new Error("Önce bir öğrenci seçmelisin.");
+      const studentId = isGradeStudentLocked
+        ? selectedStudentId
+        : Number(gradeForm.student_id);
+      if (!studentId) throw new Error("Önce bir öğrenci seçmelisin.");
       await api.createGrade({
-        student_id: Number(gradeForm.student_id),
+        student_id: studentId,
         lesson_id: Number(gradeForm.lesson_id),
         exam_name: gradeForm.exam_name.trim(),
         score: gradeForm.score,
       });
       setGradeForm({ student_id: "", lesson_id: "", exam_name: "", score: "" });
       setActiveModal(null);
-      setSelectedStudentId(Number(gradeForm.student_id));
+      setSelectedStudentId(studentId);
       await loadGrades();
-      await loadProfile(Number(gradeForm.student_id));
+      await loadGradeRecordPage();
+      await loadProfile(studentId);
       showNotice("Not kaydedildi.");
     });
   }
@@ -456,6 +674,7 @@ function App() {
       setEditingGrade(null);
       setActiveModal(null);
       await loadGrades();
+      await loadGradeRecordPage();
       if (selectedStudentId) await loadProfile(selectedStudentId);
       showNotice("Not güncellendi.");
     });
@@ -468,6 +687,7 @@ function App() {
 
       await api.deleteGrade(gradeId);
       await loadGrades();
+      await loadGradeRecordPage();
       if (selectedStudentId) await loadProfile(selectedStudentId);
       showNotice("Not silindi.");
     });
@@ -476,15 +696,20 @@ function App() {
   async function handleCreateAttendance(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!selectedStudentId) throw new Error("Önce bir öğrenci seçmelisin.");
+      const studentId = isAttendanceStudentLocked
+        ? selectedStudentId
+        : Number(attendanceForm.student_id);
+      if (!studentId) throw new Error("Önce bir öğrenci seçmelisin.");
       await api.createAttendance({
-        student_id: selectedStudentId,
+        student_id: studentId,
         date: attendanceForm.date,
         status: attendanceForm.status,
       });
-      setAttendanceForm({ date: "", status: "present" });
+      setAttendanceForm({ student_id: "", date: "", status: "present" });
       setActiveModal(null);
-      await loadProfile(selectedStudentId);
+      setSelectedStudentId(studentId);
+      await loadProfile(studentId);
+      await loadAttendanceRecordPage();
       showNotice("Devamsızlık kaydedildi.");
     });
   }
@@ -502,6 +727,7 @@ function App() {
       setEditingAttendance(null);
       setActiveModal(null);
       await loadProfile(selectedStudentId);
+      await loadAttendanceRecordPage();
       showNotice("Devamsızlık güncellendi.");
     });
   }
@@ -513,20 +739,27 @@ function App() {
 
       await api.deleteAttendance(attendanceId);
       await loadProfile(selectedStudentId);
+      await loadAttendanceRecordPage();
       showNotice("Devamsızlık silindi.");
     });
   }
 
   const shared = {
     activePage,
+    attendanceRecordOffset,
+    attendanceRecordPage,
     allStudents,
     attendanceRate,
     classroomGradeFilter,
     classroomSearchTerm,
     classroomStudentCounts,
+    classroomStudentPage,
+    classroomStudentOffset,
     classrooms,
     filteredStudents,
     gradeAverages,
+    gradeRecordOffset,
+    gradeRecordPage,
     grades,
     isStudentPickerOpen,
     lessons,
@@ -537,12 +770,16 @@ function App() {
     selectedClassroomId,
     selectedStudent,
     selectedStudentId,
+    studentDirectoryOffset,
+    studentDirectoryPage,
     setActiveModal,
     setActivePage,
     setAttendanceEditForm,
+    setAttendanceRecordOffset,
     setClassroomGradeFilter,
     setClassroomSearchTerm,
     setClassroomEditForm,
+    setClassroomStudentOffset,
     setEditingAttendance,
     setEditingClassroom,
     setEditingGrade,
@@ -550,11 +787,14 @@ function App() {
     setEditingStudent,
     setGradeEditForm,
     setGradeForm,
+    setGradeRecordOffset,
+    setAttendanceForm,
     setIsStudentPickerOpen,
     setLessonEditForm,
     setSearchTerm,
     setSelectedClassroomId,
     setSelectedStudentId,
+    setStudentDirectoryOffset,
     setStudentEditForm,
     students,
     handleDeleteAttendance,
@@ -680,6 +920,47 @@ function App() {
                 required
                 value={studentForm.last_name}
               />
+              <input
+                onChange={(event) =>
+                  setStudentForm((form) => ({
+                    ...form,
+                    parent_full_name: event.target.value,
+                  }))
+                }
+                placeholder="Veli ad soyad"
+                value={studentForm.parent_full_name}
+              />
+              <input
+                onChange={(event) =>
+                  setStudentForm((form) => ({
+                    ...form,
+                    parent_phone: event.target.value,
+                  }))
+                }
+                placeholder="Veli telefon"
+                value={studentForm.parent_phone}
+              />
+              <input
+                onChange={(event) =>
+                  setStudentForm((form) => ({
+                    ...form,
+                    parent_email: event.target.value,
+                  }))
+                }
+                placeholder="Veli e-posta"
+                type="email"
+                value={studentForm.parent_email}
+              />
+              <textarea
+                onChange={(event) =>
+                  setStudentForm((form) => ({
+                    ...form,
+                    home_address: event.target.value,
+                  }))
+                }
+                placeholder="Öğrenci ev adresi"
+                value={studentForm.home_address}
+              />
               <button className="primary-button" type="submit">
                 Öğrenciyi Kaydet
               </button>
@@ -709,15 +990,46 @@ function App() {
                 required
                 value={studentEditForm.last_name}
               />
+              <input
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    parent_full_name: event.target.value,
+                  }))
+                }
+                placeholder="Veli ad soyad"
+                value={studentEditForm.parent_full_name}
+              />
+              <input
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    parent_phone: event.target.value,
+                  }))
+                }
+                placeholder="Veli telefon"
+                value={studentEditForm.parent_phone}
+              />
+              <input
+                onChange={(event) =>
+                  setStudentEditForm((form) => ({
+                    ...form,
+                    parent_email: event.target.value,
+                  }))
+                }
+                placeholder="Veli e-posta"
+                type="email"
+                value={studentEditForm.parent_email}
+              />
               <textarea
                 onChange={(event) =>
                   setStudentEditForm((form) => ({
                     ...form,
-                    observation_notes: event.target.value,
+                    home_address: event.target.value,
                   }))
                 }
-                placeholder="Gözlem notu"
-                value={studentEditForm.observation_notes}
+                placeholder="Öğrenci ev adresi"
+                value={studentEditForm.home_address}
               />
               <button className="primary-button" type="submit">
                 Değişiklikleri Kaydet
@@ -756,40 +1068,42 @@ function App() {
           )}
           {activeModal === "grade" && (
             <FormPanel title="Not Gir" onSubmit={handleCreateGrade}>
-              <select
-                onChange={(event) =>
+              {isGradeStudentLocked ? (
+                <input
+                  aria-label="Not girilecek öğrenci"
+                  readOnly
+                  value={
+                    selectedStudent
+                      ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
+                      : ""
+                  }
+                />
+              ) : (
+                <SearchableSelect
+                  label="Öğrenci"
+                  onChange={(value) =>
+                    setGradeForm((form) => ({
+                      ...form,
+                      student_id: value,
+                    }))
+                  }
+                  options={studentOptions}
+                  placeholder="Öğrenci ara"
+                  value={gradeForm.student_id}
+                />
+              )}
+              <SearchableSelect
+                label="Ders"
+                onChange={(value) =>
                   setGradeForm((form) => ({
                     ...form,
-                    student_id: event.target.value,
+                    lesson_id: value,
                   }))
                 }
-                required
-                value={gradeForm.student_id}
-              >
-                <option value="">Öğrenci seç</option>
-                {students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.first_name} {student.last_name}
-                  </option>
-                ))}
-              </select>
-              <select
-                onChange={(event) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    lesson_id: event.target.value,
-                  }))
-                }
-                required
+                options={lessonOptions}
+                placeholder="Ders ara"
                 value={gradeForm.lesson_id}
-              >
-                <option value="">Ders seç</option>
-                {lessons.map((lesson) => (
-                  <option key={lesson.id} value={lesson.id}>
-                    {lesson.name}
-                  </option>
-                ))}
-              </select>
+              />
               <input
                 onChange={(event) =>
                   setGradeForm((form) => ({
@@ -822,23 +1136,18 @@ function App() {
           )}
           {activeModal === "editGrade" && (
             <FormPanel title="Notu Düzenle" onSubmit={handleUpdateGrade}>
-              <select
-                onChange={(event) =>
+              <SearchableSelect
+                label="Ders"
+                onChange={(value) =>
                   setGradeEditForm((form) => ({
                     ...form,
-                    lesson_id: event.target.value,
+                    lesson_id: value,
                   }))
                 }
-                required
+                options={lessonOptions}
+                placeholder="Ders ara"
                 value={gradeEditForm.lesson_id}
-              >
-                <option value="">Ders seç</option>
-                {lessons.map((lesson) => (
-                  <option key={lesson.id} value={lesson.id}>
-                    {lesson.name}
-                  </option>
-                ))}
-              </select>
+              />
               <input
                 onChange={(event) =>
                   setGradeEditForm((form) => ({
@@ -874,6 +1183,30 @@ function App() {
               title="Devamsızlık Gir"
               onSubmit={handleCreateAttendance}
             >
+              {isAttendanceStudentLocked ? (
+                <input
+                  aria-label="Devamsızlık girilecek öğrenci"
+                  readOnly
+                  value={
+                    selectedStudent
+                      ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
+                      : ""
+                  }
+                />
+              ) : (
+                <SearchableSelect
+                  label="Öğrenci"
+                  onChange={(value) =>
+                    setAttendanceForm((form) => ({
+                      ...form,
+                      student_id: value,
+                    }))
+                  }
+                  options={studentOptions}
+                  placeholder="Öğrenci ara"
+                  value={attendanceForm.student_id}
+                />
+              )}
               <input
                 onChange={(event) =>
                   setAttendanceForm((form) => ({
@@ -885,19 +1218,18 @@ function App() {
                 type="date"
                 value={attendanceForm.date}
               />
-              <select
-                onChange={(event) =>
+              <SearchableSelect
+                label="Durum"
+                onChange={(value) =>
                   setAttendanceForm((form) => ({
                     ...form,
-                    status: event.target.value,
+                    status: value,
                   }))
                 }
+                options={attendanceStatusOptions}
+                placeholder="Durum ara"
                 value={attendanceForm.status}
-              >
-                <option value="present">Var</option>
-                <option value="absent">Yok</option>
-                <option value="excused">Mazeretli</option>
-              </select>
+              />
               <button className="primary-button" type="submit">
                 Kaydet
               </button>
@@ -919,19 +1251,18 @@ function App() {
                 type="date"
                 value={attendanceEditForm.date}
               />
-              <select
-                onChange={(event) =>
+              <SearchableSelect
+                label="Durum"
+                onChange={(value) =>
                   setAttendanceEditForm((form) => ({
                     ...form,
-                    status: event.target.value,
+                    status: value,
                   }))
                 }
+                options={attendanceStatusOptions}
+                placeholder="Durum ara"
                 value={attendanceEditForm.status}
-              >
-                <option value="present">Var</option>
-                <option value="absent">Yok</option>
-                <option value="excused">Mazeretli</option>
-              </select>
+              />
               <button className="primary-button" type="submit">
                 Değişiklikleri Kaydet
               </button>
@@ -1261,6 +1592,8 @@ function ClassroomsPage(props) {
 
 function ClassroomDetailPage(props) {
   const {
+    classroomStudentOffset,
+    classroomStudentPage,
     isStudentPickerOpen,
     searchTerm,
     selectedClassroom,
@@ -1268,6 +1601,7 @@ function ClassroomDetailPage(props) {
     selectedStudentId,
     setActiveModal,
     setActivePage,
+    setClassroomStudentOffset,
     setEditingStudent,
     setIsStudentPickerOpen,
     setSearchTerm,
@@ -1299,7 +1633,7 @@ function ClassroomDetailPage(props) {
                 ? `${selectedClassroom.name} Sınıfı`
                 : "Sınıf seç"}
             </h1>
-            <p>{students.length} kayıtlı öğrenci</p>
+            <p>{classroomStudentPage.total} kayıtlı öğrenci</p>
           </div>
           <button
             className="primary-button"
@@ -1326,7 +1660,13 @@ function ClassroomDetailPage(props) {
           setEditingStudent={setEditingStudent}
           setSelectedStudentId={setSelectedStudentId}
           setStudentEditForm={setStudentEditForm}
-          students={students}
+          students={classroomStudentPage.items}
+        />
+        <PaginationControls
+          limit={classroomStudentPage.limit}
+          offset={classroomStudentOffset}
+          setOffset={setClassroomStudentOffset}
+          total={classroomStudentPage.total}
         />
       </section>
     </div>
@@ -1334,9 +1674,7 @@ function ClassroomDetailPage(props) {
 }
 
 function StudentsPage({
-  allStudents,
   classrooms,
-  filteredStudents,
   searchTerm,
   selectedStudentId,
   setActiveModal,
@@ -1345,15 +1683,16 @@ function StudentsPage({
   setGradeForm,
   setSearchTerm,
   setSelectedStudentId,
+  setStudentDirectoryOffset,
   setStudentEditForm,
+  studentDirectoryOffset,
+  studentDirectoryPage,
   handleDeleteStudent,
 }) {
   const classroomById = useMemo(
     () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
     [classrooms],
   );
-  const visibleStudents = searchTerm ? filteredStudents : allStudents;
-
   return (
     <div className="wide-page">
       <section className="hero-card">
@@ -1373,10 +1712,26 @@ function StudentsPage({
       <div className="student-search">
         <Icon name="search" />
         <input
-          onChange={(event) => setSearchTerm(event.target.value)}
+          onChange={(event) => {
+            setStudentDirectoryOffset(0);
+            setSearchTerm(event.target.value);
+          }}
           placeholder="Öğrenci ara"
           value={searchTerm}
         />
+        {searchTerm && (
+          <button
+            aria-label="Öğrenci aramasını temizle"
+            className="clear-search-button"
+            onClick={() => {
+              setStudentDirectoryOffset(0);
+              setSearchTerm("");
+            }}
+            type="button"
+          >
+            <Icon name="close" />
+          </button>
+        )}
       </div>
 
       <section className="student-table-card">
@@ -1386,7 +1741,7 @@ function StudentsPage({
           <span>Öğretmen Yorumu</span>
           <span>İşlem</span>
         </div>
-        {visibleStudents.map((student) => (
+        {studentDirectoryPage.items.map((student) => (
           <div
             className={
               student.id === selectedStudentId
@@ -1437,6 +1792,10 @@ function StudentsPage({
                   setStudentEditForm({
                     first_name: student.first_name,
                     last_name: student.last_name,
+                    parent_full_name: student.parent_full_name || "",
+                    parent_phone: student.parent_phone || "",
+                    parent_email: student.parent_email || "",
+                    home_address: student.home_address || "",
                     observation_notes: student.observation_notes || "",
                   });
                   setActiveModal("editStudent");
@@ -1459,15 +1818,23 @@ function StudentsPage({
             </span>
           </div>
         ))}
-        {!visibleStudents.length && (
+        {!studentDirectoryPage.items.length && (
           <p className="empty-note">Öğrenci bulunamadı.</p>
         )}
       </section>
+      <PaginationControls
+        limit={studentDirectoryPage.limit}
+        offset={studentDirectoryOffset}
+        setOffset={setStudentDirectoryOffset}
+        total={studentDirectoryPage.total}
+      />
     </div>
   );
 }
 
 function GradebookPage({
+  gradeRecordOffset,
+  gradeRecordPage,
   handleDeleteGrade,
   handleDeleteLesson,
   grades,
@@ -1478,6 +1845,7 @@ function GradebookPage({
   setEditingLesson,
   setGradeEditForm,
   setGradeForm,
+  setGradeRecordOffset,
   setLessonEditForm,
   setSelectedStudentId,
   students,
@@ -1584,7 +1952,10 @@ function GradebookPage({
         </div>
       </section>
       <section className="student-table-card gradebook-card">
-        <div className="gradebook-head" style={{ gridTemplateColumns: gradebookColumns }}>
+        <div
+          className="gradebook-head"
+          style={{ gridTemplateColumns: gradebookColumns }}
+        >
           <span>Öğrenci</span>
           {lessons.map((lesson) => (
             <span key={lesson.id}>{lesson.name}</span>
@@ -1631,7 +2002,7 @@ function GradebookPage({
           <span>Puan</span>
           <span>İşlem</span>
         </div>
-        {visibleGrades.map((grade) => (
+        {gradeRecordPage.items.map((grade) => (
           <div className="record-row grade-record-row" key={grade.id}>
             <strong>
               {studentById.get(grade.student_id)?.first_name}{" "}
@@ -1668,8 +2039,16 @@ function GradebookPage({
             </span>
           </div>
         ))}
-        {!visibleGrades.length && <p className="empty-note">Henüz not kaydı yok.</p>}
+        {!gradeRecordPage.items.length && (
+          <p className="empty-note">Henüz not kaydı yok.</p>
+        )}
       </section>
+      <PaginationControls
+        limit={gradeRecordPage.limit}
+        offset={gradeRecordOffset}
+        setOffset={setGradeRecordOffset}
+        total={gradeRecordPage.total}
+      />
     </div>
   );
 }
@@ -1755,6 +2134,10 @@ function StudentDetailPage({
               setStudentEditForm({
                 first_name: selectedStudent.first_name,
                 last_name: selectedStudent.last_name,
+                parent_full_name: selectedStudent.parent_full_name || "",
+                parent_phone: selectedStudent.parent_phone || "",
+                parent_email: selectedStudent.parent_email || "",
+                home_address: selectedStudent.home_address || "",
                 observation_notes: selectedStudent.observation_notes || "",
               });
               setActiveModal("editStudent");
@@ -1856,9 +2239,35 @@ function StudentDetailPage({
         <aside className="detail-side">
           <section className="card detail-note-card">
             <div className="detail-section-head">
+              <h2>Veli ve İletişim</h2>
+            </div>
+            <div className="contact-summary-list">
+              <span>
+                <strong>Veli</strong>
+                {profile.parent_full_name || "-"}
+              </span>
+              <span>
+                <strong>Telefon</strong>
+                {profile.parent_phone || "-"}
+              </span>
+              <span>
+                <strong>E-posta</strong>
+                {profile.parent_email || "-"}
+              </span>
+              <span>
+                <strong>Adres</strong>
+                {profile.home_address || "-"}
+              </span>
+            </div>
+          </section>
+
+          <section className="card detail-note-card">
+            <div className="detail-section-head">
               <h2>Öğretmen Yorumu</h2>
             </div>
-            <p>{profile.observation_notes || "Henüz öğretmen yorumu girilmedi."}</p>
+            <p>
+              {profile.observation_notes || "Henüz öğretmen yorumu girilmedi."}
+            </p>
           </section>
 
           <section className="card detail-note-card">
@@ -1893,56 +2302,174 @@ function StudentDetailPage({
 }
 
 function AttendancePage({
+  attendanceRecordOffset,
+  attendanceRecordPage,
+  attendanceRate,
+  filteredStudents,
   handleDeleteAttendance,
+  isStudentPickerOpen,
   profile,
+  searchTerm,
   selectedStudent,
+  selectedStudentId,
   setActiveModal,
   setAttendanceEditForm,
+  setAttendanceRecordOffset,
   setEditingAttendance,
-  students,
+  setAttendanceForm,
+  setIsStudentPickerOpen,
+  setSearchTerm,
+  setSelectedStudentId,
 }) {
+  const today = new Date();
+  const [visibleMonth, setVisibleMonth] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
+  const attendanceByDate = useMemo(
+    () =>
+      new Map(
+        (profile?.attendance_records || []).map((attendance) => [
+          attendance.date,
+          attendance,
+        ]),
+      ),
+    [profile],
+  );
+  const calendarDays = useMemo(
+    () => buildMonthDays(visibleMonth.getFullYear(), visibleMonth.getMonth()),
+    [visibleMonth],
+  );
+
+  function changeMonth(direction) {
+    setVisibleMonth(
+      (current) =>
+        new Date(current.getFullYear(), current.getMonth() + direction, 1),
+    );
+  }
+
+  function handleCalendarDayClick(date) {
+    const dateValue = formatLocalDate(date);
+    const attendance = attendanceByDate.get(dateValue);
+
+    if (attendance) {
+      setEditingAttendance(attendance);
+      setAttendanceEditForm({
+        date: attendance.date,
+        status: attendance.status,
+      });
+      setActiveModal("editAttendance");
+      return;
+    }
+
+    setAttendanceForm({
+      student_id: selectedStudentId ? String(selectedStudentId) : "",
+      date: dateValue,
+      status: "present",
+    });
+    setActiveModal("attendance");
+  }
+
   return (
-    <div className="wide-page">
-      <section className="hero-card">
-        <div>
-          <h1>Devamsızlık Takibi</h1>
-          <p>Öğrencilerin günlük yoklama ve mazeret durumlarını yönet.</p>
-        </div>
-        <button
-          className="primary-button"
-          onClick={() => setActiveModal("attendance")}
-          type="button"
-        >
-          <Icon name="event_available" /> Devamsızlık Gir
-        </button>
-      </section>
-      <section className="student-table-card">
-        <div className="attendance-head">
-          <span>Öğrenci</span>
-          <span>Son Kayıt</span>
-          <span>Durum</span>
-          <span>Toplam</span>
-        </div>
-        {students.map((student) => (
-          <div className="attendance-row" key={student.id}>
-            <strong>
-              {student.first_name} {student.last_name}
-            </strong>
-            <span>
-              {selectedStudent?.id === student.id &&
-              profile?.attendance_records[0]?.date
-                ? profile.attendance_records[0].date
-                : "Kayıt yok"}
-            </span>
-            <span className="attendance-ok">● Düzenli</span>
-            <span>
-              {selectedStudent?.id === student.id
-                ? profile?.attendance_summary?.total || 0
-                : 0}
-            </span>
+    <div className="wide-page attendance-page">
+      <div className="attendance-title">
+        <h1>Devamsızlık Takibi</h1>
+      </div>
+
+      <section className="attendance-calendar-layout">
+        <div className="attendance-calendar-section">
+          <section className="attendance-toolbar">
+            <div className="attendance-student-picker">
+              <StudentSearch
+                filteredStudents={filteredStudents}
+                isStudentPickerOpen={isStudentPickerOpen}
+                searchTerm={searchTerm}
+                selectedStudent={selectedStudent}
+                selectedStudentId={selectedStudentId}
+                setIsStudentPickerOpen={setIsStudentPickerOpen}
+                setSearchTerm={setSearchTerm}
+                setSelectedStudentId={setSelectedStudentId}
+              />
+            </div>
+            <div className="attendance-toolbar-actions">
+              <div className="calendar-controls">
+                <button
+                  aria-label="Önceki ay"
+                  className="icon-action"
+                  onClick={() => changeMonth(-1)}
+                  type="button"
+                >
+                  <Icon name="chevron_left" />
+                </button>
+                <strong>
+                  {monthNames[visibleMonth.getMonth()]}{" "}
+                  {visibleMonth.getFullYear()}
+                </strong>
+                <button
+                  aria-label="Sonraki ay"
+                  className="icon-action"
+                  onClick={() => changeMonth(1)}
+                  type="button"
+                >
+                  <Icon name="chevron_right" />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="attendance-calendar-card">
+            <div className="calendar-weekdays">
+              {weekDays.map((day) => (
+                <span key={day}>{day}</span>
+              ))}
+            </div>
+            <div className="calendar-grid">
+              {calendarDays.map((date, index) =>
+                date ? (
+                  <button
+                    className={
+                      attendanceByDate.has(formatLocalDate(date))
+                        ? `calendar-day ${attendanceByDate.get(formatLocalDate(date)).status}`
+                        : "calendar-day"
+                    }
+                    key={formatLocalDate(date)}
+                    onClick={() => handleCalendarDayClick(date)}
+                    type="button"
+                  >
+                    <span>{date.getDate()}</span>
+                    {attendanceByDate.has(formatLocalDate(date)) && (
+                      <strong>
+                        {
+                          attendanceLabels[
+                            attendanceByDate.get(formatLocalDate(date)).status
+                          ]
+                        }
+                      </strong>
+                    )}
+                  </button>
+                ) : (
+                  <div className="calendar-day empty" key={`empty-${index}`} />
+                ),
+              )}
+            </div>
           </div>
-        ))}
+        </div>
+
+        <aside className="attendance-summary-card">
+          <h2>
+            {selectedStudent
+              ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
+              : "Öğrenci seç"}
+          </h2>
+          <div className="attendance-summary-list">
+            <span>Var: {profile?.attendance_summary?.present || 0}</span>
+            <span>Yok: {profile?.attendance_summary?.absent || 0}</span>
+            <span>Mazeretli: {profile?.attendance_summary?.excused || 0}</span>
+            <span>Toplam: {profile?.attendance_summary?.total || 0}</span>
+            <span>Devam Oranı: {attendanceRate}</span>
+          </div>
+        </aside>
       </section>
+
       <section className="student-table-card attendance-record-card">
         <div className="record-head">
           <span>Seçili Öğrenci Devamsızlıkları</span>
@@ -1950,7 +2477,7 @@ function AttendancePage({
           <span>Durum</span>
           <span>İşlem</span>
         </div>
-        {profile?.attendance_records?.map((attendance) => (
+        {attendanceRecordPage.items.map((attendance) => (
           <div className="record-row" key={attendance.id}>
             <strong>
               {selectedStudent
@@ -1986,7 +2513,7 @@ function AttendancePage({
             </span>
           </div>
         ))}
-        {!profile?.attendance_records?.length && (
+        {!attendanceRecordPage.items.length && (
           <p className="empty-note">
             {selectedStudent
               ? "Henüz devamsızlık kaydı yok."
@@ -1994,15 +2521,197 @@ function AttendancePage({
           </p>
         )}
       </section>
+      <PaginationControls
+        limit={attendanceRecordPage.limit}
+        offset={attendanceRecordOffset}
+        setOffset={setAttendanceRecordOffset}
+        total={attendanceRecordPage.total}
+      />
     </div>
   );
 }
 
-function AIReportsPage({ profile, selectedStudent }) {
+function AIReportsPage({
+  filteredStudents,
+  isStudentPickerOpen,
+  profile,
+  searchTerm,
+  selectedStudent,
+  selectedStudentId,
+  setIsStudentPickerOpen,
+  setSearchTerm,
+  setSelectedStudentId,
+}) {
+  const [reportComment, setReportComment] = useState(null);
+  const [reportCommentOutputId, setReportCommentOutputId] = useState(null);
+  const [parentMessage, setParentMessage] = useState(null);
+  const [parentMessageOutputId, setParentMessageOutputId] = useState(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isGeneratingParentMessage, setIsGeneratingParentMessage] =
+    useState(false);
+  const [isSavingAIOutput, setIsSavingAIOutput] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiNotice, setAiNotice] = useState("");
+
+  useEffect(() => {
+    async function loadAIOutputs() {
+      if (!selectedStudentId) {
+        setReportComment(null);
+        setReportCommentOutputId(null);
+        setParentMessage(null);
+        setParentMessageOutputId(null);
+        return;
+      }
+
+      setAiError("");
+      setAiNotice("");
+      try {
+        const outputs = await api.listAIOutputs(selectedStudentId);
+        const latestReport = outputs.find(
+          (output) => output.output_type === "report_comment",
+        );
+        const latestParentMessage = outputs.find(
+          (output) => output.output_type === "parent_message",
+        );
+        setReportComment(latestReport?.output_payload || null);
+        setReportCommentOutputId(latestReport?.id || null);
+        setParentMessage(latestParentMessage?.output_payload || null);
+        setParentMessageOutputId(latestParentMessage?.id || null);
+      } catch (err) {
+        setAiError(err.message);
+      }
+    }
+
+    loadAIOutputs();
+  }, [selectedStudentId]);
+
+  function handleSelectStudent(studentId) {
+    setSelectedStudentId(studentId);
+    setReportComment(null);
+    setReportCommentOutputId(null);
+    setParentMessage(null);
+    setParentMessageOutputId(null);
+    setAiError("");
+    setAiNotice("");
+  }
+
+  function updateReportComment(field, value) {
+    setReportComment((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function updateReportCommentList(field, value) {
+    updateReportComment(
+      field,
+      value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
+  }
+
+  function updateParentMessage(field, value) {
+    setParentMessage((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function updateParentMessageList(field, value) {
+    updateParentMessage(
+      field,
+      value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
+  }
+
+  async function generateReportComment() {
+    if (!selectedStudentId) {
+      setAiError("Önce bir öğrenci seçmelisin.");
+      return;
+    }
+
+    setIsGeneratingReport(true);
+    setAiError("");
+    try {
+      const output = await api.generateReportComment(selectedStudentId);
+      setReportComment(output.output_payload);
+      setReportCommentOutputId(output.id);
+      setAiNotice("Karne yorumu oluşturuldu ve kaydedildi.");
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
+  async function generateParentMessage() {
+    if (!selectedStudentId) {
+      setAiError("Önce bir öğrenci seçmelisin.");
+      return;
+    }
+
+    setIsGeneratingParentMessage(true);
+    setAiError("");
+    try {
+      const output = await api.generateParentMessage(selectedStudentId);
+      setParentMessage(output.output_payload);
+      setParentMessageOutputId(output.id);
+      setAiNotice("Veli mesajı hazırlandı ve kaydedildi.");
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setIsGeneratingParentMessage(false);
+    }
+  }
+
+  async function saveAIOutputEdits() {
+    setIsSavingAIOutput(true);
+    setAiError("");
+    setAiNotice("");
+    try {
+      if (reportComment && reportCommentOutputId) {
+        const output = await api.updateAIOutput(
+          reportCommentOutputId,
+          reportComment,
+        );
+        setReportComment(output.output_payload);
+      }
+      if (parentMessage && parentMessageOutputId) {
+        const output = await api.updateAIOutput(
+          parentMessageOutputId,
+          parentMessage,
+        );
+        setParentMessage(output.output_payload);
+      }
+      setAiNotice("Düzenlemeler kaydedildi.");
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setIsSavingAIOutput(false);
+    }
+  }
+
   return (
     <div className="report-page">
       <section className="report-document">
         <h1>AI Karne Raporu</h1>
+        <div className="report-student-picker">
+          <StudentSearch
+            filteredStudents={filteredStudents}
+            isStudentPickerOpen={isStudentPickerOpen}
+            searchTerm={searchTerm}
+            selectedStudent={selectedStudent}
+            selectedStudentId={selectedStudentId}
+            setIsStudentPickerOpen={setIsStudentPickerOpen}
+            setSearchTerm={setSearchTerm}
+            setSelectedStudentId={handleSelectStudent}
+          />
+        </div>
         <p className="report-meta">
           Öğrenci:{" "}
           {selectedStudent
@@ -2010,27 +2719,125 @@ function AIReportsPage({ profile, selectedStudent }) {
             : "Öğrenci seçilmedi"}
         </p>
         <div className="report-section">
-          <h2>Akademik Özet</h2>
-          <p>
-            Öğrencinin not, devamsızlık ve öğretmen gözlem verileri karne yorumu
-            üretimi için hazırlanmıştır.
-          </p>
+          <h2>Karne Yorumu</h2>
+          {reportComment ? (
+            <div className="editable-ai-output">
+              <label>
+                Başlık
+                <input
+                  onChange={(event) =>
+                    updateReportComment("title", event.target.value)
+                  }
+                  value={reportComment.title || ""}
+                />
+              </label>
+              <label>
+                Karne yorumu
+                <textarea
+                  onChange={(event) =>
+                    updateReportComment("comment", event.target.value)
+                  }
+                  value={reportComment.comment || ""}
+                />
+              </label>
+              <label>
+                Güçlü yönler
+                <textarea
+                  onChange={(event) =>
+                    updateReportCommentList("strengths", event.target.value)
+                  }
+                  value={(reportComment.strengths || []).join("\n")}
+                />
+              </label>
+              <label>
+                Gelişim alanları
+                <textarea
+                  onChange={(event) =>
+                    updateReportCommentList("growth_areas", event.target.value)
+                  }
+                  value={(reportComment.growth_areas || []).join("\n")}
+                />
+              </label>
+            </div>
+          ) : (
+            <p>Henüz karne yorumu oluşturulmadı.</p>
+          )}
         </div>
         <div className="report-section">
-          <h2>Öğretmen Gözlemi</h2>
-          <p>{profile?.observation_notes || "Henüz gözlem notu girilmedi."}</p>
+          <h2>Veli Mesajı</h2>
+          {parentMessage ? (
+            <div className="editable-ai-output">
+              <label>
+                Konu
+                <input
+                  onChange={(event) =>
+                    updateParentMessage("subject", event.target.value)
+                  }
+                  value={parentMessage.subject || ""}
+                />
+              </label>
+              <label>
+                Veli mesajı
+                <textarea
+                  onChange={(event) =>
+                    updateParentMessage("message", event.target.value)
+                  }
+                  value={parentMessage.message || ""}
+                />
+              </label>
+              <label>
+                Sonraki adımlar
+                <textarea
+                  onChange={(event) =>
+                    updateParentMessageList("next_steps", event.target.value)
+                  }
+                  value={(parentMessage.next_steps || []).join("\n")}
+                />
+              </label>
+            </div>
+          ) : (
+            <p>Henüz veli mesajı hazırlanmadı.</p>
+          )}
         </div>
       </section>
       <aside className="report-actions">
-        <button className="primary-button full" type="button">
-          <Icon name="auto_awesome" /> Karne Yorumu Oluştur
+        <button
+          className="primary-button full"
+          disabled={isGeneratingReport}
+          onClick={generateReportComment}
+          type="button"
+        >
+          <Icon name="auto_awesome" />{" "}
+          {isGeneratingReport ? "Oluşturuluyor..." : "Karne Yorumu Oluştur"}
         </button>
-        <button className="outline-button full" type="button">
-          <Icon name="mail" /> Veli Mesajı Hazırla
+        <button
+          className="outline-button full"
+          disabled={isGeneratingParentMessage}
+          onClick={generateParentMessage}
+          type="button"
+        >
+          <Icon name="mail" />{" "}
+          {isGeneratingParentMessage
+            ? "Hazırlanıyor..."
+            : "Veli Mesajı Hazırla"}
         </button>
         <button className="outline-button full" type="button">
           <Icon name="download" /> PDF Dışa Aktar
         </button>
+        <button
+          className="outline-button full"
+          disabled={
+            isSavingAIOutput ||
+            (!reportCommentOutputId && !parentMessageOutputId)
+          }
+          onClick={saveAIOutputEdits}
+          type="button"
+        >
+          <Icon name="save" />{" "}
+          {isSavingAIOutput ? "Kaydediliyor..." : "Düzenlemeleri Kaydet"}
+        </button>
+        {aiNotice && <p className="empty-note success-note">{aiNotice}</p>}
+        {aiError && <p className="empty-note">{aiError}</p>}
       </aside>
     </div>
   );
@@ -2047,6 +2854,43 @@ function SettingsPage() {
   );
 }
 
+function PaginationControls({ limit, offset, setOffset, total }) {
+  if (!total) return null;
+
+  const start = offset + 1;
+  const end = Math.min(offset + limit, total);
+  const canGoBack = offset > 0;
+  const canGoForward = offset + limit < total;
+
+  return (
+    <div className="pagination-controls">
+      <span>
+        {start}-{end} / {total}
+      </span>
+      <div>
+        <button
+          aria-label="Önceki sayfa"
+          className="icon-action"
+          disabled={!canGoBack}
+          onClick={() => setOffset(Math.max(offset - limit, 0))}
+          type="button"
+        >
+          <Icon name="chevron_left" />
+        </button>
+        <button
+          aria-label="Sonraki sayfa"
+          className="icon-action"
+          disabled={!canGoForward}
+          onClick={() => setOffset(offset + limit)}
+          type="button"
+        >
+          <Icon name="chevron_right" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StudentSearch({
   filteredStudents,
   isStudentPickerOpen,
@@ -2057,6 +2901,8 @@ function StudentSearch({
   setSearchTerm,
   setSelectedStudentId,
 }) {
+  const hasValue = Boolean(searchTerm || selectedStudentId);
+
   return (
     <div className="student-search">
       <Icon name="search" />
@@ -2079,6 +2925,21 @@ function StudentSearch({
           }
           value={searchTerm}
         />
+        {hasValue && (
+          <button
+            aria-label="Öğrenci seçimini temizle"
+            className="clear-search-button"
+            onClick={() => {
+              setSelectedStudentId(null);
+              setSearchTerm("");
+              setIsStudentPickerOpen(false);
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Icon name="close" />
+          </button>
+        )}
         {isStudentPickerOpen && (
           <div className="student-options" role="listbox">
             {filteredStudents.length ? (
@@ -2122,6 +2983,7 @@ function SearchableSelect({ label, onChange, options, placeholder, value }) {
       .toLocaleLowerCase("tr")
       .includes(query.toLocaleLowerCase("tr")),
   );
+  const hasValue = Boolean(value || query);
 
   return (
     <div className="searchable-select">
@@ -2143,7 +3005,23 @@ function SearchableSelect({ label, onChange, options, placeholder, value }) {
           placeholder={selectedOption?.label || placeholder}
           value={inputValue}
         />
-        <Icon name="expand_more" />
+        {hasValue ? (
+          <button
+            aria-label={`${label} seçimini temizle`}
+            className="clear-search-button"
+            onClick={() => {
+              onChange("");
+              setQuery("");
+              setIsOpen(false);
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <Icon name="close" />
+          </button>
+        ) : (
+          <Icon name="expand_more" />
+        )}
       </div>
       <input readOnly required type="hidden" value={value} />
       {isOpen && (
@@ -2186,8 +3064,6 @@ function StudentTable({
     <section className="student-table-card">
       <div className="table-head">
         <span>Öğrenci</span>
-        <span>Son Notlar</span>
-        <span>Devam</span>
         <span>İşlem</span>
       </div>
       {students.map((student) => (
@@ -2213,15 +3089,25 @@ function StudentTable({
               {student.first_name[0]}
               {student.last_name[0]}
             </span>
-            <strong>
-              {student.first_name} {student.last_name}
-            </strong>
+            <span className="student-directory-info">
+              <strong>
+                {student.first_name} {student.last_name}
+              </strong>
+              {(student.parent_full_name ||
+                student.parent_phone ||
+                student.parent_email) && (
+                <small>
+                  {[
+                    student.parent_full_name,
+                    student.parent_phone,
+                    student.parent_email,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </small>
+              )}
+            </span>
           </span>
-          <span className="grade-pills">
-            <b>A</b>
-            <b>B+</b>
-          </span>
-          <span className="attendance-ok">● %98</span>
           <span className="row-actions">
             <button
               aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
@@ -2232,6 +3118,10 @@ function StudentTable({
                 setStudentEditForm({
                   first_name: student.first_name,
                   last_name: student.last_name,
+                  parent_full_name: student.parent_full_name || "",
+                  parent_phone: student.parent_phone || "",
+                  parent_email: student.parent_email || "",
+                  home_address: student.home_address || "",
                   observation_notes: student.observation_notes || "",
                 });
                 setActiveModal("editStudent");

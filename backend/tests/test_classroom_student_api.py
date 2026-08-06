@@ -66,7 +66,9 @@ def test_classroom_crud_flow(client: TestClient, teacher: Teacher) -> None:
 
     list_response = client.get("/classrooms")
     assert list_response.status_code == 200
-    assert [classroom["name"] for classroom in list_response.json()] == ["5-A"]
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert [classroom["name"] for classroom in list_payload["items"]] == ["5-A"]
 
     update_response = client.patch(
         f"/classrooms/{created['id']}",
@@ -104,6 +106,10 @@ def test_student_crud_flow(client: TestClient, teacher: Teacher) -> None:
             "classroom_id": classroom["id"],
             "first_name": "Ada",
             "last_name": "Yilmaz",
+            "parent_full_name": "Ayse Yilmaz",
+            "parent_phone": "+90 555 111 22 33",
+            "parent_email": "ayse@example.com",
+            "home_address": "Ankara Cankaya",
             "observation_notes": "Derse katilimi iyi.",
         },
     )
@@ -113,16 +119,26 @@ def test_student_crud_flow(client: TestClient, teacher: Teacher) -> None:
     assert created["first_name"] == "Ada"
     assert created["last_name"] == "Yilmaz"
     assert created["classroom_id"] == classroom["id"]
+    assert created["parent_full_name"] == "Ayse Yilmaz"
+    assert created["parent_phone"] == "+90 555 111 22 33"
+    assert created["parent_email"] == "ayse@example.com"
+    assert created["home_address"] == "Ankara Cankaya"
 
     list_response = client.get("/students", params={"classroom_id": classroom["id"]})
     assert list_response.status_code == 200
-    assert [student["first_name"] for student in list_response.json()] == ["Ada"]
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert [student["first_name"] for student in list_payload["items"]] == ["Ada"]
 
     update_response = client.patch(
         f"/students/{created['id']}",
-        json={"observation_notes": "Problem cozme pratigi desteklenmeli."},
+        json={
+            "parent_phone": "+90 555 444 55 66",
+            "observation_notes": "Problem cozme pratigi desteklenmeli.",
+        },
     )
     assert update_response.status_code == 200
+    assert update_response.json()["parent_phone"] == "+90 555 444 55 66"
     assert update_response.json()["observation_notes"] == "Problem cozme pratigi desteklenmeli."
 
     delete_response = client.delete(f"/students/{created['id']}")
@@ -140,3 +156,39 @@ def test_create_student_requires_existing_classroom(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Classroom not found"
+
+
+def test_students_can_be_paginated_and_searched(client: TestClient, teacher: Teacher) -> None:
+    classroom = client.post(
+        "/classrooms",
+        json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"},
+    ).json()
+    for first_name in ["Ada", "Mert", "Zeynep"]:
+        client.post(
+            "/students",
+            json={
+                "classroom_id": classroom["id"],
+                "first_name": first_name,
+                "last_name": "Yilmaz",
+            },
+        )
+
+    page_response = client.get(
+        "/students",
+        params={"classroom_id": classroom["id"], "limit": 2, "offset": 1},
+    )
+    assert page_response.status_code == 200
+    page_payload = page_response.json()
+    assert page_payload["total"] == 3
+    assert page_payload["limit"] == 2
+    assert page_payload["offset"] == 1
+    assert [student["first_name"] for student in page_payload["items"]] == [
+        "Mert",
+        "Zeynep",
+    ]
+
+    search_response = client.get("/students", params={"search": "zey"})
+    assert search_response.status_code == 200
+    assert [student["first_name"] for student in search_response.json()["items"]] == [
+        "Zeynep",
+    ]

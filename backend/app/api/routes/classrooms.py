@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Classroom, Teacher
 from app.schemas.classroom import ClassroomCreate, ClassroomResponse, ClassroomUpdate
+from app.schemas.pagination import PageResponse
 
 router = APIRouter(prefix="/classrooms", tags=["classrooms"])
 
@@ -26,13 +27,23 @@ def create_classroom(payload: ClassroomCreate, db: Session = Depends(get_db)) ->
     return classroom
 
 
-@router.get("", response_model=list[ClassroomResponse])
-def list_classrooms(teacher_id: int | None = None, db: Session = Depends(get_db)) -> list[Classroom]:
+@router.get("", response_model=PageResponse[ClassroomResponse])
+def list_classrooms(
+    teacher_id: int | None = None,
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> PageResponse[ClassroomResponse]:
     statement = select(Classroom).order_by(Classroom.id)
     if teacher_id is not None:
         statement = statement.where(Classroom.teacher_id == teacher_id)
 
-    return list(db.scalars(statement).all())
+    total = (
+        db.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+        or 0
+    )
+    items = list(db.scalars(statement.limit(limit).offset(offset)).all())
+    return PageResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{classroom_id}", response_model=ClassroomResponse)

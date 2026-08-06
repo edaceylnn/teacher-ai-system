@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = Field(default="development")
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/teacher_ai_system"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5"
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
