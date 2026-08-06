@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 from sqlalchemy import create_engine, inspect
@@ -12,7 +12,10 @@ from app.models import (
     AttendanceStatus,
     Classroom,
     Grade,
+    Homework,
+    HomeworkStatus,
     Lesson,
+    ScheduleEntry,
     Student,
     Teacher,
 )
@@ -29,7 +32,9 @@ def test_database_models_create_expected_tables() -> None:
         "attendance_records",
         "classrooms",
         "grades",
+        "homeworks",
         "lessons",
+        "schedule_entries",
         "students",
         "teachers",
     }
@@ -55,6 +60,23 @@ def test_teacher_student_ai_output_relationships() -> None:
         lesson = Lesson(name="Matematik", teacher=teacher)
         grade = Grade(student=student, lesson=lesson, exam_name="1. Yazili", score=Decimal("82.50"))
         attendance = Attendance(student=student, date=date(2026, 1, 15), status=AttendanceStatus.present)
+        schedule_entry = ScheduleEntry(
+            teacher=teacher,
+            classroom=classroom,
+            lesson=lesson,
+            weekday=0,
+            start_time=time(9, 0),
+            end_time=time(9, 40),
+            location="Derslik 2",
+        )
+        homework = Homework(
+            teacher=teacher,
+            classroom=classroom,
+            lesson=lesson,
+            title="Kesir problemleri",
+            due_date=date(2026, 1, 20),
+            status=HomeworkStatus.assigned,
+        )
         ai_output = AIOutput(
             student=student,
             output_type=AIOutputType.report_comment,
@@ -62,7 +84,7 @@ def test_teacher_student_ai_output_relationships() -> None:
             output_payload={"comment": "Ada matematikte guclu bir ilerleme gosteriyor."},
         )
 
-        session.add_all([teacher, classroom, student, lesson, grade, attendance, ai_output])
+        session.add_all([teacher, classroom, student, lesson, grade, attendance, schedule_entry, homework, ai_output])
         session.commit()
 
         saved_student = session.query(Student).filter_by(first_name="Ada").one()

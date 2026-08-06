@@ -43,6 +43,24 @@ PARENT_MESSAGE_SCHEMA: dict[str, Any] = {
     },
 }
 
+WEEKLY_SUMMARY_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "name": "weekly_teacher_summary_output",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string"},
+            "summary": {"type": "string"},
+            "attention_points": {"type": "array", "items": {"type": "string"}},
+            "positive_signals": {"type": "array", "items": {"type": "string"}},
+            "suggested_actions": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["title", "summary", "attention_points", "positive_signals", "suggested_actions"],
+    },
+}
+
 
 def generate_report_comment(input_payload: dict[str, Any]) -> dict[str, Any]:
     return _generate_structured_output(
@@ -62,6 +80,17 @@ def generate_parent_message(input_payload: dict[str, Any]) -> dict[str, Any]:
         task=(
             "Velinin kolay anlayacağı, kısa, yapıcı ve çözüm odaklı bir Türkçe "
             "veli bilgilendirme mesajı üret."
+        ),
+    )
+
+
+def generate_weekly_summary(input_payload: dict[str, Any]) -> dict[str, Any]:
+    return _generate_structured_output(
+        input_payload=input_payload,
+        output_schema=WEEKLY_SUMMARY_SCHEMA,
+        task=(
+            "Öğretmen için haftalık kısa bir Türkçe sınıf özeti üret. "
+            "Dikkat edilmesi gereken öğrencileri, olumlu sinyalleri ve net aksiyonları belirt."
         ),
     )
 

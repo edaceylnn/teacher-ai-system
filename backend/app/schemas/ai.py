@@ -10,6 +10,19 @@ class AIGenerateRequest(BaseModel):
     student_id: int
 
 
+class AIWeeklySummaryRequest(BaseModel):
+    teacher_id: int
+    classroom_id: int | None = None
+
+
+class AIWeeklySummaryResponse(BaseModel):
+    title: str
+    summary: str
+    attention_points: list[str]
+    positive_signals: list[str]
+    suggested_actions: list[str]
+
+
 class AIOutputUpdate(BaseModel):
     output_payload: dict[str, Any]
 

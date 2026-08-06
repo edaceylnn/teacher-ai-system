@@ -179,6 +179,56 @@ export const api = {
     request(`/attendance-records/${attendanceId}`, {
       method: "DELETE",
     }),
+  listScheduleEntriesPage: (teacherId, pagination = {}) =>
+    request(
+      `/schedule-entries${buildQuery({
+        teacher_id: teacherId,
+        weekday: pagination.weekday,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  createScheduleEntry: (payload) =>
+    request("/schedule-entries", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateScheduleEntry: (entryId, payload) =>
+    request(`/schedule-entries/${entryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteScheduleEntry: (entryId) =>
+    request(`/schedule-entries/${entryId}`, {
+      method: "DELETE",
+    }),
+  listHomeworksPage: (teacherId, pagination = {}) =>
+    request(
+      `/homeworks${buildQuery({
+        teacher_id: teacherId,
+        classroom_id: pagination.classroomId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  createHomework: (payload) =>
+    request("/homeworks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateHomework: (homeworkId, payload) =>
+    request(`/homeworks/${homeworkId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteHomework: (homeworkId) =>
+    request(`/homeworks/${homeworkId}`, {
+      method: "DELETE",
+    }),
   generateReportComment: (studentId) =>
     request("/ai/report-comments", {
       method: "POST",
@@ -188,6 +238,11 @@ export const api = {
     request("/ai/parent-messages", {
       method: "POST",
       body: JSON.stringify({ student_id: studentId }),
+    }),
+  generateWeeklySummary: (teacherId, classroomId) =>
+    request("/ai/weekly-summaries", {
+      method: "POST",
+      body: JSON.stringify({ teacher_id: teacherId, classroom_id: classroomId }),
     }),
   listAIOutputs: (studentId) => request(`/ai/outputs?student_id=${studentId}`),
   updateAIOutput: (outputId, outputPayload) =>

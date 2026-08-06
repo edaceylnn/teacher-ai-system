@@ -1362,6 +1362,138 @@ p {
   gap: 8px;
 }
 
+.school-schedule-card {
+  background: var(--card);
+  border: 1px solid #d7e3ff;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(53, 37, 205, 0.06);
+  overflow-x: auto;
+}
+
+.school-schedule-grid {
+  display: grid;
+  grid-template-columns: 148px repeat(5, minmax(160px, 1fr));
+  min-width: 948px;
+}
+
+.schedule-grid-head,
+.schedule-time-cell,
+.schedule-slot {
+  border-bottom: 1px solid #e7edfb;
+  border-right: 1px solid #e7edfb;
+}
+
+.schedule-grid-head {
+  background: var(--surface-low);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  padding: 14px 12px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.schedule-grid-head.time-head {
+  text-align: left;
+}
+
+.schedule-time-cell {
+  align-content: center;
+  background: #fbfcff;
+  display: grid;
+  gap: 4px;
+  min-height: 92px;
+  padding: 12px;
+}
+
+.schedule-time-cell strong {
+  color: var(--text);
+}
+
+.schedule-time-cell span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.schedule-slot {
+  background: #ffffff;
+  color: var(--text);
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  padding: 10px;
+  position: relative;
+  text-align: left;
+}
+
+.schedule-slot:hover {
+  background: #f7f9ff;
+  box-shadow: inset 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+
+.schedule-slot.filled {
+  background: #eef3ff;
+}
+
+.schedule-slot.filled strong {
+  color: var(--primary);
+}
+
+.schedule-slot.filled span,
+.schedule-slot.filled small {
+  color: var(--muted);
+}
+
+.empty-slot-text {
+  align-self: center;
+  color: #9aa6bd;
+  font-weight: 750;
+  justify-self: center;
+}
+
+.schedule-slot-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-self: end;
+}
+
+.schedule-slot-actions .material-symbols-outlined {
+  color: var(--primary);
+  font-size: 19px;
+}
+
+.schedule-delete-action {
+  align-items: center;
+  background: var(--error-container);
+  border-radius: 8px;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.schedule-delete-action .material-symbols-outlined {
+  color: var(--error);
+}
+
+.schedule-break-row {
+  align-items: center;
+  background: #fff8df;
+  border-bottom: 1px solid #f3e6b6;
+  color: #7a5a00;
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+  justify-content: center;
+  min-height: 48px;
+}
+
+.homework-record-head,
+.homework-record-row {
+  grid-template-columns: minmax(220px, 1.4fr) 120px 130px 120px 120px 90px;
+}
+
 .attendance-head,
 .attendance-row {
   grid-template-columns: minmax(220px, 1.4fr) 160px 140px 100px;

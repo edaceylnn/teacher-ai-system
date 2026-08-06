@@ -27,6 +27,38 @@ const monthNames = [
   "Aralık",
 ];
 const weekDays = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+const weekdayOptions = weekDays.map((day, index) => ({
+  label: day,
+  value: String(index),
+}));
+const schoolWeekDays = weekDays.slice(0, 5);
+const schoolWeekdayOptions = weekdayOptions.slice(0, 5);
+const lessonSlots = [
+  { period: "1. Ders", start: "08:30", end: "09:10", part: "Sabah" },
+  { period: "2. Ders", start: "09:10", end: "09:50", part: "Sabah" },
+  { period: "3. Ders", start: "10:00", end: "10:40", part: "Sabah" },
+  { period: "4. Ders", start: "10:50", end: "11:30", part: "Sabah" },
+  { period: "Öğle Arası", start: "11:30", end: "12:30", part: "break" },
+  { period: "5. Ders", start: "12:30", end: "13:10", part: "Öğleden Sonra" },
+  { period: "6. Ders", start: "13:20", end: "14:00", part: "Öğleden Sonra" },
+  { period: "7. Ders", start: "14:10", end: "14:50", part: "Öğleden Sonra" },
+  { period: "8. Ders", start: "15:00", end: "15:40", part: "Öğleden Sonra" },
+];
+const scheduleSlotOptions = lessonSlots
+  .filter((slot) => slot.part !== "break")
+  .map((slot) => ({
+    label: `${slot.period} · ${slot.start} - ${slot.end}`,
+    value: `${slot.start}|${slot.end}`,
+  }));
+const homeworkStatusLabels = {
+  assigned: "Atandı",
+  completed: "Tamamlandı",
+  missing: "Eksik",
+  late: "Geç Teslim",
+};
+const homeworkStatusOptions = Object.entries(homeworkStatusLabels).map(
+  ([value, label]) => ({ label, value }),
+);
 
 const gradeLevelOptions = Array.from({ length: 12 }, (_, index) =>
   String(index + 1),
@@ -82,6 +114,16 @@ function buildMonthDays(year, month) {
   return days;
 }
 
+function scheduleSlotValue(form) {
+  if (!form.start_time || !form.end_time) return "";
+  return `${form.start_time}|${form.end_time}`;
+}
+
+function splitScheduleSlot(value) {
+  const [start_time = "", end_time = ""] = value.split("|");
+  return { start_time, end_time };
+}
+
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [classroomSearchTerm, setClassroomSearchTerm] = useState("");
@@ -120,6 +162,17 @@ function App() {
     offset: 0,
   });
   const [attendanceRecordOffset, setAttendanceRecordOffset] = useState(0);
+  const [scheduleEntries, setScheduleEntries] = useState([]);
+  const [homeworkPage, setHomeworkPage] = useState({
+    items: [],
+    total: 0,
+    limit: TABLE_PAGE_SIZE,
+    offset: 0,
+  });
+  const [homeworkOffset, setHomeworkOffset] = useState(0);
+  const [weeklySummary, setWeeklySummary] = useState(null);
+  const [isGeneratingWeeklySummary, setIsGeneratingWeeklySummary] =
+    useState(false);
   const [selectedClassroomId, setSelectedClassroomId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -166,6 +219,24 @@ function App() {
     status: "present",
   });
   const [editingAttendance, setEditingAttendance] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState({
+    classroom_id: "",
+    lesson_id: "",
+    weekday: "0",
+    start_time: "",
+    end_time: "",
+    location: "",
+  });
+  const [editingScheduleEntry, setEditingScheduleEntry] = useState(null);
+  const [homeworkForm, setHomeworkForm] = useState({
+    classroom_id: "",
+    lesson_id: "",
+    title: "",
+    description: "",
+    due_date: "",
+    status: "assigned",
+  });
+  const [editingHomework, setEditingHomework] = useState(null);
 
   const selectedClassroom = classrooms.find(
     (classroom) => classroom.id === selectedClassroomId,
@@ -229,6 +300,14 @@ function App() {
       })),
     [lessons],
   );
+  const classroomOptions = useMemo(
+    () =>
+      classrooms.map((classroom) => ({
+        label: `${classroom.name} Sınıfı`,
+        value: String(classroom.id),
+      })),
+    [classrooms],
+  );
   const attendanceStatusOptions = [
     { label: "Var", value: "present" },
     { label: "Yok", value: "absent" },
@@ -267,6 +346,11 @@ function App() {
       setAllStudents(allStudentData);
       setLessons(lessonData);
       setGrades(gradeData);
+      const schedulePage = await api.listScheduleEntriesPage(DEMO_TEACHER_ID, {
+        limit: 500,
+        offset: 0,
+      });
+      setScheduleEntries(schedulePage.items);
       setSelectedClassroomId(
         (current) => current || classroomData[0]?.id || null,
       );
@@ -376,6 +460,22 @@ function App() {
     setAttendanceRecordPage(page);
   }
 
+  async function loadScheduleEntries() {
+    const page = await api.listScheduleEntriesPage(DEMO_TEACHER_ID, {
+      limit: 500,
+      offset: 0,
+    });
+    setScheduleEntries(page.items);
+  }
+
+  async function loadHomeworkPage() {
+    const page = await api.listHomeworksPage(DEMO_TEACHER_ID, {
+      limit: TABLE_PAGE_SIZE,
+      offset: homeworkOffset,
+    });
+    setHomeworkPage(page);
+  }
+
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -411,6 +511,16 @@ function App() {
     if (activePage !== "attendance") return;
     loadAttendanceRecordPage().catch((err) => setError(err.message));
   }, [activePage, selectedStudentId, attendanceRecordOffset]);
+
+  useEffect(() => {
+    if (activePage !== "schedule") return;
+    loadScheduleEntries().catch((err) => setError(err.message));
+  }, [activePage]);
+
+  useEffect(() => {
+    if (activePage !== "homework") return;
+    loadHomeworkPage().catch((err) => setError(err.message));
+  }, [activePage, homeworkOffset]);
 
   function showNotice(message) {
     setNotice(message);
@@ -744,6 +854,129 @@ function App() {
     });
   }
 
+  async function handleCreateScheduleEntry(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      await api.createScheduleEntry({
+        teacher_id: DEMO_TEACHER_ID,
+        classroom_id: Number(scheduleForm.classroom_id),
+        lesson_id: Number(scheduleForm.lesson_id),
+        weekday: Number(scheduleForm.weekday),
+        start_time: scheduleForm.start_time,
+        end_time: scheduleForm.end_time,
+        location: scheduleForm.location.trim() || null,
+      });
+      setScheduleForm({
+        classroom_id: "",
+        lesson_id: "",
+        weekday: "0",
+        start_time: "",
+        end_time: "",
+        location: "",
+      });
+      setActiveModal(null);
+      await loadScheduleEntries();
+      showNotice("Ders programı kaydı eklendi.");
+    });
+  }
+
+  async function handleUpdateScheduleEntry(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingScheduleEntry) throw new Error("Düzenlenecek program kaydı bulunamadı.");
+      await api.updateScheduleEntry(editingScheduleEntry.id, {
+        classroom_id: Number(scheduleForm.classroom_id),
+        lesson_id: Number(scheduleForm.lesson_id),
+        weekday: Number(scheduleForm.weekday),
+        start_time: scheduleForm.start_time,
+        end_time: scheduleForm.end_time,
+        location: scheduleForm.location.trim() || null,
+      });
+      setEditingScheduleEntry(null);
+      setActiveModal(null);
+      await loadScheduleEntries();
+      showNotice("Ders programı güncellendi.");
+    });
+  }
+
+  async function handleDeleteScheduleEntry(entryId) {
+    await runAction(async () => {
+      await api.deleteScheduleEntry(entryId);
+      await loadScheduleEntries();
+      showNotice("Ders programı kaydı silindi.");
+    });
+  }
+
+  async function handleCreateHomework(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      await api.createHomework({
+        teacher_id: DEMO_TEACHER_ID,
+        classroom_id: Number(homeworkForm.classroom_id),
+        lesson_id: Number(homeworkForm.lesson_id),
+        title: homeworkForm.title.trim(),
+        description: homeworkForm.description.trim() || null,
+        due_date: homeworkForm.due_date,
+        status: homeworkForm.status,
+      });
+      setHomeworkForm({
+        classroom_id: "",
+        lesson_id: "",
+        title: "",
+        description: "",
+        due_date: "",
+        status: "assigned",
+      });
+      setActiveModal(null);
+      await loadHomeworkPage();
+      showNotice("Ödev eklendi.");
+    });
+  }
+
+  async function handleUpdateHomework(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingHomework) throw new Error("Düzenlenecek ödev bulunamadı.");
+      await api.updateHomework(editingHomework.id, {
+        classroom_id: Number(homeworkForm.classroom_id),
+        lesson_id: Number(homeworkForm.lesson_id),
+        title: homeworkForm.title.trim(),
+        description: homeworkForm.description.trim() || null,
+        due_date: homeworkForm.due_date,
+        status: homeworkForm.status,
+      });
+      setEditingHomework(null);
+      setActiveModal(null);
+      await loadHomeworkPage();
+      showNotice("Ödev güncellendi.");
+    });
+  }
+
+  async function handleDeleteHomework(homeworkId) {
+    await runAction(async () => {
+      await api.deleteHomework(homeworkId);
+      await loadHomeworkPage();
+      showNotice("Ödev silindi.");
+    });
+  }
+
+  async function handleGenerateWeeklySummary() {
+    setIsGeneratingWeeklySummary(true);
+    setError("");
+    try {
+      const summary = await api.generateWeeklySummary(
+        DEMO_TEACHER_ID,
+        selectedClassroomId,
+      );
+      setWeeklySummary(summary);
+      showNotice("Haftalık AI özeti oluşturuldu.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsGeneratingWeeklySummary(false);
+    }
+  }
+
   const shared = {
     activePage,
     attendanceRecordOffset,
@@ -756,12 +989,19 @@ function App() {
     classroomStudentPage,
     classroomStudentOffset,
     classrooms,
+    classroomOptions,
     filteredStudents,
     gradeAverages,
     gradeRecordOffset,
     gradeRecordPage,
     grades,
     isStudentPickerOpen,
+    homeworkForm,
+    homeworkOffset,
+    homeworkPage,
+    homeworkStatusOptions,
+    isGeneratingWeeklySummary,
+    lessonOptions,
     lessons,
     overallAverage,
     profile,
@@ -783,25 +1023,37 @@ function App() {
     setEditingAttendance,
     setEditingClassroom,
     setEditingGrade,
+    setEditingHomework,
     setEditingLesson,
+    setEditingScheduleEntry,
     setEditingStudent,
     setGradeEditForm,
     setGradeForm,
     setGradeRecordOffset,
     setAttendanceForm,
+    setHomeworkForm,
+    setHomeworkOffset,
     setIsStudentPickerOpen,
     setLessonEditForm,
+    setScheduleForm,
     setSearchTerm,
     setSelectedClassroomId,
     setSelectedStudentId,
     setStudentDirectoryOffset,
     setStudentEditForm,
     students,
+    scheduleEntries,
+    scheduleForm,
+    weeklySummary,
+    weekdayOptions,
     handleDeleteAttendance,
     handleDeleteClassroom,
     handleDeleteGrade,
+    handleDeleteHomework,
     handleDeleteLesson,
+    handleDeleteScheduleEntry,
     handleDeleteStudent,
+    handleGenerateWeeklySummary,
   };
 
   return (
@@ -824,6 +1076,8 @@ function App() {
         {activePage === "gradebook" && <GradebookPage {...shared} />}
         {activePage === "studentDetail" && <StudentDetailPage {...shared} />}
         {activePage === "attendance" && <AttendancePage {...shared} />}
+        {activePage === "schedule" && <SchedulePage {...shared} />}
+        {activePage === "homework" && <HomeworkPage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
         {activePage === "settings" && <SettingsPage />}
         <StatusLine isLoading={isLoading} notice={notice} error={error} />
@@ -1268,6 +1522,142 @@ function App() {
               </button>
             </FormPanel>
           )}
+          {(activeModal === "schedule" || activeModal === "editSchedule") && (
+            <FormPanel
+              title={activeModal === "schedule" ? "Ders Programı Ekle" : "Ders Programını Düzenle"}
+              onSubmit={
+                activeModal === "schedule"
+                  ? handleCreateScheduleEntry
+                  : handleUpdateScheduleEntry
+              }
+            >
+              <SearchableSelect
+                label="Sınıf"
+                onChange={(value) =>
+                  setScheduleForm((form) => ({ ...form, classroom_id: value }))
+                }
+                options={classroomOptions}
+                placeholder="Sınıf ara"
+                value={scheduleForm.classroom_id}
+              />
+              <SearchableSelect
+                label="Ders"
+                onChange={(value) =>
+                  setScheduleForm((form) => ({ ...form, lesson_id: value }))
+                }
+                options={lessonOptions}
+                placeholder="Ders ara"
+                value={scheduleForm.lesson_id}
+              />
+              <SearchableSelect
+                label="Gün"
+                onChange={(value) =>
+                  setScheduleForm((form) => ({ ...form, weekday: value }))
+                }
+                options={schoolWeekdayOptions}
+                placeholder="Gün ara"
+                value={scheduleForm.weekday}
+              />
+              <SearchableSelect
+                label="Ders saati"
+                onChange={(value) =>
+                  setScheduleForm((form) => ({
+                    ...form,
+                    ...splitScheduleSlot(value),
+                  }))
+                }
+                options={scheduleSlotOptions}
+                placeholder="Ders saati ara"
+                value={scheduleSlotValue(scheduleForm)}
+              />
+              <input
+                onChange={(event) =>
+                  setScheduleForm((form) => ({
+                    ...form,
+                    location: event.target.value,
+                  }))
+                }
+                placeholder="Derslik"
+                value={scheduleForm.location}
+              />
+              <button className="primary-button" type="submit">
+                Kaydet
+              </button>
+            </FormPanel>
+          )}
+          {(activeModal === "homework" || activeModal === "editHomework") && (
+            <FormPanel
+              title={activeModal === "homework" ? "Ödev Ekle" : "Ödevi Düzenle"}
+              onSubmit={
+                activeModal === "homework"
+                  ? handleCreateHomework
+                  : handleUpdateHomework
+              }
+            >
+              <SearchableSelect
+                label="Sınıf"
+                onChange={(value) =>
+                  setHomeworkForm((form) => ({ ...form, classroom_id: value }))
+                }
+                options={classroomOptions}
+                placeholder="Sınıf ara"
+                value={homeworkForm.classroom_id}
+              />
+              <SearchableSelect
+                label="Ders"
+                onChange={(value) =>
+                  setHomeworkForm((form) => ({ ...form, lesson_id: value }))
+                }
+                options={lessonOptions}
+                placeholder="Ders ara"
+                value={homeworkForm.lesson_id}
+              />
+              <input
+                onChange={(event) =>
+                  setHomeworkForm((form) => ({
+                    ...form,
+                    title: event.target.value,
+                  }))
+                }
+                placeholder="Ödev başlığı"
+                required
+                value={homeworkForm.title}
+              />
+              <textarea
+                onChange={(event) =>
+                  setHomeworkForm((form) => ({
+                    ...form,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="Açıklama"
+                value={homeworkForm.description}
+              />
+              <input
+                onChange={(event) =>
+                  setHomeworkForm((form) => ({
+                    ...form,
+                    due_date: event.target.value,
+                  }))
+                }
+                required
+                type="date"
+                value={homeworkForm.due_date}
+              />
+              <SearchableSelect
+                label="Durum"
+                onChange={(value) =>
+                  setHomeworkForm((form) => ({ ...form, status: value }))
+                }
+                options={homeworkStatusOptions}
+                placeholder="Durum ara"
+                value={homeworkForm.status}
+              />
+              <button className="primary-button" type="submit">
+                Kaydet
+              </button>
+            </FormPanel>
+          )}
         </Modal>
       )}
     </main>
@@ -1336,6 +1726,18 @@ function Sidebar({
           onClick={() => setActivePage("attendance")}
         />
         <NavItem
+          active={activePage === "schedule"}
+          icon="calendar_month"
+          label="Ders Programı"
+          onClick={() => setActivePage("schedule")}
+        />
+        <NavItem
+          active={activePage === "homework"}
+          icon="assignment"
+          label="Ödevler"
+          onClick={() => setActivePage("homework")}
+        />
+        <NavItem
           active={activePage === "aiReports"}
           icon="auto_awesome"
           label="AI Raporları"
@@ -1367,11 +1769,28 @@ function Sidebar({
 
 function DashboardPage({
   classrooms,
+  handleGenerateWeeklySummary,
+  isGeneratingWeeklySummary,
   lessons,
+  scheduleEntries,
   setActiveModal,
   setActivePage,
   students,
+  weeklySummary,
 }) {
+  const classroomById = useMemo(
+    () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
+    [classrooms],
+  );
+  const lessonById = useMemo(
+    () => new Map(lessons.map((lesson) => [lesson.id, lesson])),
+    [lessons],
+  );
+  const todayWeekday = (new Date().getDay() + 6) % 7;
+  const todaySchedule = scheduleEntries.filter(
+    (entry) => entry.weekday === todayWeekday,
+  );
+
   return (
     <>
       <section className="hero-card">
@@ -1468,34 +1887,50 @@ function DashboardPage({
         <aside className="dashboard-side">
           <section className="ai-insights">
             <div className="section-heading">
-              <h2>AI Öngörüleri</h2>
-              <span className="count-pill">3 Yeni</span>
+              <h2>AI Haftalık Özet</h2>
+              <button
+                className="outline-button compact"
+                disabled={isGeneratingWeeklySummary}
+                onClick={handleGenerateWeeklySummary}
+                type="button"
+              >
+                {isGeneratingWeeklySummary ? "Hazırlanıyor" : "Oluştur"}
+              </button>
             </div>
-            <Insight
-              tone="warning"
-              title="Not Düşüşü"
-              text="Bir öğrencinin son notları sınıf ortalamasının altında."
-            />
-            <Insight
-              tone="success"
-              title="Başarı Artışı"
-              text="Matematik ortalaması geçen aya göre yükseldi."
-            />
+            {weeklySummary ? (
+              <>
+                <Insight tone="success" title={weeklySummary.title} text={weeklySummary.summary} />
+                {(weeklySummary.attention_points || []).slice(0, 2).map((item) => (
+                  <Insight key={item} tone="warning" title="Dikkat" text={item} />
+                ))}
+              </>
+            ) : (
+              <p className="empty-note">Haftalık özet henüz oluşturulmadı.</p>
+            )}
           </section>
           <section className="schedule-card">
-            <h2>Günün Programı</h2>
-            <ScheduleItem
-              color="primary"
-              time="09:00"
-              title="10-A Matematik"
-              subtitle="Sınıf 104"
-            />
-            <ScheduleItem
-              color="secondary"
-              time="11:30"
-              title="5-A Türkçe"
-              subtitle="Derslik 2"
-            />
+            <div className="section-heading">
+              <h2>Bugünkü Dersler</h2>
+              <button
+                className="outline-button compact"
+                onClick={() => setActivePage("schedule")}
+                type="button"
+              >
+                Aç
+              </button>
+            </div>
+            {todaySchedule.map((entry, index) => (
+              <ScheduleItem
+                color={index % 2 ? "secondary" : "primary"}
+                key={entry.id}
+                time={entry.start_time.slice(0, 5)}
+                title={`${classroomById.get(entry.classroom_id)?.name || "Sınıf"} ${lessonById.get(entry.lesson_id)?.name || "Ders"}`}
+                subtitle={entry.location || "Derslik belirtilmedi"}
+              />
+            ))}
+            {!todaySchedule.length && (
+              <p className="empty-note">Bugün için ders programı yok.</p>
+            )}
           </section>
         </aside>
       </div>
@@ -2526,6 +2961,285 @@ function AttendancePage({
         offset={attendanceRecordOffset}
         setOffset={setAttendanceRecordOffset}
         total={attendanceRecordPage.total}
+      />
+    </div>
+  );
+}
+
+function SchedulePage({
+  classrooms,
+  handleDeleteScheduleEntry,
+  lessons,
+  scheduleEntries,
+  setActiveModal,
+  setEditingScheduleEntry,
+  setScheduleForm,
+}) {
+  const classroomById = useMemo(
+    () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
+    [classrooms],
+  );
+  const lessonById = useMemo(
+    () => new Map(lessons.map((lesson) => [lesson.id, lesson])),
+    [lessons],
+  );
+  const entryBySlot = useMemo(() => {
+    const next = new Map();
+    scheduleEntries.forEach((entry) => {
+      next.set(
+        `${entry.weekday}:${entry.start_time.slice(0, 5)}:${entry.end_time.slice(0, 5)}`,
+        entry,
+      );
+    });
+    return next;
+  }, [scheduleEntries]);
+
+  function openSlot(slot, weekday) {
+    setScheduleForm({
+      classroom_id: "",
+      lesson_id: "",
+      weekday: String(weekday),
+      start_time: slot.start,
+      end_time: slot.end,
+      location: "",
+    });
+    setActiveModal("schedule");
+  }
+
+  function openEntry(entry) {
+    setEditingScheduleEntry(entry);
+    setScheduleForm({
+      classroom_id: String(entry.classroom_id),
+      lesson_id: String(entry.lesson_id),
+      weekday: String(entry.weekday),
+      start_time: entry.start_time.slice(0, 5),
+      end_time: entry.end_time.slice(0, 5),
+      location: entry.location || "",
+    });
+    setActiveModal("editSchedule");
+  }
+
+  return (
+    <div className="wide-page">
+      <section className="hero-card">
+        <div>
+          <h1>Ders Programı</h1>
+          <p>Haftalık ders akışını sınıf, ders, saat ve derslik bazında takip et.</p>
+        </div>
+        <button
+          className="primary-button"
+          onClick={() => {
+            setScheduleForm({
+              classroom_id: "",
+              lesson_id: "",
+              weekday: "0",
+              start_time: "",
+              end_time: "",
+              location: "",
+            });
+            setActiveModal("schedule");
+          }}
+          type="button"
+        >
+          <Icon name="add" /> Ders Ekle
+        </button>
+      </section>
+
+      <section className="school-schedule-card">
+        <div className="school-schedule-grid">
+          <div className="schedule-grid-head time-head">Saat</div>
+          {schoolWeekDays.map((day) => (
+            <div className="schedule-grid-head" key={day}>
+              {day}
+            </div>
+          ))}
+          {lessonSlots.map((slot) =>
+            slot.part === "break" ? (
+              <div className="schedule-break-row" key={slot.period}>
+                <span>{slot.period}</span>
+                <strong>
+                  {slot.start} - {slot.end}
+                </strong>
+              </div>
+            ) : (
+              <ScheduleSlotRow
+                classroomById={classroomById}
+                entryBySlot={entryBySlot}
+                handleDeleteScheduleEntry={handleDeleteScheduleEntry}
+                key={slot.period}
+                lessonById={lessonById}
+                onOpenEntry={openEntry}
+                onOpenSlot={openSlot}
+                slot={slot}
+              />
+            ),
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ScheduleSlotRow({
+  classroomById,
+  entryBySlot,
+  handleDeleteScheduleEntry,
+  lessonById,
+  onOpenEntry,
+  onOpenSlot,
+  slot,
+}) {
+  return (
+    <>
+      <div className="schedule-time-cell">
+        <strong>{slot.period}</strong>
+        <span>
+          {slot.start} - {slot.end}
+        </span>
+      </div>
+      {schoolWeekDays.map((day, weekday) => {
+        const entry = entryBySlot.get(`${weekday}:${slot.start}:${slot.end}`);
+        return (
+          <button
+            className={entry ? "schedule-slot filled" : "schedule-slot"}
+            key={`${day}-${slot.period}`}
+            onClick={() => (entry ? onOpenEntry(entry) : onOpenSlot(slot, weekday))}
+            type="button"
+          >
+            {entry ? (
+              <>
+                <strong>{lessonById.get(entry.lesson_id)?.name || "Ders"}</strong>
+                <span>{classroomById.get(entry.classroom_id)?.name || "Sınıf"}</span>
+                <small>{entry.location || "Derslik yok"}</small>
+                <span className="schedule-slot-actions">
+                  <span className="material-symbols-outlined">edit</span>
+                  <span
+                    aria-label="Ders programı kaydını sil"
+                    className="schedule-delete-action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeleteScheduleEntry(entry.id);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <span className="material-symbols-outlined">delete</span>
+                  </span>
+                </span>
+              </>
+            ) : (
+              <span className="empty-slot-text">Ders ekle</span>
+            )}
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
+function HomeworkPage({
+  classroomOptions,
+  classrooms,
+  handleDeleteHomework,
+  homeworkOffset,
+  homeworkPage,
+  homeworkStatusOptions,
+  lessonOptions,
+  lessons,
+  setActiveModal,
+  setEditingHomework,
+  setHomeworkForm,
+  setHomeworkOffset,
+}) {
+  const classroomById = useMemo(
+    () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
+    [classrooms],
+  );
+  const lessonById = useMemo(
+    () => new Map(lessons.map((lesson) => [lesson.id, lesson])),
+    [lessons],
+  );
+
+  return (
+    <div className="wide-page">
+      <section className="hero-card">
+        <div>
+          <h1>Ödev Takibi</h1>
+          <p>Sınıf bazlı ödevleri, teslim tarihlerini ve durumlarını yönet.</p>
+        </div>
+        <button
+          className="primary-button"
+          onClick={() => {
+            setHomeworkForm({
+              classroom_id: "",
+              lesson_id: "",
+              title: "",
+              description: "",
+              due_date: "",
+              status: "assigned",
+            });
+            setActiveModal("homework");
+          }}
+          type="button"
+        >
+          <Icon name="assignment_add" /> Ödev Ekle
+        </button>
+      </section>
+
+      <section className="student-table-card homework-card">
+        <div className="record-head homework-record-head">
+          <span>Ödev</span>
+          <span>Sınıf</span>
+          <span>Ders</span>
+          <span>Teslim</span>
+          <span>Durum</span>
+          <span>İşlem</span>
+        </div>
+        {homeworkPage.items.map((homework) => (
+          <div className="record-row homework-record-row" key={homework.id}>
+            <strong>{homework.title}</strong>
+            <span>{classroomById.get(homework.classroom_id)?.name || "-"}</span>
+            <span>{lessonById.get(homework.lesson_id)?.name || "-"}</span>
+            <span>{homework.due_date}</span>
+            <span>{homeworkStatusLabels[homework.status]}</span>
+            <span className="row-actions">
+              <button
+                aria-label={`${homework.title} ödevini düzenle`}
+                className="icon-action"
+                onClick={() => {
+                  setEditingHomework(homework);
+                  setHomeworkForm({
+                    classroom_id: String(homework.classroom_id),
+                    lesson_id: String(homework.lesson_id),
+                    title: homework.title,
+                    description: homework.description || "",
+                    due_date: homework.due_date,
+                    status: homework.status,
+                  });
+                  setActiveModal("editHomework");
+                }}
+                type="button"
+              >
+                <Icon name="edit" />
+              </button>
+              <button
+                aria-label={`${homework.title} ödevini sil`}
+                className="icon-action danger-action"
+                onClick={() => handleDeleteHomework(homework.id)}
+                type="button"
+              >
+                <Icon name="delete" />
+              </button>
+            </span>
+          </div>
+        ))}
+        {!homeworkPage.items.length && <p className="empty-note">Henüz ödev yok.</p>}
+      </section>
+      <PaginationControls
+        limit={homeworkPage.limit}
+        offset={homeworkOffset}
+        setOffset={setHomeworkOffset}
+        total={homeworkPage.total}
       />
     </div>
   );

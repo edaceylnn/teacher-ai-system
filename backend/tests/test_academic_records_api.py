@@ -242,6 +242,81 @@ def test_attendance_crud_flow(client: TestClient, student: dict) -> None:
     assert missing_response.status_code == 404
 
 
+def test_schedule_entry_crud_and_conflict(client: TestClient, teacher: Teacher, student: dict) -> None:
+    classroom_id = student["classroom_id"]
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    payload = {
+        "teacher_id": teacher.id,
+        "classroom_id": classroom_id,
+        "lesson_id": lesson["id"],
+        "weekday": 0,
+        "start_time": "09:00",
+        "end_time": "09:40",
+        "location": "Derslik 2",
+    }
+
+    create_response = client.post("/schedule-entries", json=payload)
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["weekday"] == 0
+    assert created["location"] == "Derslik 2"
+
+    conflict_response = client.post(
+        "/schedule-entries",
+        json={**payload, "start_time": "09:20", "end_time": "10:00"},
+    )
+    assert conflict_response.status_code == 409
+
+    list_response = client.get("/schedule-entries", params={"teacher_id": teacher.id})
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+
+    update_response = client.patch(
+        f"/schedule-entries/{created['id']}",
+        json={"location": "Laboratuvar"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["location"] == "Laboratuvar"
+
+    delete_response = client.delete(f"/schedule-entries/{created['id']}")
+    assert delete_response.status_code == 204
+
+
+def test_homework_crud_flow(client: TestClient, teacher: Teacher, student: dict) -> None:
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Turkce"}).json()
+    create_response = client.post(
+        "/homeworks",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": student["classroom_id"],
+            "lesson_id": lesson["id"],
+            "title": "Okuma calismasi",
+            "description": "10 sayfa okuma",
+            "due_date": "2026-01-20",
+            "status": "assigned",
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["title"] == "Okuma calismasi"
+
+    list_response = client.get("/homeworks", params={"teacher_id": teacher.id})
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+
+    update_response = client.patch(
+        f"/homeworks/{created['id']}",
+        json={"status": "completed"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["status"] == "completed"
+
+    delete_response = client.delete(f"/homeworks/{created['id']}")
+    assert delete_response.status_code == 204
+
+
 def test_create_attendance_requires_existing_student(client: TestClient) -> None:
     response = client.post(
         "/attendance-records",

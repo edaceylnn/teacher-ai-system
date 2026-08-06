@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ai, attendance, classrooms, grades, health, lessons, students, teachers
+from app.api.routes import ai, attendance, classrooms, grades, health, homework, lessons, schedule, students, teachers
 from app.core.config import settings
 
 
@@ -28,6 +28,8 @@ def create_app() -> FastAPI:
     app.include_router(lessons.router)
     app.include_router(grades.router)
     app.include_router(attendance.router)
+    app.include_router(schedule.router)
+    app.include_router(homework.router)
     app.include_router(ai.router)
 
     return app
