@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/teacher_ai_system"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5"
+    secret_key: str = "change-me-in-production"
+    access_token_expire_minutes: int = 60 * 12
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",

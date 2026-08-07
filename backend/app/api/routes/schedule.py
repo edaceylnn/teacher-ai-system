@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import ensure_classroom_owner, ensure_lesson_owner, ensure_schedule_owner, get_current_teacher
 from app.db.session import get_db
 from app.models import Classroom, Lesson, ScheduleEntry, Teacher
 from app.schemas.pagination import PageResponse
@@ -12,13 +13,11 @@ from app.schemas.schedule import ScheduleEntryCreate, ScheduleEntryResponse, Sch
 router = APIRouter(prefix="/schedule-entries", tags=["schedule"])
 
 
-def _ensure_refs(payload: ScheduleEntryCreate | ScheduleEntryUpdate, teacher_id: int | None, db: Session) -> None:
-    if teacher_id is not None and db.get(Teacher, teacher_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
-    if payload.classroom_id is not None and db.get(Classroom, payload.classroom_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Classroom not found")
-    if payload.lesson_id is not None and db.get(Lesson, payload.lesson_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
+def _ensure_refs(payload: ScheduleEntryCreate | ScheduleEntryUpdate, teacher: Teacher, db: Session) -> None:
+    if payload.classroom_id is not None:
+        ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
+    if payload.lesson_id is not None:
+        ensure_lesson_owner(db.get(Lesson, payload.lesson_id), teacher)
 
 
 def _ensure_no_conflict(
@@ -42,10 +41,14 @@ def _ensure_no_conflict(
 
 
 @router.post("", response_model=ScheduleEntryResponse, status_code=status.HTTP_201_CREATED)
-def create_schedule_entry(payload: ScheduleEntryCreate, db: Session = Depends(get_db)) -> ScheduleEntry:
-    _ensure_refs(payload, payload.teacher_id, db)
-    _ensure_no_conflict(payload.teacher_id, payload.weekday, payload.start_time, payload.end_time, db)
-    entry = ScheduleEntry(**payload.model_dump())
+def create_schedule_entry(
+    payload: ScheduleEntryCreate,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> ScheduleEntry:
+    _ensure_refs(payload, current_teacher, db)
+    _ensure_no_conflict(current_teacher.id, payload.weekday, payload.start_time, payload.end_time, db)
+    entry = ScheduleEntry(**{**payload.model_dump(), "teacher_id": current_teacher.id})
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -59,10 +62,11 @@ def list_schedule_entries(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[ScheduleEntryResponse]:
-    statement = select(ScheduleEntry).order_by(ScheduleEntry.weekday, ScheduleEntry.start_time, ScheduleEntry.id)
-    if teacher_id is not None:
-        statement = statement.where(ScheduleEntry.teacher_id == teacher_id)
+    statement = select(ScheduleEntry).where(ScheduleEntry.teacher_id == current_teacher.id).order_by(
+        ScheduleEntry.weekday, ScheduleEntry.start_time, ScheduleEntry.id
+    )
     if weekday is not None:
         statement = statement.where(ScheduleEntry.weekday == weekday)
 
@@ -76,11 +80,10 @@ def update_schedule_entry(
     entry_id: int,
     payload: ScheduleEntryUpdate,
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> ScheduleEntry:
-    entry = db.get(ScheduleEntry, entry_id)
-    if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule entry not found")
-    _ensure_refs(payload, None, db)
+    entry = ensure_schedule_owner(db.get(ScheduleEntry, entry_id), current_teacher)
+    _ensure_refs(payload, current_teacher, db)
 
     update_data = payload.model_dump(exclude_unset=True)
     next_weekday = update_data.get("weekday", entry.weekday)
@@ -98,10 +101,12 @@ def update_schedule_entry(
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_schedule_entry(entry_id: int, db: Session = Depends(get_db)) -> Response:
-    entry = db.get(ScheduleEntry, entry_id)
-    if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule entry not found")
+def delete_schedule_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> Response:
+    entry = ensure_schedule_owner(db.get(ScheduleEntry, entry_id), current_teacher)
     db.delete(entry)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

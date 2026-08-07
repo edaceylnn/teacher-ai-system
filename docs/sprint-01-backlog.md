@@ -32,7 +32,7 @@ Sprint sonunda kullanıcı şu akışı tamamlayabilmeli:
 | AI-001 | OpenAI servis katmanı tasarla | AI Engineer | Must | Done |
 | AI-002 | Karne yorumu structured output şeması oluştur | AI Engineer | Must | Done |
 | AI-003 | Veli mesajı prompt şablonu oluştur | AI Engineer | Must | Done |
-| QA-001 | Demo senaryosu için örnek veri hazırla | QA | Should | Todo |
+| QA-001 | Demo senaryosu için örnek veri hazırla | QA | Should | Done |
 
 ## Günlük Plan
 
@@ -48,7 +48,7 @@ Sprint sonunda kullanıcı şu akışı tamamlayabilmeli:
 - FastAPI backend iskeleti - Done
 - Health endpoint - Done
 - Ortam değişkenleri
-- Basit Docker hazırlığı - Todo
+- Basit Docker hazırlığı - Done
 
 ### Gün 3
 
@@ -73,7 +73,7 @@ Sprint sonunda kullanıcı şu akışı tamamlayabilmeli:
 ### Gün 7
 
 - Öğrenci profil endpoint'i - Done
-- Öğrenci profil ekranı - Todo
+- Öğrenci profil ekranı - Done
 
 ### Gün 8
 

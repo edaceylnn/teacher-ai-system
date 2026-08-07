@@ -25,6 +25,8 @@ Sistem öğretmene şu konularda yardımcı olur:
 - Öğrenci performansını yorumlama
 - Karne yorumu üretme
 - Veli mesajı hazırlama
+- Haftalık sınıf özeti çıkarma
+- Ders programı ve ödev takibini aynı panelde görme
 - Eksik konu analizi yapma
 - Ders planı oluşturma
 - PDF rapor üretme
@@ -57,14 +59,15 @@ Birincil kullanıcı:
 
 - AI çok genel yorum üretebilir.
 - Öğretmen verisi eksik olursa çıktı kalitesi düşebilir.
-- Hassas öğrenci verileri için gizlilik tasarımı gerekir.
+- Hassas öğrenci verileri için kimlik doğrulama, yetkilendirme ve veri izolasyonu gerekir.
 - Gereksiz büyük kapsam projeyi yavaşlatabilir.
 
 ## MVP Kararı
 
-İlk sürüm yalnızca üç temel akışa odaklanır:
+İlk sürüm şu temel akışlara odaklanır:
 
 1. Öğrenci verisini gir.
 2. AI karne yorumu üret.
 3. Veli mesajı üret ve kaydet.
-
+4. Demo için ders programı, ödev ve haftalık özet akışını göster.
+5. Eksik konu analizi, ders planı ve PDF'e yazdırma akışını tamamla.

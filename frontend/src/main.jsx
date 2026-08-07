@@ -1,10 +1,10 @@
 import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { api } from "./api";
+import { api, getAuthToken, setAuthToken } from "./api";
 import "./styles.css";
 
-const DEMO_TEACHER_ID = 1;
+const DEMO_TEACHER_ID = Number(import.meta.env.VITE_DEMO_TEACHER_ID || 1);
 const TABLE_PAGE_SIZE = 10;
 
 const attendanceLabels = {
@@ -125,6 +125,14 @@ function splitScheduleSlot(value) {
 }
 
 function App() {
+  const [authToken, setAuthTokenState] = useState(() => getAuthToken());
+  const [currentTeacher, setCurrentTeacher] = useState(null);
+  const [teacherProfileForm, setTeacherProfileForm] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+  });
+  const [isCheckingAuth, setIsCheckingAuth] = useState(Boolean(authToken));
   const [activePage, setActivePage] = useState("dashboard");
   const [classroomSearchTerm, setClassroomSearchTerm] = useState("");
   const [classroomGradeFilter, setClassroomGradeFilter] = useState("all");
@@ -132,6 +140,7 @@ function App() {
   const [classroomStudentCounts, setClassroomStudentCounts] = useState({});
   const [students, setStudents] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
+  const [aiOutputsByStudent, setAiOutputsByStudent] = useState({});
   const [studentDirectoryPage, setStudentDirectoryPage] = useState({
     items: [],
     total: 0,
@@ -321,14 +330,48 @@ function App() {
     activeModal === "attendance" &&
     activePage === "studentDetail" &&
     selectedStudentId;
+  const teacherId = currentTeacher?.id || DEMO_TEACHER_ID;
+
+  useEffect(() => {
+    if (!authToken) {
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    let isActive = true;
+    api
+      .getCurrentTeacher()
+      .then((teacher) => {
+        if (isActive) {
+          setCurrentTeacher(teacher);
+          setTeacherProfileForm({
+            full_name: teacher.full_name,
+            email: teacher.email,
+            password: "",
+          });
+        }
+      })
+      .catch(() => {
+        setAuthToken(null);
+        setAuthTokenState(null);
+        if (isActive) setCurrentTeacher(null);
+      })
+      .finally(() => {
+        if (isActive) setIsCheckingAuth(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authToken]);
 
   async function loadInitialData() {
     setIsLoading(true);
     setError("");
     try {
       const [classroomData, lessonData, gradeData] = await Promise.all([
-        api.listClassrooms(DEMO_TEACHER_ID),
-        api.listLessons(DEMO_TEACHER_ID),
+        api.listClassrooms(teacherId),
+        api.listLessons(teacherId),
         api.listGrades(),
       ]);
       const studentPages = await Promise.all(
@@ -341,12 +384,19 @@ function App() {
         return acc;
       }, {});
       const allStudentData = studentPages.flatMap((page) => page.items);
+      const aiOutputEntries = await Promise.all(
+        allStudentData.map(async (student) => [
+          student.id,
+          await api.listAIOutputs(student.id).catch(() => []),
+        ]),
+      );
       setClassrooms(classroomData);
       setClassroomStudentCounts(studentCounts);
       setAllStudents(allStudentData);
+      setAiOutputsByStudent(Object.fromEntries(aiOutputEntries));
       setLessons(lessonData);
       setGrades(gradeData);
-      const schedulePage = await api.listScheduleEntriesPage(DEMO_TEACHER_ID, {
+      const schedulePage = await api.listScheduleEntriesPage(teacherId, {
         limit: 500,
         offset: 0,
       });
@@ -461,7 +511,7 @@ function App() {
   }
 
   async function loadScheduleEntries() {
-    const page = await api.listScheduleEntriesPage(DEMO_TEACHER_ID, {
+    const page = await api.listScheduleEntriesPage(teacherId, {
       limit: 500,
       offset: 0,
     });
@@ -469,7 +519,7 @@ function App() {
   }
 
   async function loadHomeworkPage() {
-    const page = await api.listHomeworksPage(DEMO_TEACHER_ID, {
+    const page = await api.listHomeworksPage(teacherId, {
       limit: TABLE_PAGE_SIZE,
       offset: homeworkOffset,
     });
@@ -477,8 +527,9 @@ function App() {
   }
 
   useEffect(() => {
+    if (!currentTeacher) return;
     loadInitialData();
-  }, []);
+  }, [currentTeacher]);
 
   useEffect(() => {
     loadStudents(selectedClassroomId).catch((err) => setError(err.message));
@@ -543,7 +594,7 @@ function App() {
         throw new Error("Sınıf düzeyi ve şube seçmelisin.");
       const classroomName = buildClassroomName(classroomForm);
       const created = await api.createClassroom({
-        teacher_id: DEMO_TEACHER_ID,
+        teacher_id: teacherId,
         name: classroomName,
         grade_level: classroomForm.grade_level.trim(),
       });
@@ -703,7 +754,7 @@ function App() {
     event.preventDefault();
     await runAction(async () => {
       const created = await api.createLesson({
-        teacher_id: DEMO_TEACHER_ID,
+        teacher_id: teacherId,
         name: lessonForm.name.trim(),
       });
       setLessons((current) => [...current, created]);
@@ -858,7 +909,7 @@ function App() {
     event.preventDefault();
     await runAction(async () => {
       await api.createScheduleEntry({
-        teacher_id: DEMO_TEACHER_ID,
+        teacher_id: teacherId,
         classroom_id: Number(scheduleForm.classroom_id),
         lesson_id: Number(scheduleForm.lesson_id),
         weekday: Number(scheduleForm.weekday),
@@ -883,7 +934,8 @@ function App() {
   async function handleUpdateScheduleEntry(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!editingScheduleEntry) throw new Error("Düzenlenecek program kaydı bulunamadı.");
+      if (!editingScheduleEntry)
+        throw new Error("Düzenlenecek program kaydı bulunamadı.");
       await api.updateScheduleEntry(editingScheduleEntry.id, {
         classroom_id: Number(scheduleForm.classroom_id),
         lesson_id: Number(scheduleForm.lesson_id),
@@ -911,7 +963,7 @@ function App() {
     event.preventDefault();
     await runAction(async () => {
       await api.createHomework({
-        teacher_id: DEMO_TEACHER_ID,
+        teacher_id: teacherId,
         classroom_id: Number(homeworkForm.classroom_id),
         lesson_id: Number(homeworkForm.lesson_id),
         title: homeworkForm.title.trim(),
@@ -965,7 +1017,7 @@ function App() {
     setError("");
     try {
       const summary = await api.generateWeeklySummary(
-        DEMO_TEACHER_ID,
+        teacherId,
         selectedClassroomId,
       );
       setWeeklySummary(summary);
@@ -977,8 +1029,66 @@ function App() {
     }
   }
 
+  async function handleLogin(credentials) {
+    setError("");
+    const session = await api.login(credentials);
+    setAuthToken(session.access_token);
+    setAuthTokenState(session.access_token);
+    setCurrentTeacher({
+      id: session.teacher_id,
+      full_name: session.full_name,
+      email: session.email,
+    });
+    setTeacherProfileForm({
+      full_name: session.full_name,
+      email: session.email,
+      password: "",
+    });
+    showNotice("Giriş yapıldı.");
+  }
+
+  function handleLogout() {
+    setAuthToken(null);
+    setAuthTokenState(null);
+    setCurrentTeacher(null);
+    setClassrooms([]);
+    setStudents([]);
+    setAllStudents([]);
+    setAiOutputsByStudent({});
+    setLessons([]);
+    setGrades([]);
+    setScheduleEntries([]);
+    setHomeworkPage({ items: [], total: 0, limit: TABLE_PAGE_SIZE, offset: 0 });
+    setProfile(null);
+    setSelectedClassroomId(null);
+    setSelectedStudentId(null);
+    setActivePage("dashboard");
+  }
+
+  async function handleUpdateTeacherProfile(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      const payload = {
+        full_name: teacherProfileForm.full_name.trim(),
+        email: teacherProfileForm.email.trim(),
+      };
+      if (teacherProfileForm.password.trim()) {
+        payload.password_hash = teacherProfileForm.password.trim();
+      }
+      const updated = await api.updateTeacher(currentTeacher.id, payload);
+      setCurrentTeacher(updated);
+      setTeacherProfileForm({
+        full_name: updated.full_name,
+        email: updated.email,
+        password: "",
+      });
+      showNotice("Profil güncellendi.");
+    });
+  }
+
   const shared = {
     activePage,
+    aiOutputsByStudent,
     attendanceRecordOffset,
     attendanceRecordPage,
     allStudents,
@@ -1000,6 +1110,7 @@ function App() {
     homeworkOffset,
     homeworkPage,
     homeworkStatusOptions,
+    handleUpdateTeacherProfile,
     isGeneratingWeeklySummary,
     lessonOptions,
     lessons,
@@ -1039,11 +1150,13 @@ function App() {
     setSearchTerm,
     setSelectedClassroomId,
     setSelectedStudentId,
+    setTeacherProfileForm,
     setStudentDirectoryOffset,
     setStudentEditForm,
     students,
     scheduleEntries,
     scheduleForm,
+    teacherProfileForm,
     weeklySummary,
     weekdayOptions,
     handleDeleteAttendance,
@@ -1056,12 +1169,25 @@ function App() {
     handleGenerateWeeklySummary,
   };
 
+  if (isCheckingAuth) {
+    return <StatusLine error="" isLoading notice="" />;
+  }
+
+  if (!currentTeacher) {
+    return (
+      <LoginPage error={error} onLogin={handleLogin} setError={setError} />
+    );
+  }
+
   return (
     <main>
-      <Topbar setActiveModal={setActiveModal} />
+      <Topbar
+        currentTeacher={currentTeacher}
+        onLogout={handleLogout}
+        setActivePage={setActivePage}
+      />
       <Sidebar
         activePage={activePage}
-        selectedClassroom={selectedClassroom}
         setActiveModal={setActiveModal}
         setActivePage={setActivePage}
       />
@@ -1077,9 +1203,8 @@ function App() {
         {activePage === "studentDetail" && <StudentDetailPage {...shared} />}
         {activePage === "attendance" && <AttendancePage {...shared} />}
         {activePage === "schedule" && <SchedulePage {...shared} />}
-        {activePage === "homework" && <HomeworkPage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
-        {activePage === "settings" && <SettingsPage />}
+        {activePage === "profile" && <ProfilePage {...shared} />}
         <StatusLine isLoading={isLoading} notice={notice} error={error} />
       </section>
 
@@ -1524,7 +1649,11 @@ function App() {
           )}
           {(activeModal === "schedule" || activeModal === "editSchedule") && (
             <FormPanel
-              title={activeModal === "schedule" ? "Ders Programı Ekle" : "Ders Programını Düzenle"}
+              title={
+                activeModal === "schedule"
+                  ? "Ders Programı Ekle"
+                  : "Ders Programını Düzenle"
+              }
               onSubmit={
                 activeModal === "schedule"
                   ? handleCreateScheduleEntry
@@ -1664,36 +1793,124 @@ function App() {
   );
 }
 
-function Topbar({ setActiveModal }) {
+function LoginPage({ error, onLogin, setError }) {
+  const [form, setForm] = useState({
+    email: "eda@example.com",
+    password: "demo12345",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await onLogin(form);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <div>
+          <p className="eyebrow">Teacher AI</p>
+          <h1>Öğretmen Paneli</h1>
+          <p className="login-copy">
+            Öğrenci verileri artık kullanıcı oturumu ile korunur.
+          </p>
+        </div>
+        <form className="login-form" onSubmit={handleSubmit}>
+          <label>
+            E-posta
+            <input
+              autoComplete="email"
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  email: event.target.value,
+                }))
+              }
+              required
+              type="email"
+              value={form.email}
+            />
+          </label>
+          <label>
+            Parola
+            <input
+              autoComplete="current-password"
+              minLength={8}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  password: event.target.value,
+                }))
+              }
+              required
+              type="password"
+              value={form.password}
+            />
+          </label>
+          {error && <p className="form-error">{error}</p>}
+          <button
+            className="primary-button"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            <Icon name="login" />{" "}
+            {isSubmitting ? "Giriş yapılıyor..." : "Giriş Yap"}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function Topbar({ currentTeacher, onLogout, setActivePage }) {
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
   return (
     <header className="topbar">
       <div className="product-title">Teacher AI</div>
+      <div />
+      <div className="topbar-actions user-menu-wrap">
+        <button
+          className="user-menu-trigger"
+          onClick={() => setIsUserMenuOpen((current) => !current)}
+          type="button"
+        >
+          <span>{currentTeacher.full_name}</span>
+          <span className="avatar">{currentTeacher.full_name.slice(0, 1)}</span>
+          <Icon name="expand_more" />
+        </button>
+        {isUserMenuOpen && (
+          <div className="user-dropdown">
+            <button
+              onClick={() => {
+                setActivePage("profile");
+                setIsUserMenuOpen(false);
+              }}
+              type="button"
+            >
+              <Icon name="person" /> Profil
+            </button>
+            <button onClick={onLogout} type="button">
+              <Icon name="logout" /> Çıkış Yap
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
 
-function Sidebar({
-  activePage,
-  selectedClassroom,
-  setActiveModal,
-  setActivePage,
-}) {
+function Sidebar({ activePage, setActiveModal, setActivePage }) {
   return (
     <aside className="sidenav">
-      <div className="campus-card">
-        <div className="campus-icon">
-          <Icon name="account_balance" />
-        </div>
-        <div>
-          <h2>Ana Kampüs</h2>
-          <p>
-            {selectedClassroom
-              ? `${selectedClassroom.grade_level}. Sınıf`
-              : "Sınıf seçilmedi"}
-          </p>
-        </div>
-      </div>
-
       <nav className="nav-menu">
         <NavItem
           active={activePage === "dashboard"}
@@ -1732,22 +1949,10 @@ function Sidebar({
           onClick={() => setActivePage("schedule")}
         />
         <NavItem
-          active={activePage === "homework"}
-          icon="assignment"
-          label="Ödevler"
-          onClick={() => setActivePage("homework")}
-        />
-        <NavItem
           active={activePage === "aiReports"}
           icon="auto_awesome"
           label="AI Raporları"
           onClick={() => setActivePage("aiReports")}
-        />
-        <NavItem
-          active={activePage === "settings"}
-          icon="settings"
-          label="Ayarlar"
-          onClick={() => setActivePage("settings")}
         />
       </nav>
 
@@ -1758,24 +1963,23 @@ function Sidebar({
       >
         <Icon name="add" /> Sınıf Ekle
       </button>
-
-      <div className="sidenav-footer">
-        <NavItem icon="help" label="Yardım Merkezi" />
-        <NavItem icon="logout" label="Çıkış Yap" />
-      </div>
     </aside>
   );
 }
 
 function DashboardPage({
+  aiOutputsByStudent,
+  allStudents,
+  classroomStudentCounts,
   classrooms,
+  grades,
   handleGenerateWeeklySummary,
   isGeneratingWeeklySummary,
   lessons,
   scheduleEntries,
-  setActiveModal,
   setActivePage,
-  students,
+  setSelectedClassroomId,
+  setSelectedStudentId,
   weeklySummary,
 }) {
   const classroomById = useMemo(
@@ -1790,66 +1994,114 @@ function DashboardPage({
   const todaySchedule = scheduleEntries.filter(
     (entry) => entry.weekday === todayWeekday,
   );
+  const studentsForAnalysis = allStudents.filter(Boolean);
+  const gradesByStudent = useMemo(() => {
+    return grades.reduce((acc, grade) => {
+      const current = acc.get(grade.student_id) || [];
+      current.push(Number(grade.score));
+      acc.set(grade.student_id, current);
+      return acc;
+    }, new Map());
+  }, [grades]);
+  const studentAverages = useMemo(() => {
+    return studentsForAnalysis.map((student) => {
+      const scores = gradesByStudent.get(student.id) || [];
+      const average = scores.length
+        ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
+        : null;
+      const aiOutputs = aiOutputsByStudent[student.id] || [];
+      return {
+        ...student,
+        average,
+        gradeCount: scores.length,
+        hasReport: aiOutputs.some((output) => output.output_type === "report_comment"),
+        hasParentMessage: aiOutputs.some((output) => output.output_type === "parent_message"),
+      };
+    });
+  }, [studentsForAnalysis, gradesByStudent, aiOutputsByStudent]);
+  const overallAverageValue = studentAverages
+    .filter((student) => student.average !== null)
+    .reduce((sum, student, _, list) => sum + student.average / list.length, 0);
+  const overallAverage = overallAverageValue
+    ? Math.round(overallAverageValue * 10) / 10
+    : "-";
+  const riskStudents = studentAverages.filter(
+    (student) => student.average !== null && student.average < 70,
+  );
+  const missingGradeStudents = studentAverages.filter(
+    (student) => student.gradeCount === 0,
+  );
+  const aiPendingStudents = studentAverages.filter(
+    (student) => !student.hasReport || !student.hasParentMessage,
+  );
+  const classBreakdown = classrooms.map((classroom) => {
+    const classStudents = studentAverages.filter(
+      (student) => student.classroom_id === classroom.id,
+    );
+    const classAverageList = classStudents.filter((student) => student.average !== null);
+    const classAverage = classAverageList.length
+      ? Math.round(
+          (classAverageList.reduce((sum, student) => sum + student.average, 0) /
+            classAverageList.length) *
+            10,
+        ) / 10
+      : "-";
+    return {
+      classroom,
+      average: classAverage,
+      riskCount: classStudents.filter((student) => student.average !== null && student.average < 70).length,
+      studentCount: classroomStudentCounts[classroom.id] || classStudents.length,
+    };
+  });
+  const attentionStudents = [
+    ...riskStudents.map((student) => ({
+      ...student,
+      reason: `Ortalama ${student.average}`,
+      tone: "warning",
+    })),
+    ...missingGradeStudents.map((student) => ({
+      ...student,
+      reason: "Henüz not kaydı yok",
+      tone: "neutral",
+    })),
+  ].slice(0, 5);
 
   return (
     <>
-      <section className="hero-card">
-        <div>
-          <h1>Günaydın, Öğretmenim</h1>
-          <p>İşte bugünkü sınıflarınızın özeti.</p>
-        </div>
-        <div className="hero-actions">
-          <button
-            className="primary-button"
-            onClick={() => setActiveModal("student")}
-            type="button"
-          >
-            <Icon name="person_add" /> Öğrenci Ekle
-          </button>
-          <button
-            className="outline-button"
-            onClick={() => setActiveModal("grade")}
-            type="button"
-          >
-            <Icon name="upload" /> Not Gir
-          </button>
-        </div>
-      </section>
-
       <div className="dashboard-grid">
         <section className="stats-overview">
           <StatCard
             icon="groups"
             label="Toplam Öğrenci"
-            trend="+2 bu ay"
-            value={students.length}
+            trend={`${classrooms.length} sınıf`}
+            value={studentsForAnalysis.length}
           />
           <StatCard
-            icon="fact_check"
-            label="Ortalama Devam"
-            trend="İstikrarlı"
-            value="%94"
+            icon="priority_high"
+            label="Riskli Öğrenci"
+            trend={riskStudents.length ? "Takip önerilir" : "Risk görünmüyor"}
+            value={riskStudents.length}
           />
           <StatCard
             icon="analytics"
             label="Sınıf Ortalaması"
-            trend="Son 7 gün"
-            value="78.5"
+            trend={`${grades.length} not kaydı`}
+            value={overallAverage}
           />
           <StatCard
-            icon="description"
-            label="Üretilen Raporlar"
-            trend="AI destekli"
-            value="24"
+            icon="auto_awesome"
+            label="AI Bekleyen"
+            trend="Rapor veya veli mesajı eksik"
+            value={aiPendingStudents.length}
           />
         </section>
 
         <section className="chart-card">
           <div className="section-heading">
             <h2>Akademik Performans Eğilimi</h2>
-            <button className="outline-button compact" type="button">
+            <span className="analysis-chip">
               Bu Dönem
-            </button>
+            </span>
           </div>
           <svg
             viewBox="0 0 760 320"
@@ -1884,6 +2136,63 @@ function DashboardPage({
           </svg>
         </section>
 
+        <section className="analysis-card attention-card">
+          <div className="section-heading">
+            <h2>Dikkat Gerektiren Öğrenciler</h2>
+            <span className="analysis-chip">{attentionStudents.length} kayıt</span>
+          </div>
+          {attentionStudents.map((student) => (
+            <button
+              className="analysis-row"
+              key={`${student.id}-${student.reason}`}
+              onClick={() => {
+                setSelectedStudentId(student.id);
+                setActivePage("studentDetail");
+              }}
+              type="button"
+            >
+              <span>
+                <strong>{student.first_name} {student.last_name}</strong>
+                <small>{classroomById.get(student.classroom_id)?.name || "Sınıf yok"}</small>
+              </span>
+              <em className={student.tone}>{student.reason}</em>
+            </button>
+          ))}
+          {!attentionStudents.length && (
+            <p className="empty-note">Şu an dikkat gerektiren öğrenci görünmüyor.</p>
+          )}
+        </section>
+
+        <section className="analysis-card classroom-breakdown-card">
+          <div className="section-heading">
+            <h2>Sınıf Kırılımı</h2>
+            <span className="analysis-chip">Özet</span>
+          </div>
+          <div className="breakdown-table">
+            <span>Sınıf</span>
+            <span>Öğrenci</span>
+            <span>Ortalama</span>
+            <span>Riskli</span>
+            {classBreakdown.map((item) => (
+              <button
+                className="breakdown-row"
+                key={item.classroom.id}
+                onClick={() => {
+                  setSelectedClassroomId(item.classroom.id);
+                  setActivePage("classroomDetail");
+                }}
+                type="button"
+              >
+                <strong>{item.classroom.name}</strong>
+                <span>{item.studentCount}</span>
+                <span>{item.average}</span>
+                <span>{item.riskCount}</span>
+              </button>
+            ))}
+          </div>
+          {!classBreakdown.length && <p className="empty-note">Henüz sınıf yok.</p>}
+        </section>
+
         <aside className="dashboard-side">
           <section className="ai-insights">
             <div className="section-heading">
@@ -1899,10 +2208,21 @@ function DashboardPage({
             </div>
             {weeklySummary ? (
               <>
-                <Insight tone="success" title={weeklySummary.title} text={weeklySummary.summary} />
-                {(weeklySummary.attention_points || []).slice(0, 2).map((item) => (
-                  <Insight key={item} tone="warning" title="Dikkat" text={item} />
-                ))}
+                <Insight
+                  tone="success"
+                  title={weeklySummary.title}
+                  text={weeklySummary.summary}
+                />
+                {(weeklySummary.attention_points || [])
+                  .slice(0, 2)
+                  .map((item) => (
+                    <Insight
+                      key={item}
+                      tone="warning"
+                      title="Dikkat"
+                      text={item}
+                    />
+                  ))}
               </>
             ) : (
               <p className="empty-note">Haftalık özet henüz oluşturulmadı.</p>
@@ -3024,7 +3344,9 @@ function SchedulePage({
       <section className="hero-card">
         <div>
           <h1>Ders Programı</h1>
-          <p>Haftalık ders akışını sınıf, ders, saat ve derslik bazında takip et.</p>
+          <p>
+            Haftalık ders akışını sınıf, ders, saat ve derslik bazında takip et.
+          </p>
         </div>
         <button
           className="primary-button"
@@ -3103,13 +3425,19 @@ function ScheduleSlotRow({
           <button
             className={entry ? "schedule-slot filled" : "schedule-slot"}
             key={`${day}-${slot.period}`}
-            onClick={() => (entry ? onOpenEntry(entry) : onOpenSlot(slot, weekday))}
+            onClick={() =>
+              entry ? onOpenEntry(entry) : onOpenSlot(slot, weekday)
+            }
             type="button"
           >
             {entry ? (
               <>
-                <strong>{lessonById.get(entry.lesson_id)?.name || "Ders"}</strong>
-                <span>{classroomById.get(entry.classroom_id)?.name || "Sınıf"}</span>
+                <strong>
+                  {lessonById.get(entry.lesson_id)?.name || "Ders"}
+                </strong>
+                <span>
+                  {classroomById.get(entry.classroom_id)?.name || "Sınıf"}
+                </span>
                 <small>{entry.location || "Derslik yok"}</small>
                 <span className="schedule-slot-actions">
                   <span className="material-symbols-outlined">edit</span>
@@ -3233,7 +3561,9 @@ function HomeworkPage({
             </span>
           </div>
         ))}
-        {!homeworkPage.items.length && <p className="empty-note">Henüz ödev yok.</p>}
+        {!homeworkPage.items.length && (
+          <p className="empty-note">Henüz ödev yok.</p>
+        )}
       </section>
       <PaginationControls
         limit={homeworkPage.limit}
@@ -3260,8 +3590,12 @@ function AIReportsPage({
   const [reportCommentOutputId, setReportCommentOutputId] = useState(null);
   const [parentMessage, setParentMessage] = useState(null);
   const [parentMessageOutputId, setParentMessageOutputId] = useState(null);
+  const [topicAnalysis, setTopicAnalysis] = useState(null);
+  const [topicAnalysisOutputId, setTopicAnalysisOutputId] = useState(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingParentMessage, setIsGeneratingParentMessage] =
+    useState(false);
+  const [isGeneratingTopicAnalysis, setIsGeneratingTopicAnalysis] =
     useState(false);
   const [isSavingAIOutput, setIsSavingAIOutput] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -3274,6 +3608,8 @@ function AIReportsPage({
         setReportCommentOutputId(null);
         setParentMessage(null);
         setParentMessageOutputId(null);
+        setTopicAnalysis(null);
+        setTopicAnalysisOutputId(null);
         return;
       }
 
@@ -3287,10 +3623,15 @@ function AIReportsPage({
         const latestParentMessage = outputs.find(
           (output) => output.output_type === "parent_message",
         );
+        const latestTopicAnalysis = outputs.find(
+          (output) => output.output_type === "development_suggestion",
+        );
         setReportComment(latestReport?.output_payload || null);
         setReportCommentOutputId(latestReport?.id || null);
         setParentMessage(latestParentMessage?.output_payload || null);
         setParentMessageOutputId(latestParentMessage?.id || null);
+        setTopicAnalysis(latestTopicAnalysis?.output_payload || null);
+        setTopicAnalysisOutputId(latestTopicAnalysis?.id || null);
       } catch (err) {
         setAiError(err.message);
       }
@@ -3305,6 +3646,8 @@ function AIReportsPage({
     setReportCommentOutputId(null);
     setParentMessage(null);
     setParentMessageOutputId(null);
+    setTopicAnalysis(null);
+    setTopicAnalysisOutputId(null);
     setAiError("");
     setAiNotice("");
   }
@@ -3335,6 +3678,23 @@ function AIReportsPage({
 
   function updateParentMessageList(field, value) {
     updateParentMessage(
+      field,
+      value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
+  }
+
+  function updateTopicAnalysis(field, value) {
+    setTopicAnalysis((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function updateTopicAnalysisList(field, value) {
+    updateTopicAnalysis(
       field,
       value
         .split("\n")
@@ -3383,6 +3743,26 @@ function AIReportsPage({
     }
   }
 
+  async function generateTopicAnalysis() {
+    if (!selectedStudentId) {
+      setAiError("Önce bir öğrenci seçmelisin.");
+      return;
+    }
+
+    setIsGeneratingTopicAnalysis(true);
+    setAiError("");
+    try {
+      const output = await api.generateTopicAnalysis(selectedStudentId);
+      setTopicAnalysis(output.output_payload);
+      setTopicAnalysisOutputId(output.id);
+      setAiNotice("Eksik konu analizi oluşturuldu ve kaydedildi.");
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setIsGeneratingTopicAnalysis(false);
+    }
+  }
+
   async function saveAIOutputEdits() {
     setIsSavingAIOutput(true);
     setAiError("");
@@ -3401,6 +3781,13 @@ function AIReportsPage({
           parentMessage,
         );
         setParentMessage(output.output_payload);
+      }
+      if (topicAnalysis && topicAnalysisOutputId) {
+        const output = await api.updateAIOutput(
+          topicAnalysisOutputId,
+          topicAnalysis,
+        );
+        setTopicAnalysis(output.output_payload);
       }
       setAiNotice("Düzenlemeler kaydedildi.");
     } catch (err) {
@@ -3478,6 +3865,54 @@ function AIReportsPage({
           )}
         </div>
         <div className="report-section">
+          <h2>Eksik Konu Analizi</h2>
+          {topicAnalysis ? (
+            <div className="editable-ai-output">
+              <label>
+                Başlık
+                <input
+                  onChange={(event) =>
+                    updateTopicAnalysis("title", event.target.value)
+                  }
+                  value={topicAnalysis.title || ""}
+                />
+              </label>
+              <label>
+                Özet
+                <textarea
+                  onChange={(event) =>
+                    updateTopicAnalysis("summary", event.target.value)
+                  }
+                  value={topicAnalysis.summary || ""}
+                />
+              </label>
+              <label>
+                Eksik konular
+                <textarea
+                  onChange={(event) =>
+                    updateTopicAnalysisList(
+                      "missing_topics",
+                      event.target.value,
+                    )
+                  }
+                  value={(topicAnalysis.missing_topics || []).join("\n")}
+                />
+              </label>
+              <label>
+                Çalışma planı
+                <textarea
+                  onChange={(event) =>
+                    updateTopicAnalysisList("practice_plan", event.target.value)
+                  }
+                  value={(topicAnalysis.practice_plan || []).join("\n")}
+                />
+              </label>
+            </div>
+          ) : (
+            <p>Henüz eksik konu analizi oluşturulmadı.</p>
+          )}
+        </div>
+        <div className="report-section">
           <h2>Veli Mesajı</h2>
           {parentMessage ? (
             <div className="editable-ai-output">
@@ -3535,14 +3970,31 @@ function AIReportsPage({
             ? "Hazırlanıyor..."
             : "Veli Mesajı Hazırla"}
         </button>
-        <button className="outline-button full" type="button">
+        <button
+          className="outline-button full"
+          disabled={isGeneratingTopicAnalysis}
+          onClick={generateTopicAnalysis}
+          type="button"
+        >
+          <Icon name="psychology" />{" "}
+          {isGeneratingTopicAnalysis
+            ? "Analiz ediliyor..."
+            : "Eksik Konu Analizi"}
+        </button>
+        <button
+          className="outline-button full"
+          onClick={() => window.print()}
+          type="button"
+        >
           <Icon name="download" /> PDF Dışa Aktar
         </button>
         <button
           className="outline-button full"
           disabled={
             isSavingAIOutput ||
-            (!reportCommentOutputId && !parentMessageOutputId)
+            (!reportCommentOutputId &&
+              !parentMessageOutputId &&
+              !topicAnalysisOutputId)
           }
           onClick={saveAIOutputEdits}
           type="button"
@@ -3557,14 +4009,69 @@ function AIReportsPage({
   );
 }
 
-function SettingsPage() {
+function ProfilePage({
+  handleUpdateTeacherProfile,
+  setTeacherProfileForm,
+  teacherProfileForm,
+}) {
   return (
-    <section className="hero-card">
-      <div>
-        <h1>Ayarlar</h1>
-        <p>Kullanıcı, sınıf ve yapay zeka tercihleri burada yönetilecek.</p>
-      </div>
-    </section>
+    <div className="wide-page profile-page">
+      <section className="hero-card">
+        <div>
+          <h1>Profil</h1>
+          <p>Öğretmen hesabı ve giriş bilgileri.</p>
+        </div>
+      </section>
+      <section className="student-table-card profile-card">
+        <form className="profile-form" onSubmit={handleUpdateTeacherProfile}>
+          <label>
+            Ad soyad
+            <input
+              onChange={(event) =>
+                setTeacherProfileForm((form) => ({
+                  ...form,
+                  full_name: event.target.value,
+                }))
+              }
+              required
+              value={teacherProfileForm.full_name}
+            />
+          </label>
+          <label>
+            E-posta
+            <input
+              onChange={(event) =>
+                setTeacherProfileForm((form) => ({
+                  ...form,
+                  email: event.target.value,
+                }))
+              }
+              required
+              type="email"
+              value={teacherProfileForm.email}
+            />
+          </label>
+          <label>
+            Yeni parola
+            <input
+              minLength={8}
+              onChange={(event) =>
+                setTeacherProfileForm((form) => ({
+                  ...form,
+                  password: event.target.value,
+                }))
+              }
+              placeholder="Değiştirmek istemiyorsan boş bırak"
+              type="password"
+              value={teacherProfileForm.password}
+            />
+          </label>
+          <button className="primary-button" type="submit">
+            <Icon name="save" /> Profili Kaydet
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }
 

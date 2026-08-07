@@ -15,12 +15,28 @@ class AIWeeklySummaryRequest(BaseModel):
     classroom_id: int | None = None
 
 
+class AILessonPlanRequest(BaseModel):
+    teacher_id: int
+    classroom_id: int
+    lesson_id: int
+    topic: str | None = None
+
+
 class AIWeeklySummaryResponse(BaseModel):
     title: str
     summary: str
     attention_points: list[str]
     positive_signals: list[str]
     suggested_actions: list[str]
+
+
+class AILessonPlanResponse(BaseModel):
+    title: str
+    objective: str
+    warmup: str
+    activities: list[str]
+    assessment: str
+    homework: str
 
 
 class AIOutputUpdate(BaseModel):

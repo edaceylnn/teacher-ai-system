@@ -69,7 +69,7 @@ def test_teacher_crud_flow(client: TestClient) -> None:
     assert delete_response.status_code == 204
 
     missing_response = client.get(f"/teachers/{created['id']}")
-    assert missing_response.status_code == 404
+    assert missing_response.status_code == 401
 
 
 def test_create_teacher_rejects_duplicate_email(client: TestClient) -> None:

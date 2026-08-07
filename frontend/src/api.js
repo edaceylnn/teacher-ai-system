@@ -1,9 +1,24 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const AUTH_TOKEN_KEY = "teacher_ai_access_token";
+
+export function getAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
 
 async function request(path, options = {}) {
+  const token = getAuthToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
     ...options,
@@ -47,6 +62,17 @@ function normalizePage(page, fallbackLimit = 25, fallbackOffset = 0) {
 }
 
 export const api = {
+  login: (payload) =>
+    request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getCurrentTeacher: () => request("/auth/me"),
+  updateTeacher: (teacherId, payload) =>
+    request(`/teachers/${teacherId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   listClassroomsPage: (teacherId, pagination = {}) =>
     request(
       `/classrooms${buildQuery({
@@ -239,10 +265,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ student_id: studentId }),
     }),
+  generateTopicAnalysis: (studentId) =>
+    request("/ai/topic-analyses", {
+      method: "POST",
+      body: JSON.stringify({ student_id: studentId }),
+    }),
   generateWeeklySummary: (teacherId, classroomId) =>
     request("/ai/weekly-summaries", {
       method: "POST",
       body: JSON.stringify({ teacher_id: teacherId, classroom_id: classroomId }),
+    }),
+  generateLessonPlan: (payload) =>
+    request("/ai/lesson-plans", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   listAIOutputs: (studentId) => request(`/ai/outputs?student_id=${studentId}`),
   updateAIOutput: (outputId, outputPayload) =>

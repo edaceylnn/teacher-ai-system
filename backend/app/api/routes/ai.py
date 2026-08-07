@@ -5,10 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
 from app.db.session import get_db
 from app.models import AIOutput, AIOutputType, Attendance, AttendanceStatus, Classroom, Grade, Homework, Lesson, Student, Teacher
 from app.schemas.ai import (
     AIGenerateRequest,
+    AILessonPlanRequest,
+    AILessonPlanResponse,
     AIOutputResponse,
     AIOutputUpdate,
     AIWeeklySummaryRequest,
@@ -23,10 +26,8 @@ def _decimal_to_float(value: Decimal) -> float:
     return float(value)
 
 
-def _build_student_payload(student_id: int, db: Session) -> dict[str, Any]:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+def _build_student_payload(student_id: int, db: Session, teacher: Teacher) -> dict[str, Any]:
+    student = ensure_student_owner(db.get(Student, student_id), teacher, db)
 
     classroom = db.get(Classroom, student.classroom_id)
     grades = db.execute(
@@ -84,8 +85,9 @@ def _generate_and_save(
     output_type: AIOutputType,
     generator: Callable[[dict[str, Any]], dict[str, Any]],
     db: Session,
+    teacher: Teacher,
 ) -> AIOutput:
-    input_payload = _build_student_payload(payload.student_id, db)
+    input_payload = _build_student_payload(payload.student_id, db, teacher)
     try:
         output_payload = generator(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
@@ -103,14 +105,11 @@ def _generate_and_save(
     return ai_output
 
 
-def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session) -> dict[str, Any]:
-    teacher = db.get(Teacher, payload.teacher_id)
-    if teacher is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
-
+def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher: Teacher) -> dict[str, Any]:
     classroom_statement = select(Classroom).where(Classroom.teacher_id == teacher.id).order_by(Classroom.id)
     if payload.classroom_id is not None:
-        classroom_statement = classroom_statement.where(Classroom.id == payload.classroom_id)
+        classroom = ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
+        classroom_statement = classroom_statement.where(Classroom.id == classroom.id)
     classrooms = list(db.scalars(classroom_statement).all())
     classroom_ids = [classroom.id for classroom in classrooms]
 
@@ -190,14 +189,53 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session) -> dict[
     }
 
 
+def _build_lesson_plan_payload(payload: AILessonPlanRequest, db: Session, teacher: Teacher) -> dict[str, Any]:
+    classroom = ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
+    lesson = db.get(Lesson, payload.lesson_id)
+    if lesson is None or lesson.teacher_id != teacher.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
+
+    students = list(
+        db.scalars(select(Student).where(Student.classroom_id == classroom.id).order_by(Student.id)).all()
+    )
+    student_ids = [student.id for student in students]
+    grades = (
+        db.execute(
+            select(Grade, Student.first_name, Student.last_name)
+            .join(Student, Student.id == Grade.student_id)
+            .where(Grade.lesson_id == lesson.id, Grade.student_id.in_(student_ids))
+            .order_by(Grade.id.desc())
+            .limit(40)
+        ).all()
+        if student_ids
+        else []
+    )
+
+    return {
+        "teacher": {"id": teacher.id, "full_name": teacher.full_name},
+        "classroom": {"id": classroom.id, "name": classroom.name, "grade_level": classroom.grade_level},
+        "lesson": {"id": lesson.id, "name": lesson.name},
+        "topic": payload.topic,
+        "student_count": len(students),
+        "recent_lesson_grades": [
+            {
+                "student": f"{first_name} {last_name}",
+                "exam_name": grade.exam_name,
+                "score": _decimal_to_float(grade.score),
+            }
+            for grade, first_name, last_name in grades
+        ],
+    }
+
+
 @router.get("/outputs", response_model=list[AIOutputResponse])
 def list_ai_outputs(
     student_id: int,
     output_type: AIOutputType | None = None,
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> list[AIOutput]:
-    if db.get(Student, student_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+    ensure_student_owner(db.get(Student, student_id), current_teacher, db)
 
     statement = (
         select(AIOutput)
@@ -215,10 +253,12 @@ def update_ai_output(
     output_id: int,
     payload: AIOutputUpdate,
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> AIOutput:
     ai_output = db.get(AIOutput, output_id)
     if ai_output is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI output not found")
+    ensure_student_owner(db.get(Student, ai_output.student_id), current_teacher, db)
 
     ai_output.output_payload = payload.output_payload
     db.commit()
@@ -227,29 +267,71 @@ def update_ai_output(
 
 
 @router.post("/report-comments", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
-def generate_report_comment(payload: AIGenerateRequest, db: Session = Depends(get_db)) -> AIOutput:
+def generate_report_comment(
+    payload: AIGenerateRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> AIOutput:
     return _generate_and_save(
         payload=payload,
         output_type=AIOutputType.report_comment,
         generator=ai_service.generate_report_comment,
         db=db,
+        teacher=current_teacher,
     )
 
 
 @router.post("/parent-messages", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
-def generate_parent_message(payload: AIGenerateRequest, db: Session = Depends(get_db)) -> AIOutput:
+def generate_parent_message(
+    payload: AIGenerateRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> AIOutput:
     return _generate_and_save(
         payload=payload,
         output_type=AIOutputType.parent_message,
         generator=ai_service.generate_parent_message,
         db=db,
+        teacher=current_teacher,
+    )
+
+
+@router.post("/topic-analyses", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
+def generate_topic_analysis(
+    payload: AIGenerateRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> AIOutput:
+    return _generate_and_save(
+        payload=payload,
+        output_type=AIOutputType.development_suggestion,
+        generator=ai_service.generate_topic_analysis,
+        db=db,
+        teacher=current_teacher,
     )
 
 
 @router.post("/weekly-summaries", response_model=AIWeeklySummaryResponse)
-def generate_weekly_summary(payload: AIWeeklySummaryRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
-    input_payload = _build_weekly_payload(payload, db)
+def generate_weekly_summary(
+    payload: AIWeeklySummaryRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> dict[str, Any]:
+    input_payload = _build_weekly_payload(payload, db, current_teacher)
     try:
         return ai_service.generate_weekly_summary(input_payload)
+    except ai_service.AIServiceUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.post("/lesson-plans", response_model=AILessonPlanResponse)
+def generate_lesson_plan(
+    payload: AILessonPlanRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> dict[str, Any]:
+    input_payload = _build_lesson_plan_payload(payload, db, current_teacher)
+    try:
+        return ai_service.generate_lesson_plan(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

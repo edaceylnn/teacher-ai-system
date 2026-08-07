@@ -84,7 +84,7 @@ def test_classroom_crud_flow(client: TestClient, teacher: Teacher) -> None:
     assert missing_response.status_code == 404
 
 
-def test_create_classroom_requires_existing_teacher(client: TestClient) -> None:
+def test_create_classroom_requires_existing_teacher(client: TestClient, teacher: Teacher) -> None:
     response = client.post(
         "/classrooms",
         json={"teacher_id": 999, "name": "5-A", "grade_level": "5"},
@@ -148,7 +148,7 @@ def test_student_crud_flow(client: TestClient, teacher: Teacher) -> None:
     assert missing_response.status_code == 404
 
 
-def test_create_student_requires_existing_classroom(client: TestClient) -> None:
+def test_create_student_requires_existing_classroom(client: TestClient, teacher: Teacher) -> None:
     response = client.post(
         "/students",
         json={"classroom_id": 999, "first_name": "Ada", "last_name": "Yilmaz"},

@@ -125,6 +125,65 @@ def test_generate_parent_message_saves_ai_output(
     assert body["output_payload"]["tone"] == "yapici"
 
 
+def test_generate_topic_analysis_saves_ai_output(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    monkeypatch.setattr(
+        ai_service,
+        "generate_topic_analysis",
+        lambda input_payload: {
+            "title": "Eksik konu analizi",
+            "summary": "Ada problem cozme pratigiyle desteklenmeli.",
+            "missing_topics": ["Problem cozme"],
+            "practice_plan": ["Haftada iki kisa alistirma"],
+            "teacher_notes": ["Somut orneklerle ilerle"],
+        },
+    )
+
+    response = client.post("/ai/topic-analyses", json={"student_id": student["id"]})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["output_type"] == "development_suggestion"
+    assert body["output_payload"]["missing_topics"] == ["Problem cozme"]
+
+
+def test_generate_lesson_plan_returns_structured_plan(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    teacher: Teacher,
+    student: dict,
+) -> None:
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    monkeypatch.setattr(
+        ai_service,
+        "generate_lesson_plan",
+        lambda input_payload: {
+            "title": "Kesir problemleri",
+            "objective": "Kesir problemlerini cozer.",
+            "warmup": "Kisa tekrar sorulari",
+            "activities": ["Modelleme", "Esli problem cozumu"],
+            "assessment": "Cikis bileti",
+            "homework": "5 problem",
+        },
+    )
+
+    response = client.post(
+        "/ai/lesson-plans",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": student["classroom_id"],
+            "lesson_id": lesson["id"],
+            "topic": "Kesirler",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Kesir problemleri"
+
+
 def test_list_ai_outputs_returns_saved_outputs(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -187,7 +246,7 @@ def test_update_ai_output_changes_output_payload(
     assert saved_output.output_payload["comment"] == "Öğretmen metni güncelledi."
 
 
-def test_generate_ai_output_returns_404_for_missing_student(client: TestClient) -> None:
+def test_generate_ai_output_returns_404_for_missing_student(client: TestClient, teacher: Teacher) -> None:
     response = client.post("/ai/report-comments", json={"student_id": 999})
 
     assert response.status_code == 404

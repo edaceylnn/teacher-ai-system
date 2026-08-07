@@ -93,7 +93,7 @@ def test_lesson_crud_flow(client: TestClient, teacher: Teacher) -> None:
     assert missing_response.status_code == 404
 
 
-def test_create_lesson_requires_existing_teacher(client: TestClient) -> None:
+def test_create_lesson_requires_existing_teacher(client: TestClient, teacher: Teacher) -> None:
     response = client.post("/lessons", json={"teacher_id": 999, "name": "Matematik"})
 
     assert response.status_code == 404
@@ -317,7 +317,7 @@ def test_homework_crud_flow(client: TestClient, teacher: Teacher, student: dict)
     assert delete_response.status_code == 204
 
 
-def test_create_attendance_requires_existing_student(client: TestClient) -> None:
+def test_create_attendance_requires_existing_student(client: TestClient, teacher: Teacher) -> None:
     response = client.post(
         "/attendance-records",
         json={"student_id": 999, "date": "2026-01-15", "status": "present"},
@@ -392,7 +392,7 @@ def test_student_profile_returns_academic_summary(client: TestClient, teacher: T
     }
 
 
-def test_student_profile_returns_404_for_missing_student(client: TestClient) -> None:
+def test_student_profile_returns_404_for_missing_student(client: TestClient, teacher: Teacher) -> None:
     response = client.get("/students/999/profile")
 
     assert response.status_code == 404

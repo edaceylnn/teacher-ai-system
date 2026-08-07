@@ -21,7 +21,7 @@ uvicorn app.main:app --reload
 ## Test
 
 ```bash
-pytest
+.venv/bin/python -m pytest
 ```
 
 ## Database Migration
@@ -34,6 +34,12 @@ alembic upgrade head
 
 ```bash
 python -m app.db.seed
+```
+
+Demo login:
+
+```text
+eda@example.com / demo12345
 ```
 
 ## AI Configuration
@@ -54,6 +60,8 @@ curl http://127.0.0.1:8000/health
 ## Current Endpoints
 
 - `GET /health`
+- `POST /auth/login`
+- `GET /auth/me`
 - `POST /teachers`
 - `GET /teachers`
 - `GET /teachers/{teacher_id}`
@@ -85,8 +93,21 @@ curl http://127.0.0.1:8000/health
 - `GET /attendance-records/{attendance_id}`
 - `PATCH /attendance-records/{attendance_id}`
 - `DELETE /attendance-records/{attendance_id}`
+- `POST /schedule-entries`
+- `GET /schedule-entries`
+- `PATCH /schedule-entries/{entry_id}`
+- `DELETE /schedule-entries/{entry_id}`
+- `POST /homeworks`
+- `GET /homeworks`
+- `PATCH /homeworks/{homework_id}`
+- `DELETE /homeworks/{homework_id}`
+- `GET /ai/outputs`
+- `PATCH /ai/outputs/{output_id}`
 - `POST /ai/report-comments`
 - `POST /ai/parent-messages`
+- `POST /ai/topic-analyses`
+- `POST /ai/weekly-summaries`
+- `POST /ai/lesson-plans`
 
 ## Current Models
 
@@ -96,4 +117,6 @@ curl http://127.0.0.1:8000/health
 - Lesson
 - Grade
 - Attendance
+- ScheduleEntry
+- Homework
 - AIOutput

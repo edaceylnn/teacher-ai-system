@@ -9,7 +9,8 @@ class TeacherBase(BaseModel):
 
 
 class TeacherCreate(TeacherBase):
-    password_hash: str = Field(min_length=1, max_length=255)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    password_hash: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class TeacherUpdate(BaseModel):

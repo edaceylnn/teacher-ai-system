@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
 from app.db.session import get_db
-from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student
+from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student, Teacher
 from app.schemas.pagination import PageResponse
 from app.schemas.student import (
     StudentCreate,
@@ -20,10 +21,12 @@ router = APIRouter(prefix="/students", tags=["students"])
 
 
 @router.post("", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
-def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> Student:
-    classroom = db.get(Classroom, payload.classroom_id)
-    if classroom is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Classroom not found")
+def create_student(
+    payload: StudentCreate,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> Student:
+    ensure_classroom_owner(db.get(Classroom, payload.classroom_id), current_teacher)
 
     student = Student(
         classroom_id=payload.classroom_id,
@@ -48,8 +51,11 @@ def list_students(
     limit: int = Query(default=25, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[StudentResponse]:
-    statement = select(Student).order_by(Student.id)
+    statement = select(Student).join(Classroom, Classroom.id == Student.classroom_id).where(
+        Classroom.teacher_id == current_teacher.id
+    ).order_by(Student.id)
     if classroom_id is not None:
         statement = statement.where(Student.classroom_id == classroom_id)
     if search:
@@ -70,20 +76,21 @@ def list_students(
 
 
 @router.get("/{student_id}", response_model=StudentResponse)
-def get_student(student_id: int, db: Session = Depends(get_db)) -> Student:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-
-    return student
+def get_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> Student:
+    return ensure_student_owner(db.get(Student, student_id), current_teacher, db)
 
 
 @router.get("/{student_id}/profile", response_model=StudentProfileResponse)
-def get_student_profile(student_id: int, db: Session = Depends(get_db)) -> StudentProfileResponse:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-
+def get_student_profile(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> StudentProfileResponse:
+    student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
     classroom = db.get(Classroom, student.classroom_id)
     grades = db.execute(
         select(Grade, Lesson.name)
@@ -145,15 +152,14 @@ def update_student(
     student_id: int,
     payload: StudentUpdate,
     db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Student:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+    student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
 
     update_data = payload.model_dump(exclude_unset=True)
     classroom_id = update_data.get("classroom_id")
-    if classroom_id is not None and db.get(Classroom, classroom_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Classroom not found")
+    if classroom_id is not None:
+        ensure_classroom_owner(db.get(Classroom, classroom_id), current_teacher)
 
     for field, value in update_data.items():
         setattr(student, field, value)
@@ -164,11 +170,12 @@ def update_student(
 
 
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_student(student_id: int, db: Session = Depends(get_db)) -> Response:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-
+def delete_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> Response:
+    student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
     db.delete(student)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,14 +1,28 @@
 from datetime import date
+from datetime import time
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
-from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student, Teacher
+from app.models import (
+    Attendance,
+    AttendanceStatus,
+    Classroom,
+    Grade,
+    Homework,
+    HomeworkStatus,
+    Lesson,
+    ScheduleEntry,
+    Student,
+    Teacher,
+)
 
 
 DEMO_TEACHER_EMAIL = "eda@example.com"
+DEMO_TEACHER_PASSWORD = "demo12345"
 
 
 def seed_demo_data(db: Session) -> None:
@@ -17,10 +31,12 @@ def seed_demo_data(db: Session) -> None:
         teacher = Teacher(
             full_name="Eda Ceylan",
             email=DEMO_TEACHER_EMAIL,
-            password_hash="demo-password-hash",
+            password_hash=hash_password(DEMO_TEACHER_PASSWORD),
         )
         db.add(teacher)
         db.flush()
+    elif not verify_password(DEMO_TEACHER_PASSWORD, teacher.password_hash):
+        teacher.password_hash = hash_password(DEMO_TEACHER_PASSWORD)
 
     classroom = db.scalar(
         select(Classroom).where(
@@ -122,6 +138,59 @@ def seed_demo_data(db: Session) -> None:
                 Attendance(
                     student_id=student.id,
                     date=attendance_date,
+                    status=status,
+                )
+            )
+
+    schedule_entries = [
+        (classroom, lessons[0], 0, time(8, 30), time(9, 10), "5-A Derslik"),
+        (classroom, lessons[1], 1, time(9, 10), time(9, 50), "5-A Derslik"),
+        (classroom, lessons[0], 2, time(10, 0), time(10, 40), "Matematik Atolyesi"),
+    ]
+    for schedule_classroom, lesson, weekday, start_time, end_time, location in schedule_entries:
+        existing_schedule = db.scalar(
+            select(ScheduleEntry).where(
+                ScheduleEntry.teacher_id == teacher.id,
+                ScheduleEntry.weekday == weekday,
+                ScheduleEntry.start_time == start_time,
+                ScheduleEntry.end_time == end_time,
+            )
+        )
+        if existing_schedule is None:
+            db.add(
+                ScheduleEntry(
+                    teacher_id=teacher.id,
+                    classroom_id=schedule_classroom.id,
+                    lesson_id=lesson.id,
+                    weekday=weekday,
+                    start_time=start_time,
+                    end_time=end_time,
+                    location=location,
+                )
+            )
+
+    homeworks = [
+        (lessons[0], "Kesir problemleri", "Sayfa 42-43 alistirmalari", date(2026, 1, 20), HomeworkStatus.assigned),
+        (lessons[1], "Okuma gunlugu", "Bu haftaki metin icin 5 cumlelik ozet", date(2026, 1, 22), HomeworkStatus.completed),
+    ]
+    for lesson, title, description, due_date, status in homeworks:
+        existing_homework = db.scalar(
+            select(Homework).where(
+                Homework.teacher_id == teacher.id,
+                Homework.classroom_id == classroom.id,
+                Homework.lesson_id == lesson.id,
+                Homework.title == title,
+            )
+        )
+        if existing_homework is None:
+            db.add(
+                Homework(
+                    teacher_id=teacher.id,
+                    classroom_id=classroom.id,
+                    lesson_id=lesson.id,
+                    title=title,
+                    description=description,
+                    due_date=due_date,
                     status=status,
                 )
             )

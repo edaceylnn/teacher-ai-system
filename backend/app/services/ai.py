@@ -61,6 +61,43 @@ WEEKLY_SUMMARY_SCHEMA: dict[str, Any] = {
     },
 }
 
+TOPIC_ANALYSIS_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "name": "topic_analysis_output",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string"},
+            "summary": {"type": "string"},
+            "missing_topics": {"type": "array", "items": {"type": "string"}},
+            "practice_plan": {"type": "array", "items": {"type": "string"}},
+            "teacher_notes": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["title", "summary", "missing_topics", "practice_plan", "teacher_notes"],
+    },
+}
+
+LESSON_PLAN_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "name": "lesson_plan_output",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string"},
+            "objective": {"type": "string"},
+            "warmup": {"type": "string"},
+            "activities": {"type": "array", "items": {"type": "string"}},
+            "assessment": {"type": "string"},
+            "homework": {"type": "string"},
+        },
+        "required": ["title", "objective", "warmup", "activities", "assessment", "homework"],
+    },
+}
+
 
 def generate_report_comment(input_payload: dict[str, Any]) -> dict[str, Any]:
     return _generate_structured_output(
@@ -91,6 +128,29 @@ def generate_weekly_summary(input_payload: dict[str, Any]) -> dict[str, Any]:
         task=(
             "Öğretmen için haftalık kısa bir Türkçe sınıf özeti üret. "
             "Dikkat edilmesi gereken öğrencileri, olumlu sinyalleri ve net aksiyonları belirt."
+        ),
+    )
+
+
+def generate_topic_analysis(input_payload: dict[str, Any]) -> dict[str, Any]:
+    return _generate_structured_output(
+        input_payload=input_payload,
+        output_schema=TOPIC_ANALYSIS_SCHEMA,
+        task=(
+            "Öğrencinin notları, devamsızlığı ve öğretmen gözlemlerinden yola çıkarak "
+            "eksik konu/gelişim analizi üret. Veride olmayan konu adlarını kesin bilgi gibi sunma; "
+            "çıkarımlarını ölçülü ifade et."
+        ),
+    )
+
+
+def generate_lesson_plan(input_payload: dict[str, Any]) -> dict[str, Any]:
+    return _generate_structured_output(
+        input_payload=input_payload,
+        output_schema=LESSON_PLAN_SCHEMA,
+        task=(
+            "Öğretmen için sınıf düzeyine ve son öğrenci verilerine uygun, uygulanabilir "
+            "bir Türkçe ders planı üret."
         ),
     )
 

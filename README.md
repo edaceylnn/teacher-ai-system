@@ -52,13 +52,46 @@ npm install
 npm run dev
 ```
 
+Frontend ayarları için `frontend/.env.example` dosyasını `.env.local` olarak kopyalayabilirsiniz.
+
+## Docker ile Çalıştırma
+
+```bash
+docker compose up --build
+```
+
+İlk çalıştırmadan sonra ayrı bir terminalde migration ve demo verisini yükleyin:
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m app.db.seed
+```
+
+Uygulama adresleri:
+
+- Frontend: `http://127.0.0.1:5173`
+- Backend docs: `http://127.0.0.1:8000/docs`
+
+Demo giriş bilgileri:
+
+- E-posta: `eda@example.com`
+- Parola: `demo12345`
+
 ## Test
 
 ```bash
 cd backend
-pytest
+.venv/bin/python -m pytest
+```
+
+Tüm yerel kontroller:
+
+```bash
+make test
 ```
 
 ## Durum
 
-Proje aktif olarak geliştirilen bir MVP'dir. Temel CRUD akışları, öğrenci profili, not/devamsızlık yönetimi, AI rapor üretimi ve pagination desteği çalışır durumdadır.
+Proje aktif olarak geliştirilen bir MVP'dir. Temel CRUD akışları, öğrenci profili, not/devamsızlık yönetimi, ders programı, ödev takibi, AI rapor üretimi, eksik konu analizi, ders planı üretimi, PDF'e yazdırma ve pagination desteği çalışır durumdadır.
+
+Uygulama token tabanlı öğretmen oturumu ile çalışır. Backend sınıf, öğrenci, not, devamsızlık, ödev, ders programı ve AI çıktılarını oturumdaki öğretmene göre izole eder.
