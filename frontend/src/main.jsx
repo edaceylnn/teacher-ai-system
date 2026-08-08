@@ -134,6 +134,8 @@ function App() {
   });
   const [isCheckingAuth, setIsCheckingAuth] = useState(Boolean(authToken));
   const [activePage, setActivePage] = useState("dashboard");
+  const [isSidenavCollapsed, setIsSidenavCollapsed] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [classroomSearchTerm, setClassroomSearchTerm] = useState("");
   const [classroomGradeFilter, setClassroomGradeFilter] = useState("all");
   const [classrooms, setClassrooms] = useState([]);
@@ -1184,15 +1186,29 @@ function App() {
       <Topbar
         currentTeacher={currentTeacher}
         onLogout={handleLogout}
+        onToggleMobileNav={() => setIsMobileNavOpen((current) => !current)}
         setActivePage={setActivePage}
       />
       <Sidebar
         activePage={activePage}
+        isCollapsed={isSidenavCollapsed}
+        isMobileOpen={isMobileNavOpen}
+        onCloseMobile={() => setIsMobileNavOpen(false)}
         setActiveModal={setActiveModal}
-        setActivePage={setActivePage}
+        setActivePage={(page) => {
+          setActivePage(page);
+          setIsMobileNavOpen(false);
+        }}
+        toggleCollapsed={() => setIsSidenavCollapsed((current) => !current)}
       />
+      {isMobileNavOpen && (
+        <div
+          className="sidenav-backdrop visible"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
 
-      <section className="page">
+      <section className={`page${isSidenavCollapsed ? " collapsed-nav" : ""}`}>
         {activePage === "dashboard" && <DashboardPage {...shared} />}
         {activePage === "classrooms" && <ClassroomsPage {...shared} />}
         {activePage === "classroomDetail" && (
@@ -1870,12 +1886,22 @@ function LoginPage({ error, onLogin, setError }) {
   );
 }
 
-function Topbar({ currentTeacher, onLogout, setActivePage }) {
+function Topbar({ currentTeacher, onLogout, onToggleMobileNav, setActivePage }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   return (
     <header className="topbar">
-      <div className="product-title">Teacher AI</div>
+      <div style={{ alignItems: "center", display: "flex", gap: 8 }}>
+        <button
+          aria-label="Menüyü aç"
+          className="sidenav-toggle"
+          onClick={onToggleMobileNav}
+          type="button"
+        >
+          <Icon name="menu" />
+        </button>
+        <div className="product-title">Teacher AI</div>
+      </div>
       <div />
       <div className="topbar-actions user-menu-wrap">
         <button
@@ -1908,9 +1934,33 @@ function Topbar({ currentTeacher, onLogout, setActivePage }) {
   );
 }
 
-function Sidebar({ activePage, setActiveModal, setActivePage }) {
+function Sidebar({
+  activePage,
+  isCollapsed,
+  isMobileOpen,
+  onCloseMobile,
+  setActiveModal,
+  setActivePage,
+  toggleCollapsed,
+}) {
+  const sidenavClassName = [
+    "sidenav",
+    isCollapsed ? "collapsed" : "",
+    isMobileOpen ? "mobile-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <aside className="sidenav">
+    <aside className={sidenavClassName}>
+      <button
+        aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"}
+        className="sidenav-collapse-button"
+        onClick={toggleCollapsed}
+        type="button"
+      >
+        <Icon name="chevron_left" />
+      </button>
       <nav className="nav-menu">
         <NavItem
           active={activePage === "dashboard"}
@@ -1961,7 +2011,7 @@ function Sidebar({ activePage, setActiveModal, setActivePage }) {
         onClick={() => setActiveModal("classroom")}
         type="button"
       >
-        <Icon name="add" /> Sınıf Ekle
+        <Icon name="add" /> <span>Sınıf Ekle</span>
       </button>
     </aside>
   );
@@ -2066,6 +2116,50 @@ function DashboardPage({
     })),
   ].slice(0, 5);
 
+  const trendPoints = useMemo(() => {
+    if (!grades.length) return [];
+    const sorted = [...grades].sort(
+      (first, second) => new Date(first.created_at) - new Date(second.created_at),
+    );
+    const bucketCount = Math.min(7, sorted.length);
+    const bucketSize = Math.ceil(sorted.length / bucketCount);
+    const points = [];
+    for (let index = 0; index < sorted.length; index += bucketSize) {
+      const bucket = sorted.slice(index, index + bucketSize);
+      const average =
+        bucket.reduce((sum, grade) => sum + Number(grade.score), 0) / bucket.length;
+      const lastDate = new Date(bucket[bucket.length - 1].created_at);
+      points.push({
+        average: Math.round(average * 10) / 10,
+        label: lastDate.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }),
+      });
+    }
+    return points;
+  }, [grades]);
+
+  const chartWidth = 760;
+  const chartHeight = 320;
+  const chartPadding = { top: 24, right: 24, bottom: 36, left: 44 };
+  const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const chartPoints = trendPoints.map((point, index) => {
+    const x =
+      chartPadding.left +
+      (trendPoints.length > 1
+        ? (index / (trendPoints.length - 1)) * plotWidth
+        : plotWidth / 2);
+    const y =
+      chartPadding.top + plotHeight - (Math.max(0, Math.min(100, point.average)) / 100) * plotHeight;
+    return { ...point, x, y };
+  });
+  const linePath = chartPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = chartPoints.length
+    ? `${linePath} L${chartPoints[chartPoints.length - 1].x.toFixed(1)} ${(chartPadding.top + plotHeight).toFixed(1)} L${chartPoints[0].x.toFixed(1)} ${(chartPadding.top + plotHeight).toFixed(1)} Z`
+    : "";
+  const chartGridLines = [0, 25, 50, 75, 100];
+
   return (
     <>
       <div className="dashboard-grid">
@@ -2080,6 +2174,7 @@ function DashboardPage({
             icon="priority_high"
             label="Riskli Öğrenci"
             trend={riskStudents.length ? "Takip önerilir" : "Risk görünmüyor"}
+            trendDirection={riskStudents.length ? "down" : "up"}
             value={riskStudents.length}
           />
           <StatCard
@@ -2100,40 +2195,81 @@ function DashboardPage({
           <div className="section-heading">
             <h2>Akademik Performans Eğilimi</h2>
             <span className="analysis-chip">
-              Bu Dönem
+              {trendPoints.length ? "Son not kayıtları" : "Veri yok"}
             </span>
           </div>
-          <svg
-            viewBox="0 0 760 320"
-            role="img"
-            aria-label="Akademik performans grafiği"
-          >
-            <defs>
-              <linearGradient
-                id="dashboard-chart-fill"
-                x1="0"
-                x2="0"
-                y1="0"
-                y2="1"
-              >
-                <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.02" />
-              </linearGradient>
-            </defs>
-            {[60, 100, 140, 180, 220, 260].map((y) => (
-              <line key={y} x1="45" x2="730" y1={y} y2={y} stroke="#dce9ff" />
-            ))}
-            <path
-              d="M45 235 L150 218 L255 188 L365 202 L480 165 L595 170 L730 142 L730 280 L45 280 Z"
-              fill="url(#dashboard-chart-fill)"
+          {chartPoints.length > 1 ? (
+            <svg
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              role="img"
+              aria-label="Akademik performans grafiği"
+            >
+              <defs>
+                <linearGradient
+                  id="dashboard-chart-fill"
+                  x1="0"
+                  x2="0"
+                  y1="0"
+                  y2="1"
+                >
+                  <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              {chartGridLines.map((value) => {
+                const y = chartPadding.top + plotHeight - (value / 100) * plotHeight;
+                return (
+                  <g key={value}>
+                    <line
+                      x1={chartPadding.left}
+                      x2={chartWidth - chartPadding.right}
+                      y1={y}
+                      y2={y}
+                      stroke="#dce9ff"
+                    />
+                    <text
+                      x={chartPadding.left - 10}
+                      y={y + 4}
+                      fontSize="11"
+                      fill="#8a8fa3"
+                      textAnchor="end"
+                    >
+                      {value}
+                    </text>
+                  </g>
+                );
+              })}
+              <path d={areaPath} fill="url(#dashboard-chart-fill)" />
+              <path d={linePath} fill="none" stroke="#4338ca" strokeWidth="3" strokeLinecap="round" />
+              {chartPoints.map((point) => (
+                <g key={point.label + point.x}>
+                  <circle
+                    className="chart-tooltip-dot"
+                    cx={point.x}
+                    cy={point.y}
+                    r="4.5"
+                    fill="#ffffff"
+                    stroke="#4338ca"
+                    strokeWidth="2.5"
+                  />
+                  <text
+                    x={point.x}
+                    y={chartHeight - 10}
+                    fontSize="11"
+                    fill="#8a8fa3"
+                    textAnchor="middle"
+                  >
+                    {point.label}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          ) : (
+            <EmptyState
+              icon="show_chart"
+              text="Grafik için henüz yeterli not kaydı yok. Not eklendikçe eğilim burada görünecek."
             />
-            <path
-              d="M45 235 L150 218 L255 188 L365 202 L480 165 L595 170 L730 142"
-              fill="none"
-              stroke="#3525cd"
-              strokeWidth="3"
-            />
-          </svg>
+          )}
         </section>
 
         <section className="analysis-card attention-card">
@@ -2159,7 +2295,10 @@ function DashboardPage({
             </button>
           ))}
           {!attentionStudents.length && (
-            <p className="empty-note">Şu an dikkat gerektiren öğrenci görünmüyor.</p>
+            <EmptyState
+              icon="task_alt"
+              text="Şu an dikkat gerektiren öğrenci görünmüyor."
+            />
           )}
         </section>
 
@@ -2190,7 +2329,14 @@ function DashboardPage({
               </button>
             ))}
           </div>
-          {!classBreakdown.length && <p className="empty-note">Henüz sınıf yok.</p>}
+          {!classBreakdown.length && (
+            <EmptyState
+              actionLabel="Sınıf Ekle"
+              icon="school"
+              onAction={() => setActivePage("classrooms")}
+              text="Henüz sınıf yok. İlk sınıfını oluşturarak başlayabilirsin."
+            />
+          )}
         </section>
 
         <aside className="dashboard-side">
@@ -2225,7 +2371,10 @@ function DashboardPage({
                   ))}
               </>
             ) : (
-              <p className="empty-note">Haftalık özet henüz oluşturulmadı.</p>
+              <EmptyState
+                icon="auto_awesome"
+                text="Haftalık özet henüz oluşturulmadı."
+              />
             )}
           </section>
           <section className="schedule-card">
@@ -2249,7 +2398,10 @@ function DashboardPage({
               />
             ))}
             {!todaySchedule.length && (
-              <p className="empty-note">Bugün için ders programı yok.</p>
+              <EmptyState
+                icon="event_available"
+                text="Bugün için ders programı yok."
+              />
             )}
           </section>
         </aside>
@@ -2574,7 +2726,7 @@ function StudentsPage({
           </div>
         ))}
         {!studentDirectoryPage.items.length && (
-          <p className="empty-note">Öğrenci bulunamadı.</p>
+          <EmptyState icon="person_search" text="Öğrenci bulunamadı." />
         )}
       </section>
       <PaginationControls
@@ -4460,7 +4612,13 @@ function RightPanel({ selectedStudent, setActiveModal }) {
   );
 }
 
-function StatCard({ icon, label, trend, value }) {
+function StatCard({ icon, label, trend, trendDirection, value }) {
+  const trendIcon =
+    trendDirection === "up"
+      ? "trending_up"
+      : trendDirection === "down"
+        ? "trending_down"
+        : null;
   return (
     <div className="stat-card">
       <div className="stat-card-head">
@@ -4468,7 +4626,14 @@ function StatCard({ icon, label, trend, value }) {
         <Icon name={icon} />
       </div>
       <strong>{value}</strong>
-      <small>{trend}</small>
+      <small>
+        {trendIcon && (
+          <span className={`stat-trend ${trendDirection}`}>
+            <Icon name={trendIcon} />
+          </span>
+        )}
+        {trend}
+      </small>
     </div>
   );
 }
@@ -4518,9 +4683,37 @@ function StatusLine({ error, isLoading, notice }) {
   if (!isLoading && !notice && !error) return null;
   return (
     <div className="status-line">
-      {isLoading && <span>Yükleniyor</span>}
-      {notice && <span className="success">{notice}</span>}
-      {error && <span className="danger">{error}</span>}
+      {isLoading && (
+        <span>
+          <span className="spinner" /> Yükleniyor
+        </span>
+      )}
+      {notice && (
+        <span className="success">
+          <Icon name="check_circle" /> {notice}
+        </span>
+      )}
+      {error && (
+        <span className="danger">
+          <Icon name="error" /> {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ actionLabel, icon = "inbox", onAction, text }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon">
+        <Icon name={icon} />
+      </span>
+      <p>{text}</p>
+      {actionLabel && onAction && (
+        <button className="link-button" onClick={onAction} type="button">
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 }
