@@ -6,9 +6,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.routes.teachers import registration_rate_limiter
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_registration_rate_limiter() -> None:
+    registration_rate_limiter.reset()
 
 
 @pytest.fixture()
@@ -102,3 +108,26 @@ def test_classrooms_can_be_filtered_by_teacher(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert [classroom["name"] for classroom in response.json()["items"]] == ["5-A"]
+
+
+@pytest.mark.parametrize(
+    "password",
+    ["onlyletters", "12345678", "short1"],
+    ids=["no-digit", "no-letter", "too-short"],
+)
+def test_teacher_create_rejects_weak_password(client: TestClient, password: str) -> None:
+    response = client.post(
+        "/teachers",
+        json={"full_name": "Eda Ceylan", "email": "eda@example.com", "password": password},
+    )
+
+    assert response.status_code == 422
+
+
+def test_teacher_create_accepts_strong_password(client: TestClient) -> None:
+    response = client.post(
+        "/teachers",
+        json={"full_name": "Eda Ceylan", "email": "eda@example.com", "password": "demo12345"},
+    )
+
+    assert response.status_code == 201

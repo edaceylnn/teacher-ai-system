@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Icon from "../components/Icon";
+import { api } from "../api";
 
 export default function LoginPage({ error, onLogin, setError }) {
   const [form, setForm] = useState({
@@ -7,6 +8,10 @@ export default function LoginPage({ error, onLogin, setError }) {
     password: "demo12345",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -19,6 +24,72 @@ export default function LoginPage({ error, onLogin, setError }) {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleRequestReset(event) {
+    event.preventDefault();
+    setError("");
+    setResetNotice("");
+    setIsSendingReset(true);
+    try {
+      await api.requestPasswordReset(resetEmail);
+      setResetNotice(
+        "Bu e-posta sistemde kayıtlıysa, sıfırlama bağlantısı gönderildi.",
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSendingReset(false);
+    }
+  }
+
+  if (isForgotPasswordMode) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <div>
+            <p className="eyebrow">Teacher AI</p>
+            <h1>Parolamı Unuttum</h1>
+            <p className="login-copy">
+              E-posta adresini gir, sıfırlama bağlantısı gönderelim.
+            </p>
+          </div>
+          <form className="login-form" onSubmit={handleRequestReset}>
+            <label>
+              E-posta
+              <input
+                autoComplete="email"
+                onChange={(event) => setResetEmail(event.target.value)}
+                required
+                type="email"
+                value={resetEmail}
+              />
+            </label>
+            {error && <p className="form-error">{error}</p>}
+            {resetNotice && <p className="login-copy">{resetNotice}</p>}
+            <button
+              className="primary-button"
+              disabled={isSendingReset}
+              type="submit"
+            >
+              <Icon name="mail" />{" "}
+              {isSendingReset ? "Gönderiliyor..." : "Sıfırlama Bağlantısı Gönder"}
+            </button>
+            <button
+              className="outline-button full"
+              onClick={() => {
+                setIsForgotPasswordMode(false);
+                setError("");
+                setResetNotice("");
+              }}
+              type="button"
+            >
+              Girişe dön
+            </button>
+          </form>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -71,6 +142,17 @@ export default function LoginPage({ error, onLogin, setError }) {
           >
             <Icon name="login" />{" "}
             {isSubmitting ? "Giriş yapılıyor..." : "Giriş Yap"}
+          </button>
+          <button
+            className="link-button"
+            onClick={() => {
+              setIsForgotPasswordMode(true);
+              setError("");
+              setResetEmail(form.email);
+            }}
+            type="button"
+          >
+            Parolamı unuttum
           </button>
         </form>
       </section>

@@ -8,6 +8,7 @@ from app.models import AIOutputType
 
 class AIGenerateRequest(BaseModel):
     student_id: int
+    force_regenerate: bool = False
 
 
 class AIWeeklySummaryRequest(BaseModel):

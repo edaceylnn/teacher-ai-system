@@ -1,21 +1,35 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-const AUTH_TOKEN_KEY = "teacher_ai_access_token";
+
+// The access token lives only in memory now — never in localStorage/sessionStorage
+// — so it isn't readable by an XSS payload after the fact. The long-lived refresh
+// token is a separate httpOnly cookie the browser sends automatically; JS can't
+// read it either. A page reload always starts silentRefresh() over from here.
+let accessToken = null;
 
 export function getAuthToken() {
-  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+  return accessToken;
 }
 
 export function setAuthToken(token) {
-  if (token) {
-    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
-  } else {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY);
-  }
+  accessToken = token;
 }
 
-async function request(path, options = {}) {
+// FastAPI validation errors (422) send `detail` as a list of {msg, loc, ...}
+// objects rather than a string — flatten those into one readable sentence.
+function formatErrorDetail(detail) {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => (typeof item === "string" ? item : item.msg))
+      .filter(Boolean)
+      .join(" ");
+  }
+  return detail;
+}
+
+async function performRequest(path, options) {
   const token = getAuthToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -23,13 +37,47 @@ async function request(path, options = {}) {
     },
     ...options,
   });
+}
+
+let refreshPromise = null;
+
+function silentRefresh() {
+  if (!refreshPromise) {
+    refreshPromise = performRequest("/auth/refresh", { method: "POST" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Oturum yenilenemedi.");
+        return response.json();
+      })
+      .then((session) => {
+        setAuthToken(session.access_token);
+        return session;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+async function request(path, options = {}, isRetry = false) {
+  const response = await performRequest(path, options);
+
+  if (response.status === 401 && !isRetry && path !== "/auth/login" && path !== "/auth/refresh") {
+    try {
+      await silentRefresh();
+    } catch {
+      setAuthToken(null);
+      throw new Error("Oturum süresi doldu, lütfen tekrar giriş yapın.");
+    }
+    return request(path, options, true);
+  }
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || "API istegi basarisiz oldu.");
+    throw new Error(formatErrorDetail(errorBody.detail) || "API istegi basarisiz oldu.");
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || response.status === 202) {
     return null;
   }
 
@@ -68,6 +116,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getCurrentTeacher: () => request("/auth/me"),
+  refreshSession: () => silentRefresh(),
+  logout: () => request("/auth/logout", { method: "POST" }),
+  requestPasswordReset: (email) =>
+    request("/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  confirmPasswordReset: (token, newPassword) =>
+    request("/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
   updateTeacher: (teacherId, payload) =>
     request(`/teachers/${teacherId}`, {
       method: "PATCH",

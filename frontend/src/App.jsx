@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { api, getAuthToken, setAuthToken } from "./api";
+import { api, setAuthToken } from "./api";
 import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeLevelOptions, homeworkStatusOptions, scheduleSlotOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
 import { buildClassroomName, scheduleSlotValue, splitScheduleSlot } from "./utils/helpers";
 import AIReportsPage from "./pages/AIReportsPage";
@@ -12,6 +12,7 @@ import GradebookPage from "./pages/GradebookPage";
 import LoginPage from "./pages/LoginPage";
 import Modal from "./components/Modal";
 import ProfilePage from "./pages/ProfilePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SchedulePage from "./pages/SchedulePage";
 import SearchableSelect from "./components/SearchableSelect";
 import Sidebar from "./components/Sidebar";
@@ -21,14 +22,17 @@ import StudentsPage from "./pages/StudentsPage";
 import Topbar from "./components/Topbar";
 
 export default function App() {
-  const [authToken, setAuthTokenState] = useState(() => getAuthToken());
+  const [resetToken] = useState(() => {
+    if (window.location.pathname !== "/reset-password") return null;
+    return new URLSearchParams(window.location.search).get("token");
+  });
   const [currentTeacher, setCurrentTeacher] = useState(null);
   const [teacherProfileForm, setTeacherProfileForm] = useState({
     full_name: "",
     email: "",
     password: "",
   });
-  const [isCheckingAuth, setIsCheckingAuth] = useState(Boolean(authToken));
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
   const [isSidenavCollapsed, setIsSidenavCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -231,16 +235,17 @@ export default function App() {
   const teacherId = currentTeacher?.id || DEMO_TEACHER_ID;
 
   useEffect(() => {
-    if (!authToken) {
-      setIsCheckingAuth(false);
-      return;
-    }
-
+    // The access token never survives a reload (kept in memory only), so on
+    // mount we always try to mint a fresh one from the httpOnly refresh cookie.
     let isActive = true;
     api
-      .getCurrentTeacher()
+      .refreshSession()
+      .then(() => {
+        if (!isActive) return null;
+        return api.getCurrentTeacher();
+      })
       .then((teacher) => {
-        if (isActive) {
+        if (isActive && teacher) {
           setCurrentTeacher(teacher);
           setTeacherProfileForm({
             full_name: teacher.full_name,
@@ -251,7 +256,6 @@ export default function App() {
       })
       .catch(() => {
         setAuthToken(null);
-        setAuthTokenState(null);
         if (isActive) setCurrentTeacher(null);
       })
       .finally(() => {
@@ -261,7 +265,9 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [authToken]);
+    // Runs once on mount only — re-authentication after logout happens via a
+    // fresh load of the login page, not by re-running this effect.
+  }, []);
 
   async function loadInitialData() {
     setIsLoading(true);
@@ -931,7 +937,6 @@ export default function App() {
     setError("");
     const session = await api.login(credentials);
     setAuthToken(session.access_token);
-    setAuthTokenState(session.access_token);
     setCurrentTeacher({
       id: session.teacher_id,
       full_name: session.full_name,
@@ -946,8 +951,8 @@ export default function App() {
   }
 
   function handleLogout() {
+    api.logout().catch(() => {});
     setAuthToken(null);
-    setAuthTokenState(null);
     setCurrentTeacher(null);
     setClassrooms([]);
     setStudents([]);
@@ -1066,6 +1071,18 @@ export default function App() {
     handleDeleteStudent,
     handleGenerateWeeklySummary,
   };
+
+  if (resetToken) {
+    return (
+      <ResetPasswordPage
+        onDone={() => {
+          window.history.replaceState({}, "", "/");
+          window.location.reload();
+        }}
+        token={resetToken}
+      />
+    );
+  }
 
   if (isCheckingAuth) {
     return <StatusLine error="" isLoading notice="" />;

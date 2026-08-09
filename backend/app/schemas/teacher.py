@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.validators import validate_password_strength
 
 
 class TeacherBase(BaseModel):
@@ -11,6 +13,11 @@ class TeacherBase(BaseModel):
 class TeacherCreate(TeacherBase):
     password: str | None = Field(default=None, min_length=8, max_length=128)
     password_hash: str | None = Field(default=None, min_length=1, max_length=255)
+
+    @field_validator("password")
+    @classmethod
+    def check_password_strength(cls, value: str | None) -> str | None:
+        return validate_password_strength(value) if value is not None else value
 
 
 class TeacherUpdate(BaseModel):

@@ -72,6 +72,17 @@ Uygulama adresleri:
 - Frontend: `http://127.0.0.1:5173`
 - Backend docs: `http://127.0.0.1:8000/docs`
 
+### Prod build
+
+`docker-compose.prod.yml`, frontend'i (statik build + nginx, `frontend/Dockerfile`'ın `prod` hedefi) ve backend'i (healthcheck + non-root user) prod moduna uygun şekilde çalıştırır. Gerekli değişkenler: `POSTGRES_PASSWORD`, `SECRET_KEY` (üretimde en az 32 karakter olmalı), `FRONTEND_BASE_URL`, `CORS_ORIGINS`, `VITE_API_BASE_URL` (frontend build-time'da API adresini bilmeli).
+
+```bash
+POSTGRES_PASSWORD=... SECRET_KEY=$(openssl rand -hex 32) \
+  FRONTEND_BASE_URL=https://yourdomain.com CORS_ORIGINS=https://yourdomain.com \
+  VITE_API_BASE_URL=https://api.yourdomain.com \
+  docker compose -f docker-compose.prod.yml up --build
+```
+
 Demo giriş bilgileri:
 
 - E-posta: `eda@example.com`

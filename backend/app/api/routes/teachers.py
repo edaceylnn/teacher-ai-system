@@ -3,12 +3,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_teacher
+from app.core.rate_limit import InMemoryRateLimiter
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models import Teacher
 from app.schemas.teacher import TeacherCreate, TeacherResponse, TeacherUpdate
 
 router = APIRouter(prefix="/teachers", tags=["teachers"])
+registration_rate_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
 
 
 def _ensure_email_is_available(email: str, db: Session, teacher_id: int | None = None) -> None:
@@ -17,7 +19,12 @@ def _ensure_email_is_available(email: str, db: Session, teacher_id: int | None =
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Teacher email already exists")
 
 
-@router.post("", response_model=TeacherResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=TeacherResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(registration_rate_limiter)],
+)
 def create_teacher(payload: TeacherCreate, db: Session = Depends(get_db)) -> Teacher:
     _ensure_email_is_available(str(payload.email), db)
     password_hash = payload.password_hash or (hash_password(payload.password) if payload.password else None)

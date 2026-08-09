@@ -188,6 +188,12 @@ a {
   font-size: 13px;
 }
 
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: -10px;
+}
+
 .form-error {
   animation: rise-in 200ms var(--ease-out);
   background: var(--error-container);
@@ -632,15 +638,14 @@ h3 {
 
 .sidenav-collapse-button {
   align-items: center;
-  align-self: flex-end;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-full);
   color: var(--muted-soft);
   display: flex;
+  flex: none;
   height: 32px;
   justify-content: center;
-  margin-bottom: 12px;
   width: 32px;
 }
 
@@ -656,6 +661,91 @@ h3 {
 .nav-menu {
   display: grid;
   gap: 4px;
+}
+
+/* Collapse toggle rides inline with the first nav item, at the row's right
+   edge, instead of sitting alone above the list with empty space beside it.
+   The wrapper itself owns the hover/active pill (border-radius, background,
+   padding) — copied from .nav-link below — so the highlight spans the whole
+   row including the toggle's area; the inner NavItem becomes a plain,
+   unstyled flex child so it doesn't paint its own narrower pill on top. */
+.nav-menu-lead-row {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: flex;
+  gap: 4px;
+  min-height: 46px;
+  padding: 11px 14px;
+}
+
+.nav-menu-lead-row:hover {
+  background: var(--surface-container);
+  color: var(--primary);
+}
+
+.nav-menu-lead-row.active {
+  background: var(--gradient-brand);
+  box-shadow: var(--shadow-glow);
+  color: #ffffff;
+}
+
+.nav-menu-lead-row > .nav-link {
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  width: auto;
+}
+
+.nav-menu-lead-row > .sidenav-collapse-button {
+  color: inherit;
+}
+
+/* Collapsed sidenav has no room (52px) for both an icon-only nav item and
+   the toggle side by side, so stack them instead, toggle on top — this
+   matches the sidebar's pre-merge collapsed layout. The merged pill above
+   doesn't fit here either, so undo it and let the inner nav-link look like
+   every other collapsed item again. */
+.sidenav.collapsed .nav-menu-lead-row {
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.sidenav.collapsed .nav-menu-lead-row > .nav-link {
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  justify-content: center;
+  min-height: 46px;
+  padding: 11px;
+  width: 100%;
+}
+
+.sidenav.collapsed .nav-menu-lead-row > .nav-link:hover {
+  background: var(--surface-container);
+  color: var(--primary);
+}
+
+.sidenav.collapsed .nav-menu-lead-row > .nav-link.active {
+  background: var(--gradient-brand);
+  box-shadow: var(--shadow-glow);
+  color: #ffffff;
+}
+
+.sidenav.collapsed .nav-menu-lead-row .sidenav-collapse-button {
+  align-self: center;
+  color: var(--muted-soft);
+  order: -1;
 }
 
 .nav-link {
@@ -2522,7 +2612,9 @@ h3 {
   gap: 8px;
   position: fixed;
   right: 24px;
-  z-index: 80;
+  /* Above modal-backdrop (100) and the mobile sidenav (120) — status/error
+     toasts are global notifications and must stay visible over any overlay. */
+  z-index: 150;
 }
 
 .status-line span {

@@ -246,6 +246,99 @@ def test_update_ai_output_changes_output_payload(
     assert saved_output.output_payload["comment"] == "Öğretmen metni güncelledi."
 
 
+def test_generate_report_comment_reuses_cached_output_when_data_unchanged(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    call_count = 0
+
+    def fake_generate_report_comment(input_payload: dict) -> dict:
+        nonlocal call_count
+        call_count += 1
+        return {
+            "title": "Karne Yorumu",
+            "comment": "Ada iyi ilerliyor.",
+            "strengths": [],
+            "growth_areas": [],
+            "teacher_actions": [],
+        }
+
+    monkeypatch.setattr(ai_service, "generate_report_comment", fake_generate_report_comment)
+
+    first = client.post("/ai/report-comments", json={"student_id": student["id"]})
+    second = client.post("/ai/report-comments", json={"student_id": student["id"]})
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+    assert call_count == 1
+
+
+def test_generate_report_comment_regenerates_when_data_changed(
+    client: TestClient,
+    teacher: Teacher,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    call_count = 0
+
+    def fake_generate_report_comment(input_payload: dict) -> dict:
+        nonlocal call_count
+        call_count += 1
+        return {
+            "title": "Karne Yorumu",
+            "comment": f"Yorum {call_count}",
+            "strengths": [],
+            "growth_areas": [],
+            "teacher_actions": [],
+        }
+
+    monkeypatch.setattr(ai_service, "generate_report_comment", fake_generate_report_comment)
+
+    first = client.post("/ai/report-comments", json={"student_id": student["id"]})
+
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    client.post(
+        "/grades",
+        json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90"},
+    )
+
+    second = client.post("/ai/report-comments", json={"student_id": student["id"]})
+
+    assert first.json()["id"] != second.json()["id"]
+    assert call_count == 2
+
+
+def test_generate_report_comment_force_regenerate_bypasses_cache(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    call_count = 0
+
+    def fake_generate_report_comment(input_payload: dict) -> dict:
+        nonlocal call_count
+        call_count += 1
+        return {
+            "title": "Karne Yorumu",
+            "comment": f"Yorum {call_count}",
+            "strengths": [],
+            "growth_areas": [],
+            "teacher_actions": [],
+        }
+
+    monkeypatch.setattr(ai_service, "generate_report_comment", fake_generate_report_comment)
+
+    first = client.post("/ai/report-comments", json={"student_id": student["id"]})
+    second = client.post(
+        "/ai/report-comments", json={"student_id": student["id"], "force_regenerate": True}
+    )
+
+    assert first.json()["id"] != second.json()["id"]
+    assert call_count == 2
+
+
 def test_generate_ai_output_returns_404_for_missing_student(client: TestClient, teacher: Teacher) -> None:
     response = client.post("/ai/report-comments", json={"student_id": 999})
 

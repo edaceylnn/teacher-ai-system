@@ -20,21 +20,29 @@ export default function Sidebar({
 
   return (
     <aside className={sidenavClassName}>
-      <button
-        aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"}
-        className="sidenav-collapse-button"
-        onClick={toggleCollapsed}
-        type="button"
-      >
-        <Icon name="chevron_left" />
-      </button>
       <nav className="nav-menu">
-        <NavItem
-          active={activePage === "dashboard"}
-          icon="dashboard"
-          label="Kontrol Paneli"
-          onClick={() => setActivePage("dashboard")}
-        />
+        <div
+          className={
+            activePage === "dashboard"
+              ? "nav-menu-lead-row active"
+              : "nav-menu-lead-row"
+          }
+        >
+          <NavItem
+            active={activePage === "dashboard"}
+            icon="dashboard"
+            label="Kontrol Paneli"
+            onClick={() => setActivePage("dashboard")}
+          />
+          <button
+            aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"}
+            className="sidenav-collapse-button"
+            onClick={toggleCollapsed}
+            type="button"
+          >
+            <Icon name="chevron_left" />
+          </button>
+        </div>
         <NavItem
           active={activePage === "classrooms"}
           icon="school"

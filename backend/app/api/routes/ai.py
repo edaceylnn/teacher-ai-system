@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
+from app.core.rate_limit import InMemoryRateLimiter
 from app.db.session import get_db
 from app.models import AIOutput, AIOutputType, Attendance, AttendanceStatus, Classroom, Grade, Homework, Lesson, Student, Teacher
 from app.schemas.ai import (
@@ -20,6 +21,10 @@ from app.schemas.ai import (
 from app.services import ai as ai_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+# Shared (per client IP) across all generation endpoints below (not list/update)
+# since each call is a billed OpenAI request.
+ai_generation_rate_limiter = InMemoryRateLimiter(max_requests=15, window_seconds=60)
 
 
 def _decimal_to_float(value: Decimal) -> float:
@@ -80,6 +85,20 @@ def _build_student_payload(student_id: int, db: Session, teacher: Teacher) -> di
     }
 
 
+def _find_reusable_output(
+    student_id: int, output_type: AIOutputType, input_payload: dict[str, Any], db: Session
+) -> AIOutput | None:
+    latest = db.scalar(
+        select(AIOutput)
+        .where(AIOutput.student_id == student_id, AIOutput.output_type == output_type)
+        .order_by(AIOutput.created_at.desc(), AIOutput.id.desc())
+        .limit(1)
+    )
+    if latest is not None and latest.input_payload == input_payload:
+        return latest
+    return None
+
+
 def _generate_and_save(
     payload: AIGenerateRequest,
     output_type: AIOutputType,
@@ -88,6 +107,14 @@ def _generate_and_save(
     teacher: Teacher,
 ) -> AIOutput:
     input_payload = _build_student_payload(payload.student_id, db, teacher)
+
+    # Skip the OpenAI call when nothing the report is based on (grades,
+    # attendance, notes) has changed since the last time it was generated.
+    if not payload.force_regenerate:
+        reusable = _find_reusable_output(payload.student_id, output_type, input_payload, db)
+        if reusable is not None:
+            return reusable
+
     try:
         output_payload = generator(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
@@ -266,7 +293,12 @@ def update_ai_output(
     return ai_output
 
 
-@router.post("/report-comments", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/report-comments",
+    response_model=AIOutputResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(ai_generation_rate_limiter)],
+)
 def generate_report_comment(
     payload: AIGenerateRequest,
     db: Session = Depends(get_db),
@@ -281,7 +313,12 @@ def generate_report_comment(
     )
 
 
-@router.post("/parent-messages", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/parent-messages",
+    response_model=AIOutputResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(ai_generation_rate_limiter)],
+)
 def generate_parent_message(
     payload: AIGenerateRequest,
     db: Session = Depends(get_db),
@@ -296,7 +333,12 @@ def generate_parent_message(
     )
 
 
-@router.post("/topic-analyses", response_model=AIOutputResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/topic-analyses",
+    response_model=AIOutputResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(ai_generation_rate_limiter)],
+)
 def generate_topic_analysis(
     payload: AIGenerateRequest,
     db: Session = Depends(get_db),
@@ -311,7 +353,11 @@ def generate_topic_analysis(
     )
 
 
-@router.post("/weekly-summaries", response_model=AIWeeklySummaryResponse)
+@router.post(
+    "/weekly-summaries",
+    response_model=AIWeeklySummaryResponse,
+    dependencies=[Depends(ai_generation_rate_limiter)],
+)
 def generate_weekly_summary(
     payload: AIWeeklySummaryRequest,
     db: Session = Depends(get_db),
@@ -324,7 +370,11 @@ def generate_weekly_summary(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
 
-@router.post("/lesson-plans", response_model=AILessonPlanResponse)
+@router.post(
+    "/lesson-plans",
+    response_model=AILessonPlanResponse,
+    dependencies=[Depends(ai_generation_rate_limiter)],
+)
 def generate_lesson_plan(
     payload: AILessonPlanRequest,
     db: Session = Depends(get_db),

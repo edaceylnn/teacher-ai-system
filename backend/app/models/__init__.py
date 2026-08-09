@@ -1,5 +1,6 @@
 from app.models.ai_output import AIOutput, AIOutputType
 from app.models.attendance import Attendance, AttendanceStatus
+from app.models.audit_log import AuditLog
 from app.models.classroom import Classroom
 from app.models.grade import Grade
 from app.models.homework import Homework, HomeworkStatus
@@ -13,6 +14,7 @@ __all__ = [
     "AIOutputType",
     "Attendance",
     "AttendanceStatus",
+    "AuditLog",
     "Classroom",
     "Grade",
     "Homework",

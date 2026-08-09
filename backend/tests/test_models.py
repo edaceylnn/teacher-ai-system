@@ -10,6 +10,7 @@ from app.models import (
     AIOutputType,
     Attendance,
     AttendanceStatus,
+    AuditLog,
     Classroom,
     Grade,
     Homework,
@@ -30,6 +31,7 @@ def test_database_models_create_expected_tables() -> None:
     assert table_names == {
         "ai_outputs",
         "attendance_records",
+        "audit_logs",
         "classrooms",
         "grades",
         "homeworks",

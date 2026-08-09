@@ -1,16 +1,20 @@
-import base64
 import hashlib
 import hmac
-import json
-import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import jwt
 
 from app.core.config import settings
 
 
 HASH_PREFIX = "pbkdf2_sha256"
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_PURPOSE = "access"
+REFRESH_TOKEN_PURPOSE = "refresh"
+PASSWORD_RESET_TOKEN_PURPOSE = "pwd_reset"
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 30
 
 
 def hash_password(password: str) -> str:
@@ -34,42 +38,76 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     expires_at = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
-    payload = {"sub": subject, "exp": int(expires_at.timestamp())}
-    encoded_payload = _base64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-    signature = _sign(encoded_payload)
-    return f"{encoded_payload}.{signature}"
+    payload = {"sub": subject, "purpose": ACCESS_TOKEN_PURPOSE, "exp": int(expires_at.timestamp())}
+    return _encode_token(payload)
 
 
 def decode_access_token(token: str) -> dict[str, Any] | None:
-    try:
-        encoded_payload, signature = token.split(".", 1)
-    except ValueError:
-        return None
-    if not hmac.compare_digest(_sign(encoded_payload), signature):
-        return None
-    try:
-        payload = json.loads(_base64url_decode(encoded_payload))
-    except (ValueError, json.JSONDecodeError):
-        return None
-    if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
+    payload = _decode_token(token)
+    if payload is None or payload.get("purpose") != ACCESS_TOKEN_PURPOSE:
         return None
     return payload
 
 
-def _sign(encoded_payload: str) -> str:
-    key = settings.secret_key.encode("utf-8")
-    return hmac.new(key, encoded_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+def create_refresh_token(teacher_id: int, current_password_hash: str) -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.refresh_token_expire_minutes)
+    payload = {
+        "sub": str(teacher_id),
+        "purpose": REFRESH_TOKEN_PURPOSE,
+        "pwd_fp": password_fingerprint(current_password_hash),
+        "exp": int(expires_at.timestamp()),
+    }
+    return _encode_token(payload)
 
 
-def _base64url_encode(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+def decode_refresh_token(token: str) -> dict[str, Any] | None:
+    payload = _decode_token(token)
+    if payload is None or payload.get("purpose") != REFRESH_TOKEN_PURPOSE:
+        return None
+    return payload
 
 
-def _base64url_decode(value: str) -> bytes:
-    padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
+def create_password_reset_token(teacher_id: int, current_password_hash: str) -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": str(teacher_id),
+        "purpose": PASSWORD_RESET_TOKEN_PURPOSE,
+        "pwd_fp": password_fingerprint(current_password_hash),
+        "exp": int(expires_at.timestamp()),
+    }
+    return _encode_token(payload)
+
+
+def decode_password_reset_token(token: str) -> dict[str, Any] | None:
+    payload = _decode_token(token)
+    if payload is None or payload.get("purpose") != PASSWORD_RESET_TOKEN_PURPOSE:
+        return None
+    return payload
+
+
+def password_fingerprint(password_hash: str) -> str:
+    """Ties a reset token to the password hash it was issued for, so the token
+    stops working as soon as the password changes — no separate token store needed."""
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def _encode_token(payload: dict[str, Any]) -> str:
+    return jwt.encode(payload, settings.secret_key, algorithm=JWT_ALGORITHM)
+
+
+def _decode_token(token: str) -> dict[str, Any] | None:
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[JWT_ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
 
 
 def ensure_secret_key_is_not_default() -> None:
-    if settings.environment == "production" and settings.secret_key == "change-me-in-production":
+    if settings.environment != "production":
+        return
+    if settings.secret_key == "change-me-in-production":
         raise RuntimeError("SECRET_KEY must be changed in production.")
+    # RFC 7518 §3.2 recommends HS256 keys be at least as long as the hash
+    # output (32 bytes) — PyJWT warns about this at encode/decode time.
+    if len(settings.secret_key) < 32:
+        raise RuntimeError("SECRET_KEY must be at least 32 characters in production.")

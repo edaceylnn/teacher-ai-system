@@ -9,18 +9,20 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = Field(default="development")
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/teacher_ai_system"
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
     openai_api_key: str | None = None
     openai_model: str = "gpt-5"
     secret_key: str = "change-me-in-production"
-    access_token_expire_minutes: int = 60 * 12
-    cors_origins: list[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-        ]
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_minutes: int = 60 * 24 * 30
+    frontend_base_url: str = "http://localhost:5173"
+    # Comma-separated, not a JSON list — pydantic-settings tries to JSON-decode
+    # list-typed fields from env vars, which rejects a plain "a,b,c" string.
+    # Add prod origins via CORS_ORIGINS="https://app.example.com,https://admin.example.com".
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:5174,http://127.0.0.1:5174"
     )
 
     model_config = SettingsConfigDict(
@@ -28,6 +30,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache
