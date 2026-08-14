@@ -22,6 +22,7 @@ class CurrentTeacherResponse(BaseModel):
     id: int
     full_name: str
     email: str
+    title: str | None = None
     created_at: datetime
     updated_at: datetime
 

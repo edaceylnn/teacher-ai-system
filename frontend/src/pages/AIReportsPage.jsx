@@ -225,11 +225,23 @@ export default function AIReportsPage({
     }
   }
 
+  const fieldLabelClass = "font-label-md text-label-md uppercase tracking-wider text-on-surface flex items-center gap-2";
+  const fieldInputClass =
+    "w-full rounded border border-outline-variant px-3 py-2 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary";
+  const fieldTextareaClass = `${fieldInputClass} min-h-24 resize-y`;
+
   return (
-    <div className="report-page">
-      <section className="report-document">
-        <h1>AI Karne Raporu</h1>
-        <div className="report-student-picker">
+    <div className="wide-page flex-row flex-wrap items-start lg:flex-nowrap">
+      <section className="flex flex-1 flex-col gap-card-gap">
+        <div>
+          <h1 className="font-headline-lg text-headline-lg text-on-surface">AI Karne Raporu</h1>
+          <p className="mt-1 font-body-md text-body-md text-secondary">
+            {selectedStudent
+              ? `${selectedStudent.first_name} ${selectedStudent.last_name} için yapay zeka destekli rapor.`
+              : "Rapor oluşturmak için bir öğrenci seç."}
+          </p>
+        </div>
+        <div className="max-w-sm">
           <StudentSearch
             filteredStudents={filteredStudents}
             isStudentPickerOpen={isStudentPickerOpen}
@@ -241,197 +253,163 @@ export default function AIReportsPage({
             setSelectedStudentId={handleSelectStudent}
           />
         </div>
-        <p className="report-meta">
-          Öğrenci:{" "}
-          {selectedStudent
-            ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
-            : "Öğrenci seçilmedi"}
-        </p>
-        <div className="report-section">
-          <h2>Karne Yorumu</h2>
-          {reportComment ? (
-            <div className="editable-ai-output">
-              <label>
-                Başlık
+
+        <div className="card flex flex-col gap-6 p-6">
+          <div className="flex flex-col gap-2">
+            <label className={fieldLabelClass}>
+              <Icon name="edit_note" className="text-primary" /> Karne Yorumu
+            </label>
+            {reportComment ? (
+              <div className="flex flex-col gap-3">
                 <input
-                  onChange={(event) =>
-                    updateReportComment("title", event.target.value)
-                  }
+                  className={fieldInputClass}
+                  onChange={(event) => updateReportComment("title", event.target.value)}
+                  placeholder="Başlık"
                   value={reportComment.title || ""}
                 />
-              </label>
-              <label>
-                Karne yorumu
                 <textarea
-                  onChange={(event) =>
-                    updateReportComment("comment", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateReportComment("comment", event.target.value)}
+                  placeholder="Karne yorumu"
                   value={reportComment.comment || ""}
                 />
-              </label>
-              <label>
-                Güçlü yönler
                 <textarea
-                  onChange={(event) =>
-                    updateReportCommentList("strengths", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateReportCommentList("strengths", event.target.value)}
+                  placeholder="Güçlü yönler (her satıra bir madde)"
                   value={(reportComment.strengths || []).join("\n")}
                 />
-              </label>
-              <label>
-                Gelişim alanları
                 <textarea
-                  onChange={(event) =>
-                    updateReportCommentList("growth_areas", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateReportCommentList("growth_areas", event.target.value)}
+                  placeholder="Gelişim alanları (her satıra bir madde)"
                   value={(reportComment.growth_areas || []).join("\n")}
                 />
-              </label>
-            </div>
-          ) : (
-            <p>Henüz karne yorumu oluşturulmadı.</p>
-          )}
-        </div>
-        <div className="report-section">
-          <h2>Eksik Konu Analizi</h2>
-          {topicAnalysis ? (
-            <div className="editable-ai-output">
-              <label>
-                Başlık
+              </div>
+            ) : (
+              <p className="font-body-md text-body-md text-secondary">Henüz karne yorumu oluşturulmadı.</p>
+            )}
+          </div>
+
+          <div className="border-t border-outline-variant" />
+
+          <div className="flex flex-col gap-2">
+            <label className={fieldLabelClass}>
+              <Icon name="troubleshoot" className="text-tertiary" /> Eksik Konu Analizi
+            </label>
+            {topicAnalysis ? (
+              <div className="flex flex-col gap-3">
                 <input
-                  onChange={(event) =>
-                    updateTopicAnalysis("title", event.target.value)
-                  }
+                  className={fieldInputClass}
+                  onChange={(event) => updateTopicAnalysis("title", event.target.value)}
+                  placeholder="Başlık"
                   value={topicAnalysis.title || ""}
                 />
-              </label>
-              <label>
-                Özet
                 <textarea
-                  onChange={(event) =>
-                    updateTopicAnalysis("summary", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateTopicAnalysis("summary", event.target.value)}
+                  placeholder="Özet"
                   value={topicAnalysis.summary || ""}
                 />
-              </label>
-              <label>
-                Eksik konular
                 <textarea
-                  onChange={(event) =>
-                    updateTopicAnalysisList(
-                      "missing_topics",
-                      event.target.value,
-                    )
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateTopicAnalysisList("missing_topics", event.target.value)}
+                  placeholder="Eksik konular (her satıra bir madde)"
                   value={(topicAnalysis.missing_topics || []).join("\n")}
                 />
-              </label>
-              <label>
-                Çalışma planı
                 <textarea
-                  onChange={(event) =>
-                    updateTopicAnalysisList("practice_plan", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateTopicAnalysisList("practice_plan", event.target.value)}
+                  placeholder="Çalışma planı (her satıra bir madde)"
                   value={(topicAnalysis.practice_plan || []).join("\n")}
                 />
-              </label>
-            </div>
-          ) : (
-            <p>Henüz eksik konu analizi oluşturulmadı.</p>
-          )}
-        </div>
-        <div className="report-section">
-          <h2>Veli Mesajı</h2>
-          {parentMessage ? (
-            <div className="editable-ai-output">
-              <label>
-                Konu
+              </div>
+            ) : (
+              <p className="font-body-md text-body-md text-secondary">Henüz eksik konu analizi oluşturulmadı.</p>
+            )}
+          </div>
+
+          <div className="border-t border-outline-variant" />
+
+          <div className="flex flex-col gap-2">
+            <label className={fieldLabelClass}>
+              <Icon name="mail" className="text-secondary" /> Veli Mesajı
+            </label>
+            {parentMessage ? (
+              <div className="flex flex-col gap-3">
                 <input
-                  onChange={(event) =>
-                    updateParentMessage("subject", event.target.value)
-                  }
+                  className={fieldInputClass}
+                  onChange={(event) => updateParentMessage("subject", event.target.value)}
+                  placeholder="Konu"
                   value={parentMessage.subject || ""}
                 />
-              </label>
-              <label>
-                Veli mesajı
                 <textarea
-                  onChange={(event) =>
-                    updateParentMessage("message", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateParentMessage("message", event.target.value)}
+                  placeholder="Veli mesajı"
                   value={parentMessage.message || ""}
                 />
-              </label>
-              <label>
-                Sonraki adımlar
                 <textarea
-                  onChange={(event) =>
-                    updateParentMessageList("next_steps", event.target.value)
-                  }
+                  className={fieldTextareaClass}
+                  onChange={(event) => updateParentMessageList("next_steps", event.target.value)}
+                  placeholder="Sonraki adımlar (her satıra bir madde)"
                   value={(parentMessage.next_steps || []).join("\n")}
                 />
-              </label>
-            </div>
-          ) : (
-            <p>Henüz veli mesajı hazırlanmadı.</p>
-          )}
+              </div>
+            ) : (
+              <p className="font-body-md text-body-md text-secondary">Henüz veli mesajı hazırlanmadı.</p>
+            )}
+          </div>
         </div>
       </section>
-      <aside className="report-actions">
-        <button
-          className="primary-button full"
-          disabled={isGeneratingReport}
-          onClick={generateReportComment}
-          type="button"
-        >
-          <Icon name="auto_awesome" />{" "}
-          {isGeneratingReport ? "Oluşturuluyor..." : "Karne Yorumu Oluştur"}
-        </button>
-        <button
-          className="outline-button full"
-          disabled={isGeneratingParentMessage}
-          onClick={generateParentMessage}
-          type="button"
-        >
-          <Icon name="mail" />{" "}
-          {isGeneratingParentMessage
-            ? "Hazırlanıyor..."
-            : "Veli Mesajı Hazırla"}
-        </button>
-        <button
-          className="outline-button full"
-          disabled={isGeneratingTopicAnalysis}
-          onClick={generateTopicAnalysis}
-          type="button"
-        >
-          <Icon name="psychology" />{" "}
-          {isGeneratingTopicAnalysis
-            ? "Analiz ediliyor..."
-            : "Eksik Konu Analizi"}
-        </button>
-        <button
-          className="outline-button full"
-          onClick={() => window.print()}
-          type="button"
-        >
-          <Icon name="download" /> PDF Dışa Aktar
-        </button>
-        <button
-          className="outline-button full"
-          disabled={
-            isSavingAIOutput ||
-            (!reportCommentOutputId &&
-              !parentMessageOutputId &&
-              !topicAnalysisOutputId)
-          }
-          onClick={saveAIOutputEdits}
-          type="button"
-        >
-          <Icon name="save" />{" "}
-          {isSavingAIOutput ? "Kaydediliyor..." : "Düzenlemeleri Kaydet"}
-        </button>
-        {aiNotice && <p className="empty-note success-note">{aiNotice}</p>}
-        {aiError && <p className="empty-note">{aiError}</p>}
+
+      <aside className="flex w-full flex-col gap-3 lg:w-80 lg:shrink-0">
+        <div className="card sticky top-20 p-5">
+          <h3 className="mb-4 font-headline-md text-headline-md text-on-surface">Aksiyonlar</h3>
+          <div className="flex flex-col gap-3">
+            <button className="primary-button full" disabled={isGeneratingReport} onClick={generateReportComment} type="button">
+              <Icon name="auto_awesome" /> {isGeneratingReport ? "Oluşturuluyor..." : "Karne Yorumu Oluştur"}
+            </button>
+            <p className="text-center font-mono-sm text-mono-sm text-secondary">
+              Yapay zeka desteği ile taslak oluştur.
+            </p>
+            <div className="border-t border-outline-variant" />
+            <button
+              className="outline-button full"
+              disabled={isGeneratingParentMessage}
+              onClick={generateParentMessage}
+              type="button"
+            >
+              <Icon name="mail" /> {isGeneratingParentMessage ? "Hazırlanıyor..." : "Veli Mesajı Hazırla"}
+            </button>
+            <button
+              className="outline-button full"
+              disabled={isGeneratingTopicAnalysis}
+              onClick={generateTopicAnalysis}
+              type="button"
+            >
+              <Icon name="psychology" /> {isGeneratingTopicAnalysis ? "Analiz ediliyor..." : "Eksik Konu Analizi"}
+            </button>
+            <button
+              className="outline-button full"
+              disabled={
+                isSavingAIOutput ||
+                (!reportCommentOutputId && !parentMessageOutputId && !topicAnalysisOutputId)
+              }
+              onClick={saveAIOutputEdits}
+              type="button"
+            >
+              <Icon name="save" /> {isSavingAIOutput ? "Kaydediliyor..." : "Düzenlemeleri Kaydet"}
+            </button>
+          </div>
+          {aiNotice && (
+            <div className="mt-4 flex items-start gap-2 rounded border border-secondary-fixed-dim bg-secondary-container p-3">
+              <Icon name="info" className="text-on-secondary-container" />
+              <p className="font-mono-sm text-mono-sm text-on-secondary-container">{aiNotice}</p>
+            </div>
+          )}
+          {aiError && <p className="form-error mt-4">{aiError}</p>}
+        </div>
       </aside>
     </div>
   );

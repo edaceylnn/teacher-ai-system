@@ -33,7 +33,11 @@ RUN npm run build
 FROM nginx:1.27-alpine AS prod
 
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# The base image's entrypoint (docker-entrypoint.d/20-envsubst-on-templates.sh)
+# renders *.template files here into /etc/nginx/conf.d/ at container start,
+# substituting ${API_ORIGIN} (set in docker-compose.prod.yml) into the CSP header.
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV API_ORIGIN=""
 
 EXPOSE 80
 

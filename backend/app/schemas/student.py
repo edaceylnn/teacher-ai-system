@@ -3,12 +3,14 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import AttendanceStatus
+from app.models import AttendanceStatus, StudentEnrollmentStatus
 
 
 class StudentBase(BaseModel):
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
+    email: str | None = Field(default=None, max_length=255)
+    enrollment_status: StudentEnrollmentStatus = StudentEnrollmentStatus.active
     parent_full_name: str | None = Field(default=None, max_length=120)
     parent_phone: str | None = Field(default=None, max_length=40)
     parent_email: str | None = Field(default=None, max_length=255)
@@ -24,11 +26,18 @@ class StudentUpdate(BaseModel):
     classroom_id: int | None = None
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name: str | None = Field(default=None, min_length=1, max_length=80)
+    email: str | None = Field(default=None, max_length=255)
+    enrollment_status: StudentEnrollmentStatus | None = None
     parent_full_name: str | None = Field(default=None, max_length=120)
     parent_phone: str | None = Field(default=None, max_length=40)
     parent_email: str | None = Field(default=None, max_length=255)
     home_address: str | None = None
     observation_notes: str | None = None
+
+
+class StudentMessageRequest(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=5000)
 
 
 class StudentResponse(StudentBase):

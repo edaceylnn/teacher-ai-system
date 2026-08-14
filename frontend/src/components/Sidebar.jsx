@@ -1,93 +1,99 @@
 import Icon from "./Icon";
-import NavItem from "./NavItem";
+
+const NAV_ITEMS = [
+  { page: "dashboard", icon: "dashboard", label: "Kontrol Paneli" },
+  { page: "classrooms", icon: "school", label: "Sınıflarım", matchAlso: ["classroomDetail"] },
+  { page: "students", icon: "groups", label: "Öğrencilerim", matchAlso: ["studentDetail"] },
+  { page: "gradebook", icon: "menu_book", label: "Not Defteri" },
+  { page: "attendance", icon: "calendar_today", label: "Devamsızlık" },
+  { page: "schedule", icon: "schedule", label: "Ders Programı" },
+  { page: "aiReports", icon: "analytics", label: "AI Raporları" },
+];
 
 export default function Sidebar({
   activePage,
-  isCollapsed,
   isMobileOpen,
   onCloseMobile,
+  onLogout,
   setActiveModal,
   setActivePage,
-  toggleCollapsed,
 }) {
-  const sidenavClassName = [
-    "sidenav",
-    isCollapsed ? "collapsed" : "",
-    isMobileOpen ? "mobile-open" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <aside className={sidenavClassName}>
-      <nav className="nav-menu">
+    <>
+      {isMobileOpen && (
         <div
-          className={
-            activePage === "dashboard"
-              ? "nav-menu-lead-row active"
-              : "nav-menu-lead-row"
-          }
+          className="sidenav-backdrop fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`sidenav fixed left-0 top-0 z-40 flex h-screen w-[240px] flex-col border-r border-outline-variant bg-surface px-4 py-6 transition-transform duration-200 md:translate-x-0 ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="mb-8 flex items-center gap-3 px-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container font-headline-md text-headline-md font-bold text-on-primary">
+            T
+          </div>
+          <div>
+            <h1 className="font-headline-md text-headline-md font-bold leading-tight text-primary">
+              Teacher AI
+            </h1>
+            <p className="font-label-md text-label-md uppercase tracking-wider text-secondary">
+              Eğitmen Paneli
+            </p>
+          </div>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto no-scrollbar">
+          {NAV_ITEMS.map((item) => {
+            const isActive = activePage === item.page || item.matchAlso?.includes(activePage);
+            return (
+              <button
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors duration-100 ${
+                  isActive
+                    ? "border-r-2 border-primary bg-surface-container-low font-bold text-primary"
+                    : "text-secondary hover:bg-surface-container-low"
+                }`}
+                key={item.page}
+                onClick={() => setActivePage(item.page)}
+                type="button"
+              >
+                <Icon name={item.icon} filled={isActive} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <button
+          className="mb-6 mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 px-4 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container"
+          onClick={() => setActiveModal("classroom")}
+          type="button"
         >
-          <NavItem
-            active={activePage === "dashboard"}
-            icon="dashboard"
-            label="Kontrol Paneli"
-            onClick={() => setActivePage("dashboard")}
-          />
+          <Icon name="add" />
+          Sınıf Ekle
+        </button>
+
+        <div className="flex flex-col gap-1 border-t border-outline-variant pt-4">
           <button
-            aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"}
-            className="sidenav-collapse-button"
-            onClick={toggleCollapsed}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+            onClick={() => setActivePage("profile")}
             type="button"
           >
-            <Icon name="chevron_left" />
+            <Icon name="account_circle" />
+            Profil
+          </button>
+          <button
+            className="flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+            onClick={onLogout}
+            type="button"
+          >
+            <Icon name="logout" />
+            Çıkış Yap
           </button>
         </div>
-        <NavItem
-          active={activePage === "classrooms"}
-          icon="school"
-          label="Sınıflarım"
-          onClick={() => setActivePage("classrooms")}
-        />
-        <NavItem
-          active={activePage === "students" || activePage === "studentDetail"}
-          icon="groups"
-          label="Öğrencilerim"
-          onClick={() => setActivePage("students")}
-        />
-        <NavItem
-          active={activePage === "gradebook"}
-          icon="grade"
-          label="Not Defteri"
-          onClick={() => setActivePage("gradebook")}
-        />
-        <NavItem
-          active={activePage === "attendance"}
-          icon="calendar_today"
-          label="Devamsızlık"
-          onClick={() => setActivePage("attendance")}
-        />
-        <NavItem
-          active={activePage === "schedule"}
-          icon="calendar_month"
-          label="Ders Programı"
-          onClick={() => setActivePage("schedule")}
-        />
-        <NavItem
-          active={activePage === "aiReports"}
-          icon="auto_awesome"
-          label="AI Raporları"
-          onClick={() => setActivePage("aiReports")}
-        />
-      </nav>
-
-      <button
-        className="outline-button add-class-button"
-        onClick={() => setActiveModal("classroom")}
-        type="button"
-      >
-        <Icon name="add" /> <span>Sınıf Ekle</span>
-      </button>
-    </aside>
+      </aside>
+    </>
   );
 }

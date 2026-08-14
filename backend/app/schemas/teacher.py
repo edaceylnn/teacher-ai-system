@@ -8,6 +8,7 @@ from app.schemas.validators import validate_password_strength
 class TeacherBase(BaseModel):
     full_name: str = Field(min_length=1, max_length=120)
     email: str = Field(min_length=3, max_length=255)
+    title: str | None = Field(default=None, max_length=120)
 
 
 class TeacherCreate(TeacherBase):
@@ -23,6 +24,7 @@ class TeacherCreate(TeacherBase):
 class TeacherUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
     email: str | None = Field(default=None, min_length=3, max_length=255)
+    title: str | None = Field(default=None, max_length=120)
     password_hash: str | None = Field(default=None, min_length=1, max_length=255)
 
 

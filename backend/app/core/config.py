@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_minutes: int = 60 * 24 * 30
     frontend_base_url: str = "http://localhost:5173"
+    # Number of uvicorn worker processes (see backend/Dockerfile). The rate
+    # limiter (app/core/rate_limit.py) keeps its counters in-process, so more
+    # than one worker in production would silently multiply every limit.
+    web_concurrency: int = 1
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_use_tls: bool = True
     # Comma-separated, not a JSON list — pydantic-settings tries to JSON-decode
     # list-typed fields from env vars, which rejects a plain "a,b,c" string.
     # Add prod origins via CORS_ORIGINS="https://app.example.com,https://admin.example.com".

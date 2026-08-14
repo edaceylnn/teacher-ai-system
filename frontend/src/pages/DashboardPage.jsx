@@ -94,7 +94,7 @@ export default function DashboardPage({
     ...riskStudents.map((student) => ({
       ...student,
       reason: `Ortalama ${student.average}`,
-      tone: "warning",
+      tone: "danger",
     })),
     ...missingGradeStudents.map((student) => ({
       ...student,
@@ -125,7 +125,7 @@ export default function DashboardPage({
   }, [grades]);
 
   const chartWidth = 760;
-  const chartHeight = 320;
+  const chartHeight = 260;
   const chartPadding = { top: 24, right: 24, bottom: 36, left: 44 };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
@@ -148,186 +148,161 @@ export default function DashboardPage({
   const chartGridLines = [0, 25, 50, 75, 100];
 
   return (
-    <>
-      <div className="dashboard-grid">
-        <section className="stats-overview">
-          <StatCard
-            icon="groups"
-            label="Toplam Öğrenci"
-            trend={`${classrooms.length} sınıf`}
-            value={studentsForAnalysis.length}
-          />
-          <StatCard
-            icon="priority_high"
-            label="Riskli Öğrenci"
-            trend={riskStudents.length ? "Takip önerilir" : "Risk görünmüyor"}
-            trendDirection={riskStudents.length ? "down" : "up"}
-            value={riskStudents.length}
-          />
-          <StatCard
-            icon="analytics"
-            label="Sınıf Ortalaması"
-            trend={`${grades.length} not kaydı`}
-            value={overallAverage}
-          />
-          <StatCard
-            icon="auto_awesome"
-            label="AI Bekleyen"
-            trend="Rapor veya veli mesajı eksik"
-            value={aiPendingStudents.length}
-          />
-        </section>
+    <div className="wide-page">
+      <div className="grid grid-cols-1 gap-card-gap md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon="groups"
+          label="Toplam Öğrenci"
+          trend={`${classrooms.length} sınıf`}
+          value={studentsForAnalysis.length}
+        />
+        <StatCard
+          icon="priority_high"
+          label="Riskli Öğrenci"
+          trend={riskStudents.length ? "Takip önerilir" : "Risk görünmüyor"}
+          trendDirection={riskStudents.length ? "down" : "up"}
+          value={riskStudents.length}
+        />
+        <StatCard
+          icon="analytics"
+          label="Sınıf Ortalaması"
+          trend={`${grades.length} not kaydı`}
+          value={overallAverage}
+        />
+        <StatCard
+          icon="auto_awesome"
+          label="AI Bekleyen"
+          trend="Rapor veya veli mesajı eksik"
+          value={aiPendingStudents.length}
+        />
+      </div>
 
-        <section className="chart-card">
-          <div className="section-heading">
-            <h2>Akademik Performans Eğilimi</h2>
-            <span className="analysis-chip">
-              {trendPoints.length ? "Son not kayıtları" : "Veri yok"}
-            </span>
-          </div>
-          {chartPoints.length > 1 ? (
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              role="img"
-              aria-label="Akademik performans grafiği"
-            >
-              <defs>
-                <linearGradient
-                  id="dashboard-chart-fill"
-                  x1="0"
-                  x2="0"
-                  y1="0"
-                  y2="1"
-                >
-                  <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.22" />
-                  <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.02" />
-                </linearGradient>
-              </defs>
-              {chartGridLines.map((value) => {
-                const y = chartPadding.top + plotHeight - (value / 100) * plotHeight;
-                return (
-                  <g key={value}>
-                    <line
-                      x1={chartPadding.left}
-                      x2={chartWidth - chartPadding.right}
-                      y1={y}
-                      y2={y}
-                      stroke="#dce9ff"
-                    />
-                    <text
-                      x={chartPadding.left - 10}
-                      y={y + 4}
-                      fontSize="11"
-                      fill="#8a8fa3"
-                      textAnchor="end"
-                    >
-                      {value}
+      <div className="grid grid-cols-1 gap-card-gap lg:grid-cols-3">
+        <div className="flex flex-col gap-card-gap lg:col-span-2">
+          <section className="card p-6">
+            <div className="section-heading">
+              <h2>Akademik Performans Eğilimi</h2>
+              <span className="analysis-chip">
+                {trendPoints.length ? "Son not kayıtları" : "Veri yok"}
+              </span>
+            </div>
+            {chartPoints.length > 1 ? (
+              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Akademik performans grafiği">
+                <defs>
+                  <linearGradient id="dashboard-chart-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {chartGridLines.map((value) => {
+                  const y = chartPadding.top + plotHeight - (value / 100) * plotHeight;
+                  return (
+                    <g key={value}>
+                      <line x1={chartPadding.left} x2={chartWidth - chartPadding.right} y1={y} y2={y} stroke="#e5e7eb" />
+                      <text x={chartPadding.left - 10} y={y + 4} fontSize="11" fill="#777587" textAnchor="end">
+                        {value}
+                      </text>
+                    </g>
+                  );
+                })}
+                <path d={areaPath} fill="url(#dashboard-chart-fill)" />
+                <path d={linePath} fill="none" stroke="#3525cd" strokeWidth="3" strokeLinecap="round" />
+                {chartPoints.map((point) => (
+                  <g key={point.label + point.x}>
+                    <circle cx={point.x} cy={point.y} r="4.5" fill="#ffffff" stroke="#3525cd" strokeWidth="2.5" />
+                    <text x={point.x} y={chartHeight - 10} fontSize="11" fill="#777587" textAnchor="middle">
+                      {point.label}
                     </text>
                   </g>
-                );
-              })}
-              <path d={areaPath} fill="url(#dashboard-chart-fill)" />
-              <path d={linePath} fill="none" stroke="#4338ca" strokeWidth="3" strokeLinecap="round" />
-              {chartPoints.map((point) => (
-                <g key={point.label + point.x}>
-                  <circle
-                    className="chart-tooltip-dot"
-                    cx={point.x}
-                    cy={point.y}
-                    r="4.5"
-                    fill="#ffffff"
-                    stroke="#4338ca"
-                    strokeWidth="2.5"
-                  />
-                  <text
-                    x={point.x}
-                    y={chartHeight - 10}
-                    fontSize="11"
-                    fill="#8a8fa3"
-                    textAnchor="middle"
-                  >
-                    {point.label}
-                  </text>
-                </g>
+                ))}
+              </svg>
+            ) : (
+              <EmptyState icon="show_chart" text="Grafik için henüz yeterli not kaydı yok. Not eklendikçe eğilim burada görünecek." />
+            )}
+          </section>
+
+          <section className="card overflow-hidden">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+              <h2>Dikkat Gerektiren Öğrenciler</h2>
+              <span className="analysis-chip">{attentionStudents.length} kayıt</span>
+            </div>
+            <div className="divide-y divide-outline-variant">
+              {attentionStudents.map((student) => (
+                <button
+                  className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-surface-container-low"
+                  key={`${student.id}-${student.reason}`}
+                  onClick={() => {
+                    setSelectedStudentId(student.id);
+                    setActivePage("studentDetail");
+                  }}
+                  type="button"
+                >
+                  <span>
+                    <strong className="block font-body-md text-body-md font-medium text-on-surface">
+                      {student.first_name} {student.last_name}
+                    </strong>
+                    <small className="font-body-md text-body-md text-secondary">
+                      {classroomById.get(student.classroom_id)?.name || "Sınıf yok"}
+                    </small>
+                  </span>
+                  <span className={`badge ${student.tone === "danger" ? "badge-danger" : "badge-neutral"}`}>
+                    {student.reason}
+                  </span>
+                </button>
               ))}
-            </svg>
-          ) : (
-            <EmptyState
-              icon="show_chart"
-              text="Grafik için henüz yeterli not kaydı yok. Not eklendikçe eğilim burada görünecek."
-            />
-          )}
-        </section>
+            </div>
+            {!attentionStudents.length && (
+              <EmptyState icon="task_alt" text="Şu an dikkat gerektiren öğrenci görünmüyor." />
+            )}
+          </section>
 
-        <section className="analysis-card attention-card">
-          <div className="section-heading">
-            <h2>Dikkat Gerektiren Öğrenciler</h2>
-            <span className="analysis-chip">{attentionStudents.length} kayıt</span>
-          </div>
-          {attentionStudents.map((student) => (
-            <button
-              className="analysis-row"
-              key={`${student.id}-${student.reason}`}
-              onClick={() => {
-                setSelectedStudentId(student.id);
-                setActivePage("studentDetail");
-              }}
-              type="button"
-            >
-              <span>
-                <strong>{student.first_name} {student.last_name}</strong>
-                <small>{classroomById.get(student.classroom_id)?.name || "Sınıf yok"}</small>
-              </span>
-              <em className={student.tone}>{student.reason}</em>
-            </button>
-          ))}
-          {!attentionStudents.length && (
-            <EmptyState
-              icon="task_alt"
-              text="Şu an dikkat gerektiren öğrenci görünmüyor."
-            />
-          )}
-        </section>
+          <section className="card overflow-hidden">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+              <h2>Sınıf Kırılımı</h2>
+              <span className="analysis-chip">Özet</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="bg-surface-container-low font-label-md text-label-md uppercase tracking-wider text-secondary">
+                    <th className="p-4 font-medium">Sınıf</th>
+                    <th className="p-4 font-medium">Öğrenci</th>
+                    <th className="p-4 font-medium">Ortalama</th>
+                    <th className="p-4 font-medium">Riskli</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant font-body-md text-body-md text-on-surface">
+                  {classBreakdown.map((item) => (
+                    <tr
+                      className="cursor-pointer transition-colors hover:bg-surface-container-low"
+                      key={item.classroom.id}
+                      onClick={() => {
+                        setSelectedClassroomId(item.classroom.id);
+                        setActivePage("classroomDetail");
+                      }}
+                    >
+                      <td className="p-4 font-medium">{item.classroom.name}</td>
+                      <td className="p-4">{item.studentCount}</td>
+                      <td className="p-4">{item.average}</td>
+                      <td className="p-4">{item.riskCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!classBreakdown.length && (
+              <EmptyState
+                actionLabel="Sınıf Ekle"
+                icon="school"
+                onAction={() => setActivePage("classrooms")}
+                text="Henüz sınıf yok. İlk sınıfını oluşturarak başlayabilirsin."
+              />
+            )}
+          </section>
+        </div>
 
-        <section className="analysis-card classroom-breakdown-card">
-          <div className="section-heading">
-            <h2>Sınıf Kırılımı</h2>
-            <span className="analysis-chip">Özet</span>
-          </div>
-          <div className="breakdown-table">
-            <span>Sınıf</span>
-            <span>Öğrenci</span>
-            <span>Ortalama</span>
-            <span>Riskli</span>
-            {classBreakdown.map((item) => (
-              <button
-                className="breakdown-row"
-                key={item.classroom.id}
-                onClick={() => {
-                  setSelectedClassroomId(item.classroom.id);
-                  setActivePage("classroomDetail");
-                }}
-                type="button"
-              >
-                <strong>{item.classroom.name}</strong>
-                <span>{item.studentCount}</span>
-                <span>{item.average}</span>
-                <span>{item.riskCount}</span>
-              </button>
-            ))}
-          </div>
-          {!classBreakdown.length && (
-            <EmptyState
-              actionLabel="Sınıf Ekle"
-              icon="school"
-              onAction={() => setActivePage("classrooms")}
-              text="Henüz sınıf yok. İlk sınıfını oluşturarak başlayabilirsin."
-            />
-          )}
-        </section>
-
-        <aside className="dashboard-side">
-          <section className="ai-insights">
+        <aside className="flex flex-col gap-card-gap">
+          <section className="card p-6">
             <div className="section-heading">
               <h2>AI Haftalık Özet</h2>
               <button
@@ -340,59 +315,38 @@ export default function DashboardPage({
               </button>
             </div>
             {weeklySummary ? (
-              <>
-                <Insight
-                  tone="success"
-                  title={weeklySummary.title}
-                  text={weeklySummary.summary}
-                />
-                {(weeklySummary.attention_points || [])
-                  .slice(0, 2)
-                  .map((item) => (
-                    <Insight
-                      key={item}
-                      tone="warning"
-                      title="Dikkat"
-                      text={item}
-                    />
-                  ))}
-              </>
+              <div className="flex flex-col gap-3">
+                <Insight tone="success" title={weeklySummary.title} text={weeklySummary.summary} />
+                {(weeklySummary.attention_points || []).slice(0, 2).map((item) => (
+                  <Insight key={item} tone="warning" title="Dikkat" text={item} />
+                ))}
+              </div>
             ) : (
-              <EmptyState
-                icon="auto_awesome"
-                text="Haftalık özet henüz oluşturulmadı."
-              />
+              <EmptyState icon="auto_awesome" text="Haftalık özet henüz oluşturulmadı." />
             )}
           </section>
-          <section className="schedule-card">
-            <div className="section-heading">
+          <section className="card overflow-hidden">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
               <h2>Bugünkü Dersler</h2>
-              <button
-                className="outline-button compact"
-                onClick={() => setActivePage("schedule")}
-                type="button"
-              >
+              <button className="outline-button compact" onClick={() => setActivePage("schedule")} type="button">
                 Aç
               </button>
             </div>
-            {todaySchedule.map((entry, index) => (
-              <ScheduleItem
-                color={index % 2 ? "secondary" : "primary"}
-                key={entry.id}
-                time={entry.start_time.slice(0, 5)}
-                title={`${classroomById.get(entry.classroom_id)?.name || "Sınıf"} ${lessonById.get(entry.lesson_id)?.name || "Ders"}`}
-                subtitle={entry.location || "Derslik belirtilmedi"}
-              />
-            ))}
-            {!todaySchedule.length && (
-              <EmptyState
-                icon="event_available"
-                text="Bugün için ders programı yok."
-              />
-            )}
+            <div className="flex flex-col gap-3 p-4">
+              {todaySchedule.map((entry, index) => (
+                <ScheduleItem
+                  color={index % 2 ? "secondary" : "primary"}
+                  key={entry.id}
+                  time={entry.start_time.slice(0, 5)}
+                  title={`${classroomById.get(entry.classroom_id)?.name || "Sınıf"} ${lessonById.get(entry.lesson_id)?.name || "Ders"}`}
+                  subtitle={entry.location || "Derslik belirtilmedi"}
+                />
+              ))}
+              {!todaySchedule.length && <EmptyState icon="event_available" text="Bugün için ders programı yok." />}
+            </div>
           </section>
         </aside>
       </div>
-    </>
+    </div>
   );
 }

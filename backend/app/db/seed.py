@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from datetime import time
 from decimal import Decimal
@@ -5,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
 from app.models import (
@@ -17,6 +19,7 @@ from app.models import (
     Lesson,
     ScheduleEntry,
     Student,
+    StudentEnrollmentStatus,
     Teacher,
 )
 
@@ -32,11 +35,15 @@ def seed_demo_data(db: Session) -> None:
             full_name="Eda Ceylan",
             email=DEMO_TEACHER_EMAIL,
             password_hash=hash_password(DEMO_TEACHER_PASSWORD),
+            title="Kıdemli Sınıf Öğretmeni",
         )
         db.add(teacher)
         db.flush()
-    elif not verify_password(DEMO_TEACHER_PASSWORD, teacher.password_hash):
-        teacher.password_hash = hash_password(DEMO_TEACHER_PASSWORD)
+    else:
+        if not verify_password(DEMO_TEACHER_PASSWORD, teacher.password_hash):
+            teacher.password_hash = hash_password(DEMO_TEACHER_PASSWORD)
+        if not teacher.title:
+            teacher.title = "Kıdemli Sınıf Öğretmeni"
 
     classroom = db.scalar(
         select(Classroom).where(
@@ -54,12 +61,30 @@ def seed_demo_data(db: Session) -> None:
         db.flush()
 
     students = [
-        ("Ada", "Yilmaz", "Derse katilimi iyi, problem cozme pratigine ihtiyaci var."),
-        ("Mert", "Demir", "Okuma anlama becerisi guclu, odev takibi desteklenmeli."),
-        ("Zeynep", "Kaya", "Sorumluluk bilinci yuksek, sinif ici paylasimlari artabilir."),
+        (
+            "Ada",
+            "Yilmaz",
+            "Derse katilimi iyi, problem cozme pratigine ihtiyaci var.",
+            "ada.yilmaz@ogrenci.example.com",
+            StudentEnrollmentStatus.active,
+        ),
+        (
+            "Mert",
+            "Demir",
+            "Okuma anlama becerisi guclu, odev takibi desteklenmeli.",
+            "mert.demir@ogrenci.example.com",
+            StudentEnrollmentStatus.active,
+        ),
+        (
+            "Zeynep",
+            "Kaya",
+            "Sorumluluk bilinci yuksek, sinif ici paylasimlari artabilir.",
+            "zeynep.kaya@ogrenci.example.com",
+            StudentEnrollmentStatus.reported,
+        ),
     ]
     saved_students: list[Student] = []
-    for first_name, last_name, observation_notes in students:
+    for first_name, last_name, observation_notes, email, enrollment_status in students:
         student = db.scalar(
             select(Student).where(
                 Student.classroom_id == classroom.id,
@@ -73,9 +98,13 @@ def seed_demo_data(db: Session) -> None:
                 first_name=first_name,
                 last_name=last_name,
                 observation_notes=observation_notes,
+                email=email,
+                enrollment_status=enrollment_status,
             )
             db.add(student)
             db.flush()
+        elif not student.email:
+            student.email = email
         saved_students.append(student)
 
     lessons = []
@@ -199,6 +228,16 @@ def seed_demo_data(db: Session) -> None:
 
 
 def main() -> None:
+    # This creates/resets a teacher with a publicly known demo password
+    # (DEMO_TEACHER_PASSWORD above). Running it against a production database
+    # by accident would plant a working backdoor account, so production
+    # requires an explicit, separate opt-in beyond just ENVIRONMENT=production.
+    if settings.environment == "production" and os.environ.get("ALLOW_PROD_SEED") != "true":
+        raise SystemExit(
+            "Refusing to seed demo data in production. This would create a "
+            "login with a publicly known password. Set ALLOW_PROD_SEED=true "
+            "if you really intend to seed this database."
+        )
     with SessionLocal() as db:
         seed_demo_data(db)
 

@@ -111,3 +111,28 @@ def ensure_secret_key_is_not_default() -> None:
     # output (32 bytes) — PyJWT warns about this at encode/decode time.
     if len(settings.secret_key) < 32:
         raise RuntimeError("SECRET_KEY must be at least 32 characters in production.")
+
+
+def ensure_single_worker_in_production() -> None:
+    """The rate limiter in app/core/rate_limit.py keeps its hit counters in
+    process memory. Running more than one uvicorn worker would give each
+    worker its own counters, silently multiplying every rate limit — so
+    production must run a single worker unless the limiter is backed by a
+    shared store."""
+    if settings.environment != "production":
+        return
+    if settings.web_concurrency != 1:
+        raise RuntimeError(
+            "WEB_CONCURRENCY must be 1 in production — the in-memory rate "
+            "limiter does not coordinate across worker processes."
+        )
+
+
+def ensure_email_is_configured_in_production() -> None:
+    if settings.environment != "production":
+        return
+    if not settings.smtp_host:
+        raise RuntimeError(
+            "SMTP_HOST must be configured in production — without it, "
+            "password reset emails are only logged, not delivered."
+        )

@@ -187,6 +187,11 @@ export const api = {
       method: "DELETE",
     }),
   getStudentProfile: (studentId) => request(`/students/${studentId}/profile`),
+  sendParentMessage: (studentId, payload) =>
+    request(`/students/${studentId}/message`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   listLessonsPage: (teacherId, pagination = {}) =>
     request(
       `/lessons${buildQuery({

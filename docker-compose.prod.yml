@@ -26,6 +26,12 @@ services:
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?FRONTEND_BASE_URL is required}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required, e.g. https://yourdomain.com}
       WEB_CONCURRENCY: ${BACKEND_WEB_CONCURRENCY:-1}
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required in production (password reset emails)}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:?SMTP_FROM_EMAIL is required in production}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     ports:
       - "8000:8000"
     depends_on:
@@ -40,6 +46,10 @@ services:
       # which serves the pre-built static bundle via nginx on port 80.
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL is required (e.g. https://api.yourdomain.com)}
+    environment:
+      # Same origin as VITE_API_BASE_URL — allowed into the CSP connect-src
+      # at container start (see frontend/nginx.conf.template).
+      API_ORIGIN: ${VITE_API_BASE_URL:?VITE_API_BASE_URL is required (e.g. https://api.yourdomain.com)}
     ports:
       - "80:80"
     depends_on:

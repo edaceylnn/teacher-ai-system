@@ -35,6 +35,7 @@ def create_teacher(payload: TeacherCreate, db: Session = Depends(get_db)) -> Tea
         full_name=payload.full_name,
         email=str(payload.email),
         password_hash=password_hash,
+        title=payload.title,
     )
     db.add(teacher)
     db.commit()

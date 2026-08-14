@@ -60,10 +60,9 @@ Frontend ayarları için `frontend/.env.example` dosyasını `.env.local` olarak
 docker compose up --build
 ```
 
-İlk çalıştırmadan sonra ayrı bir terminalde migration ve demo verisini yükleyin:
+Backend container'ı başlarken `alembic upgrade head`'i otomatik çalıştırır (bkz. `backend/docker-entrypoint.sh`), ayrı bir migration adımına gerek yoktur. Demo verisini yüklemek isterseniz:
 
 ```bash
-docker compose exec backend alembic upgrade head
 docker compose exec backend python -m app.db.seed
 ```
 
@@ -74,14 +73,17 @@ Uygulama adresleri:
 
 ### Prod build
 
-`docker-compose.prod.yml`, frontend'i (statik build + nginx, `frontend/Dockerfile`'ın `prod` hedefi) ve backend'i (healthcheck + non-root user) prod moduna uygun şekilde çalıştırır. Gerekli değişkenler: `POSTGRES_PASSWORD`, `SECRET_KEY` (üretimde en az 32 karakter olmalı), `FRONTEND_BASE_URL`, `CORS_ORIGINS`, `VITE_API_BASE_URL` (frontend build-time'da API adresini bilmeli).
+`docker-compose.prod.yml`, frontend'i (statik build + nginx, `frontend/Dockerfile`'ın `prod` hedefi) ve backend'i (healthcheck + non-root user + otomatik migration) prod moduna uygun şekilde çalıştırır. Gerekli değişkenler: `POSTGRES_PASSWORD`, `SECRET_KEY` (üretimde en az 32 karakter olmalı), `FRONTEND_BASE_URL`, `CORS_ORIGINS`, `VITE_API_BASE_URL` (frontend build-time'da API adresini bilmeli), `SMTP_HOST` ve `SMTP_FROM_EMAIL` (şifre sıfırlama e-postaları için — üretimde zorunlu, aksi halde uygulama başlamaz).
 
 ```bash
 POSTGRES_PASSWORD=... SECRET_KEY=$(openssl rand -hex 32) \
   FRONTEND_BASE_URL=https://yourdomain.com CORS_ORIGINS=https://yourdomain.com \
   VITE_API_BASE_URL=https://api.yourdomain.com \
+  SMTP_HOST=smtp.yourprovider.com SMTP_USERNAME=... SMTP_PASSWORD=... SMTP_FROM_EMAIL=no-reply@yourdomain.com \
   docker compose -f docker-compose.prod.yml up --build
 ```
+
+Üretimde `/docs`, `/redoc` ve `/openapi.json` otomatik olarak kapatılır (bkz. `backend/app/main.py`). Demo seed script'i (`app.db.seed`) üretim ortamında `ALLOW_PROD_SEED=true` açıkça verilmeden çalışmayı reddeder — bilinen şifreli demo hesabının gerçek bir veritabanına yazılmasını önlemek için.
 
 Demo giriş bilgileri:
 

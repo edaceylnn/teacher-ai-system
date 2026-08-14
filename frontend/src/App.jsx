@@ -34,7 +34,6 @@ export default function App() {
   });
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
-  const [isSidenavCollapsed, setIsSidenavCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [classroomSearchTerm, setClassroomSearchTerm] = useState("");
   const [classroomGradeFilter, setClassroomGradeFilter] = useState("all");
@@ -50,6 +49,7 @@ export default function App() {
     offset: 0,
   });
   const [studentDirectoryOffset, setStudentDirectoryOffset] = useState(0);
+  const [studentDirectoryClassroomId, setStudentDirectoryClassroomId] = useState("");
   const [classroomStudentPage, setClassroomStudentPage] = useState({
     items: [],
     total: 0,
@@ -348,7 +348,7 @@ export default function App() {
   }
 
   async function loadStudentDirectoryPage() {
-    const page = await api.listStudentsPage(null, {
+    const page = await api.listStudentsPage(studentDirectoryClassroomId || null, {
       limit: TABLE_PAGE_SIZE,
       offset: studentDirectoryOffset,
       search: searchTerm,
@@ -389,6 +389,7 @@ export default function App() {
   async function loadGradeRecordPage() {
     const page = await api.listGradesPage({
       classroomId: selectedClassroomId,
+      studentId: selectedStudentId,
       limit: TABLE_PAGE_SIZE,
       offset: gradeRecordOffset,
     });
@@ -444,13 +445,18 @@ export default function App() {
 
   useEffect(() => {
     setAttendanceRecordOffset(0);
+    setGradeRecordOffset(0);
     loadProfile(selectedStudentId).catch((err) => setError(err.message));
   }, [selectedStudentId]);
 
   useEffect(() => {
     if (activePage !== "students") return;
     loadStudentDirectoryPage().catch((err) => setError(err.message));
-  }, [activePage, searchTerm, studentDirectoryOffset]);
+  }, [activePage, searchTerm, studentDirectoryOffset, studentDirectoryClassroomId]);
+
+  useEffect(() => {
+    setStudentDirectoryOffset(0);
+  }, [studentDirectoryClassroomId]);
 
   useEffect(() => {
     if (activePage !== "classroomDetail") return;
@@ -460,7 +466,7 @@ export default function App() {
   useEffect(() => {
     if (activePage !== "gradebook") return;
     loadGradeRecordPage().catch((err) => setError(err.message));
-  }, [activePage, selectedClassroomId, gradeRecordOffset]);
+  }, [activePage, selectedClassroomId, selectedStudentId, gradeRecordOffset]);
 
   useEffect(() => {
     if (activePage !== "attendance") return;
@@ -863,6 +869,21 @@ export default function App() {
     });
   }
 
+  async function handleMoveScheduleEntry(entry, updates) {
+    await runAction(async () => {
+      await api.updateScheduleEntry(entry.id, {
+        classroom_id: entry.classroom_id,
+        lesson_id: entry.lesson_id,
+        weekday: updates.weekday,
+        start_time: updates.start_time,
+        end_time: updates.end_time,
+        location: entry.location,
+      });
+      await loadScheduleEntries();
+      showNotice("Ders programı güncellendi.");
+    });
+  }
+
   async function handleCreateHomework(event) {
     event.preventDefault();
     await runAction(async () => {
@@ -937,14 +958,11 @@ export default function App() {
     setError("");
     const session = await api.login(credentials);
     setAuthToken(session.access_token);
-    setCurrentTeacher({
-      id: session.teacher_id,
-      full_name: session.full_name,
-      email: session.email,
-    });
+    const teacher = await api.getCurrentTeacher();
+    setCurrentTeacher(teacher);
     setTeacherProfileForm({
-      full_name: session.full_name,
-      email: session.email,
+      full_name: teacher.full_name,
+      email: teacher.email,
       password: "",
     });
     showNotice("Giriş yapıldı.");
@@ -992,6 +1010,7 @@ export default function App() {
   const shared = {
     activePage,
     aiOutputsByStudent,
+    currentTeacher,
     attendanceRecordOffset,
     attendanceRecordPage,
     allStudents,
@@ -1024,6 +1043,7 @@ export default function App() {
     selectedClassroomId,
     selectedStudent,
     selectedStudentId,
+    studentDirectoryClassroomId,
     studentDirectoryOffset,
     studentDirectoryPage,
     setActiveModal,
@@ -1054,6 +1074,7 @@ export default function App() {
     setSelectedClassroomId,
     setSelectedStudentId,
     setTeacherProfileForm,
+    setStudentDirectoryClassroomId,
     setStudentDirectoryOffset,
     setStudentEditForm,
     students,
@@ -1068,6 +1089,7 @@ export default function App() {
     handleDeleteHomework,
     handleDeleteLesson,
     handleDeleteScheduleEntry,
+    handleMoveScheduleEntry,
     handleDeleteStudent,
     handleGenerateWeeklySummary,
   };
@@ -1095,33 +1117,27 @@ export default function App() {
   }
 
   return (
-    <main>
-      <Topbar
-        currentTeacher={currentTeacher}
-        onLogout={handleLogout}
-        onToggleMobileNav={() => setIsMobileNavOpen((current) => !current)}
-        setActivePage={setActivePage}
-      />
+    <main className="min-h-screen bg-background">
       <Sidebar
         activePage={activePage}
-        isCollapsed={isSidenavCollapsed}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
+        onLogout={handleLogout}
         setActiveModal={setActiveModal}
         setActivePage={(page) => {
           setActivePage(page);
           setIsMobileNavOpen(false);
         }}
-        toggleCollapsed={() => setIsSidenavCollapsed((current) => !current)}
       />
-      {isMobileNavOpen && (
-        <div
-          className="sidenav-backdrop visible"
-          onClick={() => setIsMobileNavOpen(false)}
+      <div className="app-content-shell flex min-h-screen flex-col md:ml-[240px]">
+        <Topbar
+          currentTeacher={currentTeacher}
+          onLogout={handleLogout}
+          onToggleMobileNav={() => setIsMobileNavOpen((current) => !current)}
+          setActivePage={setActivePage}
         />
-      )}
 
-      <section className={`page${isSidenavCollapsed ? " collapsed-nav" : ""}`}>
+      <section className="page flex-1 p-4 md:p-container-padding">
         {activePage === "dashboard" && <DashboardPage {...shared} />}
         {activePage === "classrooms" && <ClassroomsPage {...shared} />}
         {activePage === "classroomDetail" && (
@@ -1136,6 +1152,7 @@ export default function App() {
         {activePage === "profile" && <ProfilePage {...shared} />}
         <StatusLine isLoading={isLoading} notice={notice} error={error} />
       </section>
+      </div>
 
       {activeModal && (
         <Modal onClose={() => setActiveModal(null)}>

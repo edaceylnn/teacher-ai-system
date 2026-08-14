@@ -101,3 +101,59 @@ def test_ensure_secret_key_is_not_default_accepts_strong_key_in_production(
     monkeypatch.setattr(settings, "secret_key", "a" * 32)
 
     security.ensure_secret_key_is_not_default()  # should not raise
+
+
+def test_ensure_single_worker_in_production_only_enforced_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "web_concurrency", 4)
+
+    security.ensure_single_worker_in_production()  # should not raise
+
+
+def test_ensure_single_worker_in_production_rejects_multiple_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "web_concurrency", 2)
+
+    with pytest.raises(RuntimeError, match="WEB_CONCURRENCY must be 1"):
+        security.ensure_single_worker_in_production()
+
+
+def test_ensure_single_worker_in_production_accepts_one_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "web_concurrency", 1)
+
+    security.ensure_single_worker_in_production()  # should not raise
+
+
+def test_ensure_email_is_configured_in_production_only_enforced_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "smtp_host", None)
+
+    security.ensure_email_is_configured_in_production()  # should not raise
+
+
+def test_ensure_email_is_configured_in_production_rejects_missing_smtp_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "smtp_host", None)
+
+    with pytest.raises(RuntimeError, match="SMTP_HOST must be configured"):
+        security.ensure_email_is_configured_in_production()
+
+
+def test_ensure_email_is_configured_in_production_accepts_configured_smtp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "smtp_host", "smtp.example.com")
+
+    security.ensure_email_is_configured_in_production()  # should not raise

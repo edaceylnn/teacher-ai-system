@@ -3,11 +3,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
+from app.core.email import send_parent_message_email
 from app.db.session import get_db
 from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student, Teacher
 from app.schemas.pagination import PageResponse
 from app.schemas.student import (
     StudentCreate,
+    StudentMessageRequest,
     StudentProfileAttendanceRecord,
     StudentProfileAttendanceSummary,
     StudentProfileClassroom,
@@ -32,6 +34,8 @@ def create_student(
         classroom_id=payload.classroom_id,
         first_name=payload.first_name,
         last_name=payload.last_name,
+        email=payload.email,
+        enrollment_status=payload.enrollment_status,
         parent_full_name=payload.parent_full_name,
         parent_phone=payload.parent_phone,
         parent_email=payload.parent_email,
@@ -112,6 +116,12 @@ def get_student_profile(
         classroom_id=student.classroom_id,
         first_name=student.first_name,
         last_name=student.last_name,
+        email=student.email,
+        enrollment_status=student.enrollment_status,
+        parent_full_name=student.parent_full_name,
+        parent_phone=student.parent_phone,
+        parent_email=student.parent_email,
+        home_address=student.home_address,
         observation_notes=student.observation_notes,
         created_at=student.created_at,
         updated_at=student.updated_at,
@@ -167,6 +177,24 @@ def update_student(
     db.commit()
     db.refresh(student)
     return student
+
+
+@router.post("/{student_id}/message", status_code=status.HTTP_202_ACCEPTED)
+def send_student_parent_message(
+    student_id: int,
+    payload: StudentMessageRequest,
+    db: Session = Depends(get_db),
+    current_teacher: Teacher = Depends(get_current_teacher),
+) -> Response:
+    student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
+    if not student.parent_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu öğrenci için kayıtlı bir veli e-postası yok.",
+        )
+
+    send_parent_message_email(student.parent_email, payload.subject, payload.message)
+    return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
