@@ -2,7 +2,7 @@ import { useState } from "react";
 import Icon from "./Icon";
 import { initialsOf } from "../utils/helpers";
 
-export default function Topbar({ currentTeacher, onLogout, onToggleMobileNav, setActivePage }) {
+export default function Topbar({ currentTeacher, onLogout, onToggleMobileNav, onToggleTheme, setActivePage, theme }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [firstName = "", lastName = ""] = currentTeacher.full_name.split(" ");
 
@@ -29,6 +29,15 @@ export default function Topbar({ currentTeacher, onLogout, onToggleMobileNav, se
         </div>
       </div>
       <div className="relative flex items-center gap-4">
+        <button
+          aria-label={theme === "dark" ? "Açık moda geç" : "Koyu moda geç"}
+          className="icon-action"
+          onClick={onToggleTheme}
+          title={theme === "dark" ? "Açık moda geç" : "Koyu moda geç"}
+          type="button"
+        >
+          <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} />
+        </button>
         <button
           className="hidden font-label-md text-label-md text-on-surface-variant transition-colors hover:text-primary sm:inline"
           onClick={() => setActivePage("profile")}

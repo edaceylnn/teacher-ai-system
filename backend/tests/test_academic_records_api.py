@@ -1,15 +1,16 @@
 from collections.abc import Generator
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Teacher
+from app.models import AcademicYear, Teacher, TeacherAssignment
 
 
 @pytest.fixture()
@@ -23,6 +24,12 @@ def db_session() -> Generator[Session, None, None]:
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
+        # Every environment needs a current AcademicYear for classroom
+        # creation to attach a TeacherAssignment to.
+        session.add(
+            AcademicYear(label="2026-2027", start_date=date(2026, 9, 1), end_date=date(2027, 6, 30), is_current=True)
+        )
+        session.commit()
         yield session
 
     Base.metadata.drop_all(engine)
@@ -50,6 +57,23 @@ def teacher(db_session: Session) -> Teacher:
     db_session.commit()
     db_session.refresh(teacher)
     return teacher
+
+
+def _assign_subject(db_session: Session, *, teacher_id: int, classroom_id: int, lesson_id: int) -> None:
+    """Grants write access the way an admin's Ders/Sınıf Ata would — tests
+    below create the classroom/lesson via the API, then wire the resulting
+    TeacherAssignment directly since assignment creation is admin-only."""
+    academic_year = db_session.scalar(select(AcademicYear).where(AcademicYear.is_current.is_(True)))
+    db_session.add(
+        TeacherAssignment(
+            teacher_id=teacher_id,
+            classroom_id=classroom_id,
+            lesson_id=lesson_id,
+            academic_year_id=academic_year.id,
+            is_active=True,
+        )
+    )
+    db_session.commit()
 
 
 @pytest.fixture()
@@ -100,8 +124,9 @@ def test_create_lesson_requires_existing_teacher(client: TestClient, teacher: Te
     assert response.json()["detail"] == "Teacher not found"
 
 
-def test_grade_crud_flow(client: TestClient, teacher: Teacher, student: dict) -> None:
+def test_grade_crud_flow(client: TestClient, db_session: Session, teacher: Teacher, student: dict) -> None:
     lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
 
     create_response = client.post(
         "/grades",
@@ -137,7 +162,7 @@ def test_grade_crud_flow(client: TestClient, teacher: Teacher, student: dict) ->
     assert missing_response.status_code == 404
 
 
-def test_grades_can_be_filtered_by_classroom(client: TestClient, teacher: Teacher) -> None:
+def test_grades_can_be_filtered_by_classroom(client: TestClient, db_session: Session, teacher: Teacher) -> None:
     first_classroom = client.post(
         "/classrooms",
         json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"},
@@ -166,6 +191,8 @@ def test_grades_can_be_filtered_by_classroom(client: TestClient, teacher: Teache
         "/lessons",
         json={"teacher_id": teacher.id, "name": "Matematik"},
     ).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=first_classroom["id"], lesson_id=lesson["id"])
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=second_classroom["id"], lesson_id=lesson["id"])
     client.post(
         "/grades",
         json={
@@ -205,12 +232,15 @@ def test_create_grade_requires_existing_student_and_lesson(client: TestClient, t
     assert missing_student_response.status_code == 404
     assert missing_student_response.json()["detail"] == "Student not found"
 
+    # lesson_id=999 isn't a 404 anymore — the teacher IS assigned to this
+    # classroom (as its homeroom), just not for this (nonexistent) subject,
+    # so it's a 403 like any other unassigned-subject write attempt.
     missing_lesson_response = client.post(
         "/grades",
         json={"student_id": student["id"], "lesson_id": 999, "exam_name": "1. Yazili", "score": "82.50"},
     )
-    assert missing_lesson_response.status_code == 404
-    assert missing_lesson_response.json()["detail"] == "Lesson not found"
+    assert missing_lesson_response.status_code == 403
+    assert missing_lesson_response.json()["detail"] == "Bu ders için yetkiniz yok."
 
 
 def test_attendance_crud_flow(client: TestClient, student: dict) -> None:
@@ -242,9 +272,12 @@ def test_attendance_crud_flow(client: TestClient, student: dict) -> None:
     assert missing_response.status_code == 404
 
 
-def test_schedule_entry_crud_and_conflict(client: TestClient, teacher: Teacher, student: dict) -> None:
+def test_schedule_entry_crud_and_conflict(
+    client: TestClient, db_session: Session, teacher: Teacher, student: dict
+) -> None:
     classroom_id = student["classroom_id"]
     lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=classroom_id, lesson_id=lesson["id"])
     payload = {
         "teacher_id": teacher.id,
         "classroom_id": classroom_id,
@@ -283,8 +316,9 @@ def test_schedule_entry_crud_and_conflict(client: TestClient, teacher: Teacher, 
     assert delete_response.status_code == 204
 
 
-def test_homework_crud_flow(client: TestClient, teacher: Teacher, student: dict) -> None:
+def test_homework_crud_flow(client: TestClient, db_session: Session, teacher: Teacher, student: dict) -> None:
     lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Turkce"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
     create_response = client.post(
         "/homeworks",
         json={
@@ -327,9 +361,13 @@ def test_create_attendance_requires_existing_student(client: TestClient, teacher
     assert response.json()["detail"] == "Student not found"
 
 
-def test_student_profile_returns_academic_summary(client: TestClient, teacher: Teacher, student: dict) -> None:
+def test_student_profile_returns_academic_summary(
+    client: TestClient, db_session: Session, teacher: Teacher, student: dict
+) -> None:
     math_lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
     turkish_lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Turkce"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=math_lesson["id"])
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=turkish_lesson["id"])
     client.post(
         "/grades",
         json={

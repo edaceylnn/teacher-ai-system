@@ -10,6 +10,19 @@
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Applied before React mounts so a stored/system dark preference never
+      // flashes light first. Key/logic mirrored in src/App.jsx's theme state.
+      (function () {
+        try {
+          var stored = localStorage.getItem("teacherAi.theme");
+          var isDark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (isDark) document.documentElement.classList.add("dark");
+        } catch (error) {
+          // ignore (e.g. storage disabled) — App.jsx's effect will still apply the class post-mount
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

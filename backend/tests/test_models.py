@@ -29,6 +29,7 @@ def test_database_models_create_expected_tables() -> None:
 
     table_names = set(inspect(engine).get_table_names())
     assert table_names == {
+        "academic_years",
         "ai_outputs",
         "attendance_records",
         "audit_logs",
@@ -38,7 +39,9 @@ def test_database_models_create_expected_tables() -> None:
         "lessons",
         "schedule_entries",
         "students",
+        "teacher_assignments",
         "teachers",
+        "terms",
     }
 
 

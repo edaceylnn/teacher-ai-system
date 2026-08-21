@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models import TeacherRole
 from app.schemas.validators import validate_password_strength
 
 
@@ -23,6 +24,8 @@ class CurrentTeacherResponse(BaseModel):
     full_name: str
     email: str
     title: str | None = None
+    branch: str | None = None
+    role: TeacherRole
     created_at: datetime
     updated_at: datetime
 

@@ -5,10 +5,29 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
+from app.api.deps import (
+    assigned_classroom_ids,
+    ensure_student_owner,
+    ensure_subject_write_access,
+    get_current_teacher,
+    visible_academic_scope,
+    visible_lesson_ids_for_classroom,
+)
 from app.core.rate_limit import InMemoryRateLimiter
 from app.db.session import get_db
-from app.models import AIOutput, AIOutputType, Attendance, AttendanceStatus, Classroom, Grade, Homework, Lesson, Student, Teacher
+from app.models import (
+    AIOutput,
+    AIOutputType,
+    Attendance,
+    AttendanceStatus,
+    Classroom,
+    Grade,
+    Homework,
+    Lesson,
+    Student,
+    Teacher,
+    TeacherRole,
+)
 from app.schemas.ai import (
     AIGenerateRequest,
     AILessonPlanRequest,
@@ -41,6 +60,12 @@ def _build_student_payload(student_id: int, db: Session, teacher: Teacher) -> di
         .where(Grade.student_id == student.id)
         .order_by(Lesson.name, Grade.id)
     ).all()
+    # Madde 19: a subject teacher's AI context must never include another
+    # subject's detailed records — only a rehber (homeroom) assignment sees
+    # everything for this student.
+    visible_lessons = visible_lesson_ids_for_classroom(teacher, student.classroom_id, db)
+    if visible_lessons is not None:
+        grades = [(grade, lesson_name) for grade, lesson_name in grades if grade.lesson_id in visible_lessons]
     attendance_records = list(
         db.scalars(
             select(Attendance).where(Attendance.student_id == student.id).order_by(Attendance.date, Attendance.id)
@@ -122,6 +147,7 @@ def _generate_and_save(
 
     ai_output = AIOutput(
         student_id=payload.student_id,
+        teacher_id=teacher.id,
         output_type=output_type,
         input_payload=input_payload,
         output_payload=output_payload,
@@ -133,12 +159,23 @@ def _generate_and_save(
 
 
 def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher: Teacher) -> dict[str, Any]:
-    classroom_statement = select(Classroom).where(Classroom.teacher_id == teacher.id).order_by(Classroom.id)
+    accessible_ids = assigned_classroom_ids(teacher, db)
     if payload.classroom_id is not None:
-        classroom = ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
-        classroom_statement = classroom_statement.where(Classroom.id == classroom.id)
-    classrooms = list(db.scalars(classroom_statement).all())
-    classroom_ids = [classroom.id for classroom in classrooms]
+        if payload.classroom_id not in accessible_ids:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Classroom not found")
+        classroom_ids = [payload.classroom_id]
+    else:
+        classroom_ids = list(accessible_ids)
+    classrooms = (
+        list(db.scalars(select(Classroom).where(Classroom.id.in_(classroom_ids)).order_by(Classroom.id)).all())
+        if classroom_ids
+        else []
+    )
+
+    # Madde 18/19: the weekly summary's context is bounded by what this
+    # teacher can actually see — a rehber's classrooms show every subject,
+    # a branş-only classroom only shows that subject's grades/homework.
+    homeroom_ids, subject_pairs = visible_academic_scope(teacher, db)
 
     students = list(
         db.scalars(select(Student).where(Student.classroom_id.in_(classroom_ids)).order_by(Student.id)).all()
@@ -146,18 +183,23 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
         else []
     )
     student_ids = [student.id for student in students]
-    grades = (
+    all_grades = (
         db.execute(
-            select(Grade, Lesson.name, Student.first_name, Student.last_name)
+            select(Grade, Lesson.name, Student.first_name, Student.last_name, Student.classroom_id)
             .join(Lesson, Lesson.id == Grade.lesson_id)
             .join(Student, Student.id == Grade.student_id)
             .where(Grade.student_id.in_(student_ids))
             .order_by(Grade.id.desc())
-            .limit(80)
+            .limit(200)
         ).all()
         if student_ids
         else []
     )
+    grades = [
+        (grade, lesson_name, first_name, last_name)
+        for grade, lesson_name, first_name, last_name, classroom_id in all_grades
+        if classroom_id in homeroom_ids or (classroom_id, grade.lesson_id) in subject_pairs
+    ][:80]
     attendance_records = (
         db.execute(
             select(Attendance, Student.first_name, Student.last_name)
@@ -169,18 +211,23 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
         if student_ids
         else []
     )
-    homeworks = (
+    all_homeworks = (
         db.execute(
             select(Homework, Classroom.name, Lesson.name)
             .join(Classroom, Classroom.id == Homework.classroom_id)
             .join(Lesson, Lesson.id == Homework.lesson_id)
             .where(Homework.classroom_id.in_(classroom_ids))
             .order_by(Homework.due_date.desc(), Homework.id.desc())
-            .limit(40)
+            .limit(200)
         ).all()
         if classroom_ids
         else []
     )
+    homeworks = [
+        (homework, classroom_name, lesson_name)
+        for homework, classroom_name, lesson_name in all_homeworks
+        if homework.classroom_id in homeroom_ids or (homework.classroom_id, homework.lesson_id) in subject_pairs
+    ][:40]
 
     return {
         "teacher": {"id": teacher.id, "full_name": teacher.full_name},
@@ -217,10 +264,11 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
 
 
 def _build_lesson_plan_payload(payload: AILessonPlanRequest, db: Session, teacher: Teacher) -> dict[str, Any]:
-    classroom = ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
+    # A lesson plan is written for a specific classroom+subject you actually
+    # teach — same bar as editing grades/homework there.
+    ensure_subject_write_access(teacher, payload.classroom_id, payload.lesson_id, db)
+    classroom = db.get(Classroom, payload.classroom_id)
     lesson = db.get(Lesson, payload.lesson_id)
-    if lesson is None or lesson.teacher_id != teacher.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
 
     students = list(
         db.scalars(select(Student).where(Student.classroom_id == classroom.id).order_by(Student.id)).all()
@@ -255,6 +303,23 @@ def _build_lesson_plan_payload(payload: AILessonPlanRequest, db: Session, teache
     }
 
 
+def _ensure_ai_output_visible(ai_output: AIOutput, student: Student, teacher: Teacher, db: Session) -> None:
+    # An AI output's input_payload was built from whatever the generating
+    # teacher could see — a subject-only teacher's payload only covers their
+    # own subject, a homeroom teacher's covers every subject. Any other
+    # teacher who merely shares the classroom (e.g. a different subject)
+    # must not be able to read or edit a report they didn't generate and
+    # that may embed subjects outside their authorization (Madde 19).
+    if teacher.role == TeacherRole.admin:
+        return
+    if ai_output.teacher_id == teacher.id:
+        return
+    homeroom_ids, _ = visible_academic_scope(teacher, db)
+    if student.classroom_id in homeroom_ids:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu AI çıktısına erişim yetkiniz yok.")
+
+
 @router.get("/outputs", response_model=list[AIOutputResponse])
 def list_ai_outputs(
     student_id: int,
@@ -262,7 +327,7 @@ def list_ai_outputs(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> list[AIOutput]:
-    ensure_student_owner(db.get(Student, student_id), current_teacher, db)
+    student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
 
     statement = (
         select(AIOutput)
@@ -272,7 +337,12 @@ def list_ai_outputs(
     if output_type is not None:
         statement = statement.where(AIOutput.output_type == output_type)
 
-    return list(db.scalars(statement).all())
+    outputs = list(db.scalars(statement).all())
+    if current_teacher.role != TeacherRole.admin:
+        homeroom_ids, _ = visible_academic_scope(current_teacher, db)
+        if student.classroom_id not in homeroom_ids:
+            outputs = [output for output in outputs if output.teacher_id == current_teacher.id]
+    return outputs
 
 
 @router.patch("/outputs/{output_id}", response_model=AIOutputResponse)
@@ -285,7 +355,8 @@ def update_ai_output(
     ai_output = db.get(AIOutput, output_id)
     if ai_output is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI output not found")
-    ensure_student_owner(db.get(Student, ai_output.student_id), current_teacher, db)
+    student = ensure_student_owner(db.get(Student, ai_output.student_id), current_teacher, db)
+    _ensure_ai_output_visible(ai_output, student, current_teacher, db)
 
     ai_output.output_payload = payload.output_payload
     db.commit()

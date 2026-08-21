@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, setAuthToken } from "./api";
-import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeLevelOptions, homeworkStatusOptions, scheduleSlotOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
+import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeLevelOptions, homeworkStatusOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
 import { buildClassroomName, scheduleSlotValue, splitScheduleSlot } from "./utils/helpers";
+import { buildLessonSlots, loadStoredScheduleSettings, persistScheduleSettings, validateScheduleSettings } from "./utils/scheduleSettings";
+import { assignedLessonsForClassroom, isAdmin as isAdminTeacher } from "./utils/permissions";
 import AIReportsPage from "./pages/AIReportsPage";
 import AttendancePage from "./pages/AttendancePage";
 import ClassroomDetailPage from "./pages/ClassroomDetailPage";
@@ -15,6 +17,8 @@ import ProfilePage from "./pages/ProfilePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SchedulePage from "./pages/SchedulePage";
 import SearchableSelect from "./components/SearchableSelect";
+import SettingsPage from "./pages/SettingsPage";
+import TeachersPage from "./pages/TeachersPage";
 import Sidebar from "./components/Sidebar";
 import StatusLine from "./components/StatusLine";
 import StudentDetailPage from "./pages/StudentDetailPage";
@@ -25,6 +29,13 @@ export default function App() {
   const [resetToken] = useState(() => {
     if (window.location.pathname !== "/reset-password") return null;
     return new URLSearchParams(window.location.search).get("token");
+  });
+  // Mirrors the inline script in index.html, which applies the same stored
+  // (or system) preference before React mounts to avoid a light-theme flash.
+  const [theme, setTheme] = useState(() => {
+    const stored = window.localStorage.getItem("teacherAi.theme");
+    if (stored === "light" || stored === "dark") return stored;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
   const [currentTeacher, setCurrentTeacher] = useState(null);
   const [teacherProfileForm, setTeacherProfileForm] = useState({
@@ -58,6 +69,7 @@ export default function App() {
   });
   const [classroomStudentOffset, setClassroomStudentOffset] = useState(0);
   const [lessons, setLessons] = useState([]);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
   const [grades, setGrades] = useState([]);
   const [gradeRecordPage, setGradeRecordPage] = useState({
     items: [],
@@ -81,6 +93,12 @@ export default function App() {
     offset: 0,
   });
   const [homeworkOffset, setHomeworkOffset] = useState(0);
+  const [teachersAdminList, setTeachersAdminList] = useState([]);
+  const [assignmentForm, setAssignmentForm] = useState({
+    teacher_id: "",
+    classroom_id: "",
+    lesson_id: "",
+  });
   const [weeklySummary, setWeeklySummary] = useState(null);
   const [isGeneratingWeeklySummary, setIsGeneratingWeeklySummary] =
     useState(false);
@@ -148,6 +166,39 @@ export default function App() {
     status: "assigned",
   });
   const [editingHomework, setEditingHomework] = useState(null);
+  const [scheduleSettings, setScheduleSettings] = useState(() => loadStoredScheduleSettings());
+
+  useEffect(() => {
+    persistScheduleSettings(scheduleSettings);
+  }, [scheduleSettings]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    try {
+      window.localStorage.setItem("teacherAi.theme", theme);
+    } catch {
+      // ignore (e.g. private browsing can throw on write)
+    }
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
+
+  // Single source of truth for the school's timetable: every period time
+  // shown anywhere (Ders Programı's grid, the "Ders saati" picker in the
+  // add/edit modal) is derived from scheduleSettings here, never hard-coded.
+  const lessonSlots = useMemo(() => buildLessonSlots(scheduleSettings), [scheduleSettings]);
+  const scheduleSlotOptions = useMemo(
+    () =>
+      lessonSlots
+        .filter((slot) => slot.part !== "break")
+        .map((slot) => ({
+          label: `${slot.period} · ${slot.start} - ${slot.end}`,
+          value: `${slot.start}|${slot.end}`,
+        })),
+    [lessonSlots],
+  );
 
   const selectedClassroom = classrooms.find(
     (classroom) => classroom.id === selectedClassroomId,
@@ -219,6 +270,15 @@ export default function App() {
       })),
     [classrooms],
   );
+  const isAdminUser = isAdminTeacher(currentTeacher);
+  const assignedLessonOptionsForClassroom = useMemo(
+    () => (classroomId) =>
+      assignedLessonsForClassroom(teacherAssignments, Number(classroomId), lessons).map((lesson) => ({
+        label: lesson.name,
+        value: String(lesson.id),
+      })),
+    [teacherAssignments, lessons],
+  );
   const attendanceStatusOptions = [
     { label: "Var", value: "present" },
     { label: "Yok", value: "absent" },
@@ -273,10 +333,11 @@ export default function App() {
     setIsLoading(true);
     setError("");
     try {
-      const [classroomData, lessonData, gradeData] = await Promise.all([
+      const [classroomData, lessonData, gradeData, assignmentData] = await Promise.all([
         api.listClassrooms(teacherId),
         api.listLessons(teacherId),
         api.listGrades(),
+        api.listTeacherAssignments(teacherId),
       ]);
       const studentPages = await Promise.all(
         classroomData.map((classroom) =>
@@ -299,6 +360,7 @@ export default function App() {
       setAllStudents(allStudentData);
       setAiOutputsByStudent(Object.fromEntries(aiOutputEntries));
       setLessons(lessonData);
+      setTeacherAssignments(assignmentData);
       setGrades(gradeData);
       const schedulePage = await api.listScheduleEntriesPage(teacherId, {
         limit: 500,
@@ -431,6 +493,10 @@ export default function App() {
     setHomeworkPage(page);
   }
 
+  async function loadTeachersAdminList() {
+    setTeachersAdminList(await api.listTeachers());
+  }
+
   useEffect(() => {
     if (!currentTeacher) return;
     loadInitialData();
@@ -482,6 +548,11 @@ export default function App() {
     if (activePage !== "homework") return;
     loadHomeworkPage().catch((err) => setError(err.message));
   }, [activePage, homeworkOffset]);
+
+  useEffect(() => {
+    if (activePage !== "teachers" || !isAdminUser) return;
+    loadTeachersAdminList().catch((err) => setError(err.message));
+  }, [activePage, isAdminUser]);
 
   function showNotice(message) {
     setNotice(message);
@@ -910,6 +981,32 @@ export default function App() {
     });
   }
 
+  async function handleCreateTeacherAssignment(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!assignmentForm.teacher_id || !assignmentForm.classroom_id) {
+        throw new Error("Öğretmen ve sınıf seçmelisin.");
+      }
+      await api.createTeacherAssignment({
+        teacher_id: Number(assignmentForm.teacher_id),
+        classroom_id: Number(assignmentForm.classroom_id),
+        lesson_id: assignmentForm.lesson_id ? Number(assignmentForm.lesson_id) : null,
+      });
+      setAssignmentForm({ teacher_id: "", classroom_id: "", lesson_id: "" });
+      setActiveModal(null);
+      await loadTeachersAdminList();
+      showNotice("Atama oluşturuldu.");
+    });
+  }
+
+  async function handleRemoveTeacherAssignment(assignmentId) {
+    await runAction(async () => {
+      await api.updateTeacherAssignment(assignmentId, { is_active: false });
+      await loadTeachersAdminList();
+      showNotice("Atama kaldırıldı.");
+    });
+  }
+
   async function handleUpdateHomework(event) {
     event.preventDefault();
     await runAction(async () => {
@@ -977,6 +1074,7 @@ export default function App() {
     setAllStudents([]);
     setAiOutputsByStudent({});
     setLessons([]);
+    setTeacherAssignments([]);
     setGrades([]);
     setScheduleEntries([]);
     setHomeworkPage({ items: [], total: 0, limit: TABLE_PAGE_SIZE, offset: 0 });
@@ -984,6 +1082,12 @@ export default function App() {
     setSelectedClassroomId(null);
     setSelectedStudentId(null);
     setActivePage("dashboard");
+  }
+
+  function handleUpdateScheduleSettings(nextSettings) {
+    if (validateScheduleSettings(nextSettings).length > 0) return;
+    setScheduleSettings(nextSettings);
+    showNotice("Ders saatleri başarıyla güncellendi.");
   }
 
   async function handleUpdateTeacherProfile(event) {
@@ -1010,7 +1114,15 @@ export default function App() {
   const shared = {
     activePage,
     aiOutputsByStudent,
+    assignedLessonOptionsForClassroom,
+    assignmentForm,
     currentTeacher,
+    handleCreateTeacherAssignment,
+    handleRemoveTeacherAssignment,
+    isAdminUser,
+    setAssignmentForm,
+    teacherAssignments,
+    teachersAdminList,
     attendanceRecordOffset,
     attendanceRecordPage,
     allStudents,
@@ -1032,9 +1144,11 @@ export default function App() {
     homeworkOffset,
     homeworkPage,
     homeworkStatusOptions,
+    handleUpdateScheduleSettings,
     handleUpdateTeacherProfile,
     isGeneratingWeeklySummary,
     lessonOptions,
+    lessonSlots,
     lessons,
     overallAverage,
     profile,
@@ -1080,6 +1194,7 @@ export default function App() {
     students,
     scheduleEntries,
     scheduleForm,
+    scheduleSettings,
     teacherProfileForm,
     weeklySummary,
     weekdayOptions,
@@ -1120,6 +1235,7 @@ export default function App() {
     <main className="min-h-screen bg-background">
       <Sidebar
         activePage={activePage}
+        isAdminUser={isAdminUser}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
         onLogout={handleLogout}
@@ -1134,7 +1250,9 @@ export default function App() {
           currentTeacher={currentTeacher}
           onLogout={handleLogout}
           onToggleMobileNav={() => setIsMobileNavOpen((current) => !current)}
+          onToggleTheme={toggleTheme}
           setActivePage={setActivePage}
+          theme={theme}
         />
 
       <section className="page flex-1 p-4 md:p-container-padding">
@@ -1150,6 +1268,8 @@ export default function App() {
         {activePage === "schedule" && <SchedulePage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
         {activePage === "profile" && <ProfilePage {...shared} />}
+        {activePage === "settings" && <SettingsPage {...shared} />}
+        {activePage === "teachers" && isAdminUser && <TeachersPage {...shared} />}
         <StatusLine isLoading={isLoading} notice={notice} error={error} />
       </section>
       </div>
@@ -1425,7 +1545,9 @@ export default function App() {
                     lesson_id: value,
                   }))
                 }
-                options={lessonOptions}
+                // Sadece bu sınıfta atanmış olduğun dersler — madde 6:
+                // vermediğin bir ders dropdown'da bile görünmemeli.
+                options={selectedClassroomId ? assignedLessonOptionsForClassroom(selectedClassroomId) : lessonOptions}
                 placeholder="Ders ara"
                 value={gradeForm.lesson_id}
               />
@@ -1469,7 +1591,7 @@ export default function App() {
                     lesson_id: value,
                   }))
                 }
-                options={lessonOptions}
+                options={selectedClassroomId ? assignedLessonOptionsForClassroom(selectedClassroomId) : lessonOptions}
                 placeholder="Ders ara"
                 value={gradeEditForm.lesson_id}
               />
@@ -1620,7 +1742,11 @@ export default function App() {
                 onChange={(value) =>
                   setScheduleForm((form) => ({ ...form, lesson_id: value }))
                 }
-                options={lessonOptions}
+                options={
+                  scheduleForm.classroom_id
+                    ? assignedLessonOptionsForClassroom(scheduleForm.classroom_id)
+                    : lessonOptions
+                }
                 placeholder="Ders ara"
                 value={scheduleForm.lesson_id}
               />
@@ -1683,7 +1809,11 @@ export default function App() {
                 onChange={(value) =>
                   setHomeworkForm((form) => ({ ...form, lesson_id: value }))
                 }
-                options={lessonOptions}
+                options={
+                  homeworkForm.classroom_id
+                    ? assignedLessonOptionsForClassroom(homeworkForm.classroom_id)
+                    : lessonOptions
+                }
                 placeholder="Ders ara"
                 value={homeworkForm.lesson_id}
               />
@@ -1730,6 +1860,43 @@ export default function App() {
               />
               <button className="primary-button" type="submit">
                 Kaydet
+              </button>
+            </FormPanel>
+          )}
+          {activeModal === "assignTeacher" && (
+            <FormPanel title="Ders / Sınıf Ata" onSubmit={handleCreateTeacherAssignment}>
+              <SearchableSelect
+                label="Öğretmen"
+                onChange={(value) =>
+                  setAssignmentForm((form) => ({ ...form, classroom_id: "", lesson_id: "", teacher_id: value }))
+                }
+                options={teachersAdminList.map((teacher) => ({
+                  label: teacher.full_name,
+                  value: String(teacher.id),
+                }))}
+                placeholder="Öğretmen ara"
+                value={assignmentForm.teacher_id}
+              />
+              <SearchableSelect
+                label="Sınıf"
+                onChange={(value) =>
+                  setAssignmentForm((form) => ({ ...form, lesson_id: "", classroom_id: value }))
+                }
+                options={classroomOptions}
+                placeholder="Sınıf ara"
+                value={assignmentForm.classroom_id}
+              />
+              <SearchableSelect
+                label="Ders (boş bırakılırsa rehber ataması olur)"
+                onChange={(value) =>
+                  setAssignmentForm((form) => ({ ...form, lesson_id: value }))
+                }
+                options={lessonOptions}
+                placeholder="Ders ara"
+                value={assignmentForm.lesson_id}
+              />
+              <button className="primary-button" type="submit">
+                Ata
               </button>
             </FormPanel>
           )}

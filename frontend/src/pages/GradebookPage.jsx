@@ -8,6 +8,7 @@ import {
   formatRelativeTime,
   initialsOf,
 } from "../utils/helpers";
+import { assignedLessonsForClassroom } from "../utils/permissions";
 
 const LESSON_ICONS = ["calculate", "science", "biotech", "psychology", "history_edu", "functions"];
 
@@ -17,7 +18,8 @@ export default function GradebookPage({
   handleDeleteGrade,
   handleDeleteLesson,
   grades,
-  lessons,
+  lessons: allVisibleLessons,
+  selectedClassroomId,
   selectedStudentId,
   setActiveModal,
   setEditingGrade,
@@ -28,7 +30,14 @@ export default function GradebookPage({
   setLessonEditForm,
   setSelectedStudentId,
   students,
+  teacherAssignments,
 }) {
+  // Madde 6: bu sınıfta atanmış olduğun dersler dışındakiler burada da
+  // görünmemeli — sınıf sekmeleri/sütunları sadece atanmış dersleri listeler.
+  const lessons = useMemo(
+    () => assignedLessonsForClassroom(teacherAssignments, Number(selectedClassroomId), allVisibleLessons),
+    [teacherAssignments, selectedClassroomId, allVisibleLessons],
+  );
   const currentStudentIds = useMemo(
     () => new Set(students.map((student) => student.id)),
     [students],

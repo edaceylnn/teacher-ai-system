@@ -1,8 +1,8 @@
 import Icon from "./Icon";
 
-export default function EmptyState({ actionLabel, icon = "inbox", onAction, text }) {
+export default function EmptyState({ actionLabel, compact = false, icon = "inbox", onAction, text }) {
   return (
-    <div className="empty-state">
+    <div className={`empty-state ${compact ? "empty-state-compact" : ""}`}>
       <span className="empty-state-icon">
         <Icon name={icon} />
       </span>

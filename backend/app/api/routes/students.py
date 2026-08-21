@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_classroom_owner, ensure_student_owner, get_current_teacher
+from app.api.deps import (
+    assigned_classroom_ids,
+    ensure_classroom_homeroom_access,
+    ensure_student_owner,
+    get_current_teacher,
+    visible_lesson_ids_for_classroom,
+)
 from app.core.email import send_parent_message_email
 from app.db.session import get_db
 from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student, Teacher
@@ -28,7 +34,9 @@ def create_student(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Student:
-    ensure_classroom_owner(db.get(Classroom, payload.classroom_id), current_teacher)
+    # Roster management (add/remove/move students) is a rehber (homeroom)
+    # responsibility — a subject-only assignment doesn't grant it.
+    ensure_classroom_homeroom_access(db.get(Classroom, payload.classroom_id), current_teacher, db)
 
     student = Student(
         classroom_id=payload.classroom_id,
@@ -57,9 +65,8 @@ def list_students(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[StudentResponse]:
-    statement = select(Student).join(Classroom, Classroom.id == Student.classroom_id).where(
-        Classroom.teacher_id == current_teacher.id
-    ).order_by(Student.id)
+    accessible_ids = assigned_classroom_ids(current_teacher, db)
+    statement = select(Student).where(Student.classroom_id.in_(accessible_ids)).order_by(Student.id)
     if classroom_id is not None:
         statement = statement.where(Student.classroom_id == classroom_id)
     if search:
@@ -102,6 +109,11 @@ def get_student_profile(
         .where(Grade.student_id == student.id)
         .order_by(Lesson.name, Grade.id)
     ).all()
+    # Madde 5: a branş öğretmeni sees this student's roster entry, but only
+    # their own subject's grades — a rehber sees every subject's grades.
+    visible_lessons = visible_lesson_ids_for_classroom(current_teacher, student.classroom_id, db)
+    if visible_lessons is not None:
+        grades = [(grade, lesson_name) for grade, lesson_name in grades if grade.lesson_id in visible_lessons]
     attendance_records = list(
         db.scalars(
             select(Attendance).where(Attendance.student_id == student.id).order_by(Attendance.date, Attendance.id)
@@ -165,11 +177,12 @@ def update_student(
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Student:
     student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
+    ensure_classroom_homeroom_access(db.get(Classroom, student.classroom_id), current_teacher, db)
 
     update_data = payload.model_dump(exclude_unset=True)
     classroom_id = update_data.get("classroom_id")
     if classroom_id is not None:
-        ensure_classroom_owner(db.get(Classroom, classroom_id), current_teacher)
+        ensure_classroom_homeroom_access(db.get(Classroom, classroom_id), current_teacher, db)
 
     for field, value in update_data.items():
         setattr(student, field, value)
@@ -204,6 +217,7 @@ def delete_student(
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Response:
     student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
+    ensure_classroom_homeroom_access(db.get(Classroom, student.classroom_id), current_teacher, db)
     db.delete(student)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

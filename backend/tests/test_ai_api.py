@@ -1,16 +1,32 @@
 from collections.abc import Generator
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.deps import get_current_teacher
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import AIOutput, AIOutputType, Teacher
+from app.models import AIOutput, AIOutputType, AcademicYear, Teacher, TeacherAssignment
 from app.services import ai as ai_service
+
+
+def _assign_subject(db_session: Session, *, teacher_id: int, classroom_id: int, lesson_id: int) -> None:
+    academic_year = db_session.scalar(select(AcademicYear).where(AcademicYear.is_current.is_(True)))
+    db_session.add(
+        TeacherAssignment(
+            teacher_id=teacher_id,
+            classroom_id=classroom_id,
+            lesson_id=lesson_id,
+            academic_year_id=academic_year.id,
+            is_active=True,
+        )
+    )
+    db_session.commit()
 
 
 @pytest.fixture()
@@ -24,6 +40,12 @@ def db_session() -> Generator[Session, None, None]:
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
+        # Every environment needs a current AcademicYear for classroom
+        # creation to attach a TeacherAssignment to.
+        session.add(
+            AcademicYear(label="2026-2027", start_date=date(2026, 9, 1), end_date=date(2027, 6, 30), is_current=True)
+        )
+        session.commit()
         yield session
 
     Base.metadata.drop_all(engine)
@@ -152,11 +174,13 @@ def test_generate_topic_analysis_saves_ai_output(
 
 def test_generate_lesson_plan_returns_structured_plan(
     client: TestClient,
+    db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
     teacher: Teacher,
     student: dict,
 ) -> None:
     lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
     monkeypatch.setattr(
         ai_service,
         "generate_lesson_plan",
@@ -277,6 +301,7 @@ def test_generate_report_comment_reuses_cached_output_when_data_unchanged(
 
 def test_generate_report_comment_regenerates_when_data_changed(
     client: TestClient,
+    db_session: Session,
     teacher: Teacher,
     monkeypatch: pytest.MonkeyPatch,
     student: dict,
@@ -299,6 +324,7 @@ def test_generate_report_comment_regenerates_when_data_changed(
     first = client.post("/ai/report-comments", json={"student_id": student["id"]})
 
     lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
     client.post(
         "/grades",
         json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90"},
@@ -360,3 +386,60 @@ def test_generate_ai_output_returns_503_when_service_unavailable(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "OPENAI_API_KEY tanımlı değil."
+
+
+def test_subject_teacher_cannot_view_or_edit_another_teachers_ai_output(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    teacher: Teacher,
+    student: dict,
+) -> None:
+    # Eda is the homeroom (rehber) teacher for 5-A and generates a report as
+    # herself — its input_payload covers every subject for this student.
+    monkeypatch.setattr(
+        ai_service,
+        "generate_report_comment",
+        lambda input_payload: {
+            "title": "Karne Yorumu",
+            "comment": "Ada iyi ilerliyor.",
+            "strengths": [],
+            "growth_areas": [],
+            "teacher_actions": [],
+        },
+    )
+    created = client.post("/ai/report-comments", json={"student_id": student["id"]}).json()
+
+    # Ahmet only has a subject (branş) assignment for Matematik in the same
+    # classroom — no homeroom access, and he did not generate this output.
+    ahmet = Teacher(full_name="Ahmet Yilmaz", email="ahmet@example.com", password_hash="hashed-password")
+    db_session.add(ahmet)
+    db_session.commit()
+    db_session.refresh(ahmet)
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=ahmet.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
+
+    app.dependency_overrides[get_current_teacher] = lambda: ahmet
+    try:
+        list_response = client.get("/ai/outputs", params={"student_id": student["id"]})
+        assert list_response.status_code == 200
+        assert created["id"] not in [output["id"] for output in list_response.json()]
+
+        update_response = client.patch(
+            f"/ai/outputs/{created['id']}",
+            json={
+                "output_payload": {
+                    "title": "Yetkisiz degisiklik",
+                    "comment": "Bu Ahmet'in erisemeyecegi bir kayit.",
+                    "strengths": [],
+                    "growth_areas": [],
+                    "teacher_actions": [],
+                }
+            },
+        )
+        assert update_response.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_current_teacher, None)
+
+    unchanged = db_session.get(AIOutput, created["id"])
+    assert unchanged.output_payload["comment"] == "Ada iyi ilerliyor."

@@ -2,6 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens as "R G B" triplets (no commas, no rgb() wrapper) so
+ * Tailwind's rgb(var(...) / <alpha-value>) color config (tailwind.config.js)
+ * can apply opacity modifiers like `bg-primary/5` to them. :root holds the
+ * light (default) scheme; .dark overrides only the roles that actually
+ * differ in dark mode — M3 "fixed" roles (primary-fixed, on-primary-fixed,
+ * primary-fixed-dim, on-primary-fixed-variant and their secondary/tertiary
+ * equivalents) are defined to stay identical across themes, so they're
+ * intentionally left out of the .dark block and fall through to :root. */
+:root {
+  color-scheme: light;
+  --color-on-primary: 255 255 255;
+  --color-tertiary: 58 73 95;
+  /* Sidebar/header/input "chrome" surface — pure white, same tier as cards
+   * (surface-container-lowest). What separates it from the page canvas is
+   * the background/border delta below, not a different white. */
+  --color-surface: 255 255 255;
+  --color-surface-tint: 77 68 227;
+  --color-inverse-primary: 195 192 255;
+  --color-on-error: 255 255 255;
+  --color-primary: 53 37 205;
+  --color-on-secondary: 255 255 255;
+  --color-surface-container-lowest: 255 255 255;
+  --color-primary-container: 79 70 229;
+  --color-inverse-surface: 46 49 50;
+  --color-secondary-fixed: 218 226 253;
+  --color-tertiary-fixed: 211 228 254;
+  --color-primary-fixed-dim: 195 192 255;
+  --color-surface-variant: 225 227 228;
+  --color-error: 186 26 26;
+  --color-on-tertiary-fixed-variant: 56 72 93;
+  --color-primary-fixed: 226 223 255;
+  /* De-purpled from the M3-generated default (which leaned lavender) to a
+   * neutral cool gray — strong enough for icon strokes/placeholder text,
+   * without reading as a tinted brand color. */
+  --color-outline: 148 152 165;
+  --color-secondary-fixed-dim: 190 198 224;
+  --color-surface-container-low: 240 241 246;
+  /* Card/table/input borders — soft and neutral, not the previous lavender
+   * tint the purple accent shouldn't leak into every edge. */
+  --color-outline-variant: 225 227 234;
+  --color-on-primary-fixed: 15 0 105;
+  --color-inverse-on-surface: 240 241 242;
+  --color-tertiary-container: 81 97 119;
+  --color-error-container: 255 218 214;
+  --color-on-tertiary-fixed: 11 28 48;
+  --color-on-secondary-container: 92 100 122;
+  --color-surface-dim: 217 218 219;
+  --color-on-secondary-fixed-variant: 63 70 92;
+  --color-secondary: 86 94 116;
+  --color-on-primary-container: 218 215 255;
+  /* Page canvas — a soft, slightly cool off-white so white cards/sidebar
+   * visibly float above it instead of blending in. */
+  --color-background: 244 245 249;
+  --color-surface-container-high: 231 232 233;
+  --color-secondary-container: 218 226 253;
+  --color-surface-bright: 244 245 249;
+  --color-surface-container-highest: 225 227 228;
+  --color-on-tertiary: 255 255 255;
+  --color-on-background: 25 28 29;
+  --color-on-tertiary-container: 204 220 247;
+  --color-on-error-container: 147 0 10;
+  --color-tertiary-fixed-dim: 183 200 225;
+  --color-on-surface: 25 28 29;
+  --color-on-primary-fixed-variant: 51 35 204;
+  /* Muted text tier — deliberately lighter than --color-secondary so the
+   * primary/secondary/muted ladder has three distinct, ordered contrast
+   * steps instead of muted (on-surface-variant) outranking secondary. */
+  --color-on-surface-variant: 138 145 161;
+  --color-surface-container: 237 238 239;
+  --color-on-secondary-fixed: 19 27 46;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-primary: 195 192 255;
+  --color-on-primary: 15 0 105;
+  --color-primary-container: 51 35 204;
+  --color-on-primary-container: 226 223 255;
+  --color-secondary: 190 198 224;
+  --color-on-secondary: 19 27 46;
+  --color-secondary-container: 63 70 92;
+  --color-on-secondary-container: 218 226 253;
+  --color-tertiary: 183 200 225;
+  --color-on-tertiary: 11 28 48;
+  --color-tertiary-container: 56 72 93;
+  --color-on-tertiary-container: 211 228 254;
+  --color-error: 255 180 171;
+  --color-on-error: 105 0 5;
+  --color-error-container: 147 0 10;
+  --color-on-error-container: 255 218 214;
+  /* Neutral surface ramp — deliberately NOT the M3-standard "elevation gets
+   * darker" direction. Elevation reads as lighter here (background < chrome
+   * < card < hover), same visual logic light mode already uses (card=white
+   * sits lighter than page=off-white), so cards/tables never look darker
+   * than the page behind them. Each step is a small, deliberate nudge (~5-12
+   * RGB units) — enough to separate layers, not enough to read as "boxes". */
+  --color-background: 17 18 22; /* page */
+  --color-on-background: 240 241 245;
+  --color-surface: 22 23 28; /* sidebar / header chrome — barely off background */
+  --color-on-surface: 240 241 245;
+  --color-surface-variant: 55 58 70;
+  --color-on-surface-variant: 150 154 172; /* muted text tier */
+  --color-outline: 128 132 150; /* muted icon/placeholder strokes */
+  --color-outline-variant: 52 55 65; /* borders/dividers */
+  --color-surface-dim: 17 18 22;
+  --color-surface-bright: 65 68 82; /* brightest — row hover */
+  --color-surface-container-lowest: 27 29 36; /* card / table / modal base */
+  --color-surface-container-low: 34 36 44; /* hover / selected fill, table header */
+  --color-surface-container: 40 43 52;
+  --color-surface-container-high: 47 50 60; /* badge-neutral, avatar bg */
+  --color-surface-container-highest: 55 58 70;
+  --color-inverse-surface: 227 226 230;
+  --color-inverse-on-surface: 47 48 51;
+  --color-inverse-primary: 53 37 205;
+  --color-surface-tint: 195 192 255;
+}
+
 @layer base {
   html,
   body,
@@ -10,7 +127,7 @@
   }
 
   body {
-    @apply bg-background text-on-background font-body-md text-body-md antialiased;
+    @apply bg-background text-on-background font-body-md text-body-md antialiased transition-colors duration-150;
   }
 }
 
@@ -102,6 +219,12 @@
   .empty-state p {
     @apply font-body-md text-body-md text-secondary;
   }
+  /* Compact variant — same icon/type styling, tighter padding so a card
+   * that's just waiting on one action (e.g. AI Haftalık Özet) doesn't force
+   * a tall empty card to "fill" a grid row. */
+  .empty-state.empty-state-compact {
+    @apply gap-1.5 p-2;
+  }
 
   /* Insight */
   .insight {
@@ -120,10 +243,10 @@
     @apply text-primary;
   }
   .insight.warning {
-    @apply border-amber-200 bg-amber-50;
+    @apply border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950;
   }
   .insight.warning .material-symbols-outlined {
-    @apply text-amber-600;
+    @apply text-amber-600 dark:text-amber-400;
   }
 
   /* Pagination */
@@ -153,10 +276,10 @@
     @apply inline-flex items-center rounded-full px-2.5 py-1 font-label-md text-label-md;
   }
   .badge-success {
-    @apply border border-emerald-200 bg-emerald-50 text-emerald-700;
+    @apply border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400;
   }
   .badge-warning {
-    @apply border border-amber-200 bg-amber-50 text-amber-700;
+    @apply border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400;
   }
   .badge-danger {
     @apply bg-error/10 text-error;
@@ -205,7 +328,7 @@
     @apply flex items-center gap-1 text-secondary hover:text-primary;
   }
   .parent-info-missing {
-    @apply flex items-center gap-1 font-body-md text-body-md text-amber-600;
+    @apply flex items-center gap-1 font-body-md text-body-md text-amber-600 dark:text-amber-400;
   }
 
   /* Dashboard "Bugünkü Dersler" timeline item */

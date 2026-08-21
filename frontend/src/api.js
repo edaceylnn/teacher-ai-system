@@ -351,4 +351,27 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ output_payload: outputPayload }),
     }),
+  // Admin sees every teacher + their assignment summary; a regular teacher
+  // gets back just themselves (see GET /teachers on the backend).
+  listTeachers: () => request("/teachers"),
+  listTeacherAssignmentsPage: (teacherId, pagination = {}) =>
+    request(
+      `/teacher-assignments${buildQuery({
+        teacher_id: teacherId,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) => normalizePage(page, pagination.limit, pagination.offset)),
+  listTeacherAssignments: async (teacherId, pagination = { limit: 500, offset: 0 }) =>
+    pageItems(await api.listTeacherAssignmentsPage(teacherId, pagination)),
+  createTeacherAssignment: (payload) =>
+    request("/teacher-assignments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateTeacherAssignment: (assignmentId, payload) =>
+    request(`/teacher-assignments/${assignmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 };

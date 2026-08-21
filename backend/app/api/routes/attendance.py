@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_student_owner, get_current_teacher
+from app.api.deps import assigned_classroom_ids, ensure_student_owner, get_current_teacher
 from app.db.session import get_db
 from app.models import Attendance, Classroom, Student, Teacher
 from app.schemas.attendance import AttendanceCreate, AttendanceResponse, AttendanceUpdate
@@ -42,9 +42,10 @@ def list_attendance_records(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[AttendanceResponse]:
+    accessible_ids = assigned_classroom_ids(current_teacher, db)
     statement = select(Attendance).join(Student, Student.id == Attendance.student_id).join(
         Classroom, Classroom.id == Student.classroom_id
-    ).where(Classroom.teacher_id == current_teacher.id).order_by(Attendance.date, Attendance.id)
+    ).where(Student.classroom_id.in_(accessible_ids)).order_by(Attendance.date, Attendance.id)
     if student_id is not None:
         statement = statement.where(Attendance.student_id == student_id)
 

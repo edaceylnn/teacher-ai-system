@@ -2,9 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_classroom_owner, get_current_teacher
+from app.api.deps import (
+    assigned_classroom_ids,
+    current_academic_year,
+    ensure_classroom_access,
+    ensure_classroom_homeroom_access,
+    get_current_teacher,
+)
 from app.db.session import get_db
-from app.models import Classroom, Teacher
+from app.models import Classroom, Teacher, TeacherAssignment
 from app.schemas.classroom import ClassroomCreate, ClassroomResponse, ClassroomUpdate
 from app.schemas.pagination import PageResponse
 
@@ -19,12 +25,28 @@ def create_classroom(
 ) -> Classroom:
     if payload.teacher_id != current_teacher.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
+    year = current_academic_year(db)
+    if year is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Aktif akademik yıl tanımlı değil.")
+
     classroom = Classroom(
         teacher_id=current_teacher.id,
         name=payload.name,
         grade_level=payload.grade_level,
     )
     db.add(classroom)
+    db.flush()
+    # Creating a classroom makes you its rehber (homeroom) teacher — a
+    # TeacherAssignment with no lesson, the same as everyone else's access.
+    db.add(
+        TeacherAssignment(
+            teacher_id=current_teacher.id,
+            classroom_id=classroom.id,
+            lesson_id=None,
+            academic_year_id=year.id,
+            is_active=True,
+        )
+    )
     db.commit()
     db.refresh(classroom)
     return classroom
@@ -38,7 +60,8 @@ def list_classrooms(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[ClassroomResponse]:
-    statement = select(Classroom).where(Classroom.teacher_id == current_teacher.id).order_by(Classroom.id)
+    accessible_ids = assigned_classroom_ids(current_teacher, db)
+    statement = select(Classroom).where(Classroom.id.in_(accessible_ids)).order_by(Classroom.id)
 
     total = (
         db.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
@@ -54,7 +77,7 @@ def get_classroom(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Classroom:
-    return ensure_classroom_owner(db.get(Classroom, classroom_id), current_teacher)
+    return ensure_classroom_access(db.get(Classroom, classroom_id), current_teacher, db)
 
 
 @router.patch("/{classroom_id}", response_model=ClassroomResponse)
@@ -64,7 +87,7 @@ def update_classroom(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Classroom:
-    classroom = ensure_classroom_owner(db.get(Classroom, classroom_id), current_teacher)
+    classroom = ensure_classroom_homeroom_access(db.get(Classroom, classroom_id), current_teacher, db)
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -81,7 +104,7 @@ def delete_classroom(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Response:
-    classroom = ensure_classroom_owner(db.get(Classroom, classroom_id), current_teacher)
+    classroom = ensure_classroom_homeroom_access(db.get(Classroom, classroom_id), current_teacher, db)
     db.delete(classroom)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

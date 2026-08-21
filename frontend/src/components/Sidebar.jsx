@@ -12,12 +12,17 @@ const NAV_ITEMS = [
 
 export default function Sidebar({
   activePage,
+  isAdminUser,
   isMobileOpen,
   onCloseMobile,
   onLogout,
   setActiveModal,
   setActivePage,
 }) {
+  const navItems = isAdminUser
+    ? [...NAV_ITEMS, { page: "teachers", icon: "supervisor_account", label: "Öğretmenler" }]
+    : NAV_ITEMS;
+
   return (
     <>
       {isMobileOpen && (
@@ -46,13 +51,13 @@ export default function Sidebar({
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto no-scrollbar">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activePage === item.page || item.matchAlso?.includes(activePage);
             return (
               <button
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors duration-100 ${
                   isActive
-                    ? "border-r-2 border-primary bg-surface-container-low font-bold text-primary"
+                    ? "bg-surface-container-low font-bold text-primary"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
                 key={item.page}
@@ -76,6 +81,18 @@ export default function Sidebar({
         </button>
 
         <div className="flex flex-col gap-1 border-t border-outline-variant pt-4">
+          <button
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors ${
+              activePage === "settings"
+                ? "font-bold text-primary"
+                : "text-secondary hover:bg-surface-container-low"
+            }`}
+            onClick={() => setActivePage("settings")}
+            type="button"
+          >
+            <Icon filled={activePage === "settings"} name="settings" />
+            Ayarlar
+          </button>
           <button
             className="flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low"
             onClick={() => setActivePage("profile")}

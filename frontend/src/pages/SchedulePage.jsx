@@ -1,27 +1,36 @@
 import { useMemo, useState } from "react";
-import { lessonSlots, schoolWeekDays } from "../constants";
+import { schoolWeekDays } from "../constants";
 import { buildScheduleTimeBounds, minutesToTime, timeToMinutes } from "../utils/helpers";
 import Icon from "../components/Icon";
 
-const PX_PER_HOUR = 80;
+// 120px/hour (2px/min) so a standard 40-minute lesson renders ~76px tall —
+// enough for the 3-line card (name/classroom/location) to breathe. At the
+// old 80px/hour a 40-minute block was only ~49px, too short for that text.
+const PX_PER_HOUR = 120;
 const PX_PER_MINUTE = PX_PER_HOUR / 60;
+// Keep in sync with the `w-[80px]`/`left-[80px]` Tailwind arbitrary values
+// below — those are static classes (Tailwind can't read a JS constant), this
+// is the same width used in inline styles (grid columns, min-width).
+const GUTTER_WIDTH = 80;
+const DAY_COLUMN_MIN_WIDTH = 140;
+const GRID_MIN_WIDTH = GUTTER_WIDTH + schoolWeekDays.length * DAY_COLUMN_MIN_WIDTH;
 const EVENT_TONES = [
   "border-primary-fixed-dim bg-primary-fixed text-on-primary-fixed",
   "border-secondary-fixed-dim bg-secondary-fixed text-on-secondary-fixed",
 ];
-const PERIODS = lessonSlots.filter((slot) => slot.part !== "break");
 
-function nearestPeriodAt(clickedMinute) {
-  return PERIODS.reduce((closest, slot) => {
+function nearestPeriodAt(periods, clickedMinute) {
+  return periods.reduce((closest, slot) => {
     const distance = Math.abs(timeToMinutes(slot.start) - clickedMinute);
     const closestDistance = Math.abs(timeToMinutes(closest.start) - clickedMinute);
     return distance < closestDistance ? slot : closest;
-  }, PERIODS[0]);
+  }, periods[0]);
 }
 
 export default function SchedulePage({
   classrooms,
   handleDeleteScheduleEntry,
+  lessonSlots,
   lessons,
   handleMoveScheduleEntry,
   scheduleEntries,
@@ -39,9 +48,13 @@ export default function SchedulePage({
     () => new Map(lessons.map((lesson) => [lesson.id, lesson])),
     [lessons],
   );
+  // Ders Programı's timetable is entirely derived from Ayarlar → Ders
+  // Saatleri (lessonSlots, computed by App.jsx from schoolScheduleSettings) —
+  // this page never hard-codes period times itself.
+  const periods = useMemo(() => lessonSlots.filter((slot) => slot.part !== "break"), [lessonSlots]);
   const { startMinutes, endMinutes } = useMemo(
     () => buildScheduleTimeBounds(scheduleEntries, lessonSlots),
-    [scheduleEntries],
+    [scheduleEntries, lessonSlots],
   );
   const totalHeight = (endMinutes - startMinutes) * PX_PER_MINUTE;
   // Gutter marks follow the real ders/teneffüs boundaries (not round hours),
@@ -55,12 +68,12 @@ export default function SchedulePage({
     return Array.from(times)
       .filter((minute) => minute >= startMinutes && minute <= endMinutes)
       .sort((a, b) => a - b);
-  }, [startMinutes, endMinutes]);
+  }, [startMinutes, endMinutes, lessonSlots]);
   const lessonStartMinutes = useMemo(
-    () => new Set(PERIODS.map((slot) => timeToMinutes(slot.start))),
-    [],
+    () => new Set(periods.map((slot) => timeToMinutes(slot.start))),
+    [periods],
   );
-  const breakBands = lessonSlots.filter((slot) => slot.part === "break");
+  const breakBands = useMemo(() => lessonSlots.filter((slot) => slot.part === "break"), [lessonSlots]);
   const entriesByWeekday = useMemo(() => {
     const grouped = new Map();
     scheduleEntries.forEach((entry) => {
@@ -86,7 +99,7 @@ export default function SchedulePage({
 
   function openSlotAt(weekday, offsetY) {
     const clickedMinute = startMinutes + offsetY / PX_PER_MINUTE;
-    const nearestPeriod = nearestPeriodAt(clickedMinute);
+    const nearestPeriod = nearestPeriodAt(periods, clickedMinute);
     setScheduleForm({
       classroom_id: "",
       lesson_id: "",
@@ -107,7 +120,7 @@ export default function SchedulePage({
 
     const rect = event.currentTarget.getBoundingClientRect();
     const clickedMinute = startMinutes + (event.clientY - rect.top) / PX_PER_MINUTE;
-    const nearestPeriod = nearestPeriodAt(clickedMinute);
+    const nearestPeriod = nearestPeriodAt(periods, clickedMinute);
     if (
       entry.weekday === weekday &&
       entry.start_time.slice(0, 5) === nearestPeriod.start &&
@@ -153,86 +166,90 @@ export default function SchedulePage({
       </section>
 
       <section className="card flex flex-col overflow-hidden">
-        <div
-          className="grid border-b border-outline-variant bg-surface-container-lowest"
-          style={{ gridTemplateColumns: `80px repeat(${schoolWeekDays.length}, 1fr)` }}
-        >
-          <div className="flex items-end justify-end p-3 font-mono-sm text-mono-sm text-secondary">GMT+3</div>
-          {schoolWeekDays.map((day) => (
-            <div className="flex flex-col items-center justify-center border-l border-outline-variant p-3" key={day}>
-              <span className="font-label-md text-label-md uppercase text-secondary">{day}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="relative overflow-y-auto bg-surface-container-lowest" style={{ height: Math.min(totalHeight, 560) }}>
-          <div className="relative" style={{ height: totalHeight }}>
-            {/* Ders/teneffüs gridlines — one tick per period or break
-                boundary (not round hours), so the axis reads the real school
-                timetable (08:30, 09:10, 09:25…). 0-height rows with a top
-                border keep the line exactly at the calculated offset; the
-                time label is a separately positioned, vertically-centered
-                overlay so its own line-height can't push the line out of
-                place. */}
-            <div className="pointer-events-none absolute inset-0 z-0">
-              {timeMarks.map((minute) => {
-                const isLessonBoundary = lessonStartMinutes.has(minute);
-                // The first/last marks sit exactly at the grid's top/bottom
-                // edge — centering their label on the line would push half
-                // of the text outside the scroll container and clip it, so
-                // those two are aligned to sit fully inside instead.
-                const labelAlignClass =
-                  minute === startMinutes
-                    ? "top-0"
-                    : minute === endMinutes
-                      ? "bottom-0"
-                      : "top-0 -translate-y-1/2";
-                return (
-                  <div
-                    className={`absolute left-0 right-0 border-t ${isLessonBoundary ? "border-outline-variant" : "border-outline-variant/40"}`}
-                    key={minute}
-                    style={{ top: (minute - startMinutes) * PX_PER_MINUTE }}
-                  >
-                    <span
-                      className={`absolute left-0 w-[80px] ${labelAlignClass} pr-2 text-right font-mono-sm text-mono-sm ${
-                        isLessonBoundary ? "font-semibold text-on-surface" : "text-secondary"
-                      }`}
-                    >
-                      {minutesToTime(minute)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Break bands */}
-            <div className="pointer-events-none absolute inset-0 z-[5]">
-              {breakBands.map((slot) => {
-                const top = (timeToMinutes(slot.start) - startMinutes) * PX_PER_MINUTE;
-                const height = (timeToMinutes(slot.end) - timeToMinutes(slot.start)) * PX_PER_MINUTE;
-                return (
-                  <div
-                    className="absolute left-[80px] right-0 flex items-center justify-center bg-surface-variant/50 font-label-md text-label-md uppercase tracking-widest text-secondary"
-                    key={slot.start}
-                    style={{ top, height }}
-                  >
-                    {slot.period}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Day columns */}
+        {/* Horizontal scroll wrapper: below GRID_MIN_WIDTH the grid keeps its
+            per-day minimum instead of squeezing columns/cards illegible. */}
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: GRID_MIN_WIDTH }}>
             <div
-              className="absolute inset-0 z-10 grid"
-              style={{ gridTemplateColumns: `80px repeat(${schoolWeekDays.length}, 1fr)` }}
+              className="grid border-b border-outline-variant/70 bg-surface-container-lowest"
+              style={{ gridTemplateColumns: `${GUTTER_WIDTH}px repeat(${schoolWeekDays.length}, 1fr)` }}
             >
-              <div />
-              {schoolWeekDays.map((day, weekday) => (
+              <div className="flex items-end justify-end p-3 font-mono-sm text-mono-sm text-secondary">GMT+3</div>
+              {schoolWeekDays.map((day) => (
+                <div className="flex flex-col items-center justify-center border-l border-outline-variant/60 p-3" key={day}>
+                  <span className="font-label-md text-label-md uppercase text-secondary">{day}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="relative overflow-y-auto bg-surface-container-lowest" style={{ height: Math.min(totalHeight, 560) }}>
+              <div className="relative" style={{ height: totalHeight }}>
+                {/* Time gutter — its own layer, fully separate from the grid
+                    lines. Labels never sit on top of a line: the line only
+                    spans the day columns (left-[80px] onward), the gutter
+                    background covers 0..80px and nothing else is drawn there. */}
+                <div className="pointer-events-none absolute inset-0 z-0">
+                  <div className="absolute bottom-0 left-0 top-0 w-[80px] bg-surface-container-low/60" />
+                  {timeMarks.map((minute) => {
+                    const isLessonBoundary = lessonStartMinutes.has(minute);
+                    const top = (minute - startMinutes) * PX_PER_MINUTE;
+                    // The first/last marks sit exactly at the grid's top/bottom
+                    // edge — centering their label on the line would push half
+                    // of the text outside the scroll container and clip it, so
+                    // those two are aligned to sit fully inside instead.
+                    const labelAlignClass =
+                      minute === startMinutes
+                        ? "top-0"
+                        : minute === endMinutes
+                          ? "bottom-0"
+                          : "top-0 -translate-y-1/2";
+                    return (
+                      <div key={minute}>
+                        <div
+                          className={`absolute left-[80px] right-0 border-t ${isLessonBoundary ? "border-outline-variant/70" : "border-outline-variant/30"}`}
+                          style={{ top }}
+                        />
+                        <span
+                          className={`absolute left-0 w-[80px] ${labelAlignClass} pr-2 text-right font-mono-sm text-mono-sm text-secondary`}
+                          style={{ top }}
+                        >
+                          {minutesToTime(minute)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Break bands — span the full Pazartesi–Cuma width (never a
+                    single day's column) since teneffüs/öğle arası applies to
+                    the whole week at once. */}
+                <div className="pointer-events-none absolute inset-0 z-[5]">
+                  {breakBands.map((slot) => {
+                    const top = (timeToMinutes(slot.start) - startMinutes) * PX_PER_MINUTE;
+                    const height = (timeToMinutes(slot.end) - timeToMinutes(slot.start)) * PX_PER_MINUTE;
+                    return (
+                      <div
+                        className="absolute left-[80px] right-0 flex items-center justify-center bg-surface-variant/50 font-label-md text-label-md uppercase tracking-widest text-secondary"
+                        key={slot.start}
+                        style={{ top, height }}
+                      >
+                        {slot.period}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Day columns */}
                 <div
-                  className={`relative border-l border-outline-variant transition-colors ${
-                    dragOverWeekday === weekday ? "bg-primary/5" : ""
-                  }`}
+                  className="absolute inset-0 z-10 grid"
+                  style={{ gridTemplateColumns: `${GUTTER_WIDTH}px repeat(${schoolWeekDays.length}, 1fr)` }}
+                >
+                  <div />
+                  {schoolWeekDays.map((day, weekday) => (
+                    <div
+                      className={`relative border-l border-outline-variant/60 transition-colors ${
+                        dragOverWeekday === weekday ? "bg-primary/5" : ""
+                      }`}
                   key={day}
                   onClick={(event) => {
                     if (event.target !== event.currentTarget) return;
@@ -251,7 +268,7 @@ export default function SchedulePage({
                     const entryEnd = timeToMinutes(entry.end_time.slice(0, 5));
                     return (
                       <div
-                        className={`group absolute left-1 right-1 flex cursor-grab flex-col justify-center gap-px overflow-hidden rounded-md border px-2 py-1 shadow-sm transition-colors active:cursor-grabbing ${EVENT_TONES[index % EVENT_TONES.length]} ${
+                        className={`group absolute left-1 right-1 flex cursor-grab flex-col justify-center gap-1 overflow-hidden rounded-md border px-2.5 py-1.5 shadow-sm transition-colors active:cursor-grabbing ${EVENT_TONES[index % EVENT_TONES.length]} ${
                           draggingEntryId === entry.id ? "opacity-40" : ""
                         }`}
                         draggable
@@ -268,7 +285,7 @@ export default function SchedulePage({
                         }}
                         style={{
                           top: (entryStart - startMinutes) * PX_PER_MINUTE + 2,
-                          height: Math.max((entryEnd - entryStart) * PX_PER_MINUTE - 4, 44),
+                          height: Math.max((entryEnd - entryStart) * PX_PER_MINUTE - 4, 56),
                         }}
                       >
                         <button
@@ -282,13 +299,13 @@ export default function SchedulePage({
                         >
                           <Icon name="delete" className="text-[13px]" />
                         </button>
-                        <span className="truncate pr-4 font-label-md text-label-md font-bold leading-tight">
+                        <span className="truncate pr-4 font-label-md text-label-md font-bold leading-snug">
                           {lessonById.get(entry.lesson_id)?.name || "Ders"}
                         </span>
-                        <span className="truncate font-mono-sm text-mono-sm leading-tight opacity-80">
+                        <span className="truncate font-mono-sm text-mono-sm leading-snug opacity-80">
                           {classroomById.get(entry.classroom_id)?.name || "Sınıf"}
                         </span>
-                        <span className="flex items-center gap-1 truncate font-mono-sm text-mono-sm leading-tight opacity-80">
+                        <span className="flex items-center gap-1 truncate font-mono-sm text-mono-sm leading-snug opacity-80">
                           <Icon name="room" className="shrink-0 text-[12px]" /> {entry.location || "Derslik yok"}
                         </span>
                       </div>
@@ -296,6 +313,8 @@ export default function SchedulePage({
                   })}
                 </div>
               ))}
+            </div>
+              </div>
             </div>
           </div>
         </div>

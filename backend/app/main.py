@@ -3,7 +3,21 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import audit, auth, ai, attendance, classrooms, grades, health, homework, lessons, schedule, students, teachers
+from app.api.routes import (
+    audit,
+    auth,
+    ai,
+    attendance,
+    classrooms,
+    grades,
+    health,
+    homework,
+    lessons,
+    schedule,
+    students,
+    teacher_assignments,
+    teachers,
+)
 from app.core.audit import AuditLogMiddleware
 from app.core.config import settings
 from app.core.security import (
@@ -44,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(teachers.router)
+    app.include_router(teacher_assignments.router)
     app.include_router(classrooms.router)
     app.include_router(students.router)
     app.include_router(lessons.router)

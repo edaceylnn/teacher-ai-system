@@ -1,23 +1,26 @@
 from datetime import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import false, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_classroom_owner, ensure_lesson_owner, ensure_schedule_owner, get_current_teacher
+from app.api.deps import ensure_schedule_write_access, ensure_subject_write_access, get_current_teacher, visible_academic_scope
 from app.db.session import get_db
-from app.models import Classroom, Lesson, ScheduleEntry, Teacher
+from app.models import ScheduleEntry, Teacher
 from app.schemas.pagination import PageResponse
 from app.schemas.schedule import ScheduleEntryCreate, ScheduleEntryResponse, ScheduleEntryUpdate
 
 router = APIRouter(prefix="/schedule-entries", tags=["schedule"])
 
 
-def _ensure_refs(payload: ScheduleEntryCreate | ScheduleEntryUpdate, teacher: Teacher, db: Session) -> None:
-    if payload.classroom_id is not None:
-        ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
-    if payload.lesson_id is not None:
-        ensure_lesson_owner(db.get(Lesson, payload.lesson_id), teacher)
+def _visible_schedule_condition(teacher: Teacher, db: Session):
+    homeroom_ids, subject_pairs = visible_academic_scope(teacher, db)
+    conditions = []
+    if homeroom_ids:
+        conditions.append(ScheduleEntry.classroom_id.in_(homeroom_ids))
+    if subject_pairs:
+        conditions.append(tuple_(ScheduleEntry.classroom_id, ScheduleEntry.lesson_id).in_(subject_pairs))
+    return or_(*conditions) if conditions else false()
 
 
 def _ensure_no_conflict(
@@ -46,7 +49,7 @@ def create_schedule_entry(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> ScheduleEntry:
-    _ensure_refs(payload, current_teacher, db)
+    ensure_subject_write_access(current_teacher, payload.classroom_id, payload.lesson_id, db)
     _ensure_no_conflict(current_teacher.id, payload.weekday, payload.start_time, payload.end_time, db)
     entry = ScheduleEntry(**{**payload.model_dump(), "teacher_id": current_teacher.id})
     db.add(entry)
@@ -64,8 +67,10 @@ def list_schedule_entries(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[ScheduleEntryResponse]:
-    statement = select(ScheduleEntry).where(ScheduleEntry.teacher_id == current_teacher.id).order_by(
-        ScheduleEntry.weekday, ScheduleEntry.start_time, ScheduleEntry.id
+    statement = (
+        select(ScheduleEntry)
+        .where(_visible_schedule_condition(current_teacher, db))
+        .order_by(ScheduleEntry.weekday, ScheduleEntry.start_time, ScheduleEntry.id)
     )
     if weekday is not None:
         statement = statement.where(ScheduleEntry.weekday == weekday)
@@ -82,10 +87,14 @@ def update_schedule_entry(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> ScheduleEntry:
-    entry = ensure_schedule_owner(db.get(ScheduleEntry, entry_id), current_teacher)
-    _ensure_refs(payload, current_teacher, db)
+    entry = ensure_schedule_write_access(db.get(ScheduleEntry, entry_id), current_teacher, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    next_classroom_id = update_data.get("classroom_id", entry.classroom_id)
+    next_lesson_id = update_data.get("lesson_id", entry.lesson_id)
+    if "classroom_id" in update_data or "lesson_id" in update_data:
+        ensure_subject_write_access(current_teacher, next_classroom_id, next_lesson_id, db)
+
     next_weekday = update_data.get("weekday", entry.weekday)
     next_start = update_data.get("start_time", entry.start_time)
     next_end = update_data.get("end_time", entry.end_time)
@@ -106,7 +115,7 @@ def delete_schedule_entry(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Response:
-    entry = ensure_schedule_owner(db.get(ScheduleEntry, entry_id), current_teacher)
+    entry = ensure_schedule_write_access(db.get(ScheduleEntry, entry_id), current_teacher, db)
     db.delete(entry)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,21 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import false, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.api.deps import ensure_classroom_owner, ensure_homework_owner, ensure_lesson_owner, get_current_teacher
+from app.api.deps import ensure_homework_write_access, ensure_subject_write_access, get_current_teacher, visible_academic_scope
 from app.db.session import get_db
-from app.models import Classroom, Homework, Lesson, Teacher
+from app.models import Homework, Teacher
 from app.schemas.homework import HomeworkCreate, HomeworkResponse, HomeworkUpdate
 from app.schemas.pagination import PageResponse
 
 router = APIRouter(prefix="/homeworks", tags=["homeworks"])
 
 
-def _ensure_refs(payload: HomeworkCreate | HomeworkUpdate, teacher: Teacher, db: Session) -> None:
-    if payload.classroom_id is not None:
-        ensure_classroom_owner(db.get(Classroom, payload.classroom_id), teacher)
-    if payload.lesson_id is not None:
-        ensure_lesson_owner(db.get(Lesson, payload.lesson_id), teacher)
+def _visible_homework_condition(teacher: Teacher, db: Session):
+    homeroom_ids, subject_pairs = visible_academic_scope(teacher, db)
+    conditions = []
+    if homeroom_ids:
+        conditions.append(Homework.classroom_id.in_(homeroom_ids))
+    if subject_pairs:
+        conditions.append(tuple_(Homework.classroom_id, Homework.lesson_id).in_(subject_pairs))
+    return or_(*conditions) if conditions else false()
 
 
 @router.post("", response_model=HomeworkResponse, status_code=status.HTTP_201_CREATED)
@@ -24,7 +27,7 @@ def create_homework(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Homework:
-    _ensure_refs(payload, current_teacher, db)
+    ensure_subject_write_access(current_teacher, payload.classroom_id, payload.lesson_id, db)
     homework = Homework(**{**payload.model_dump(), "teacher_id": current_teacher.id})
     db.add(homework)
     db.commit()
@@ -41,7 +44,11 @@ def list_homeworks(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> PageResponse[HomeworkResponse]:
-    statement = select(Homework).where(Homework.teacher_id == current_teacher.id).order_by(Homework.due_date, Homework.id)
+    statement = (
+        select(Homework)
+        .where(_visible_homework_condition(current_teacher, db))
+        .order_by(Homework.due_date, Homework.id)
+    )
     if classroom_id is not None:
         statement = statement.where(Homework.classroom_id == classroom_id)
 
@@ -57,10 +64,15 @@ def update_homework(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Homework:
-    homework = ensure_homework_owner(db.get(Homework, homework_id), current_teacher)
-    _ensure_refs(payload, current_teacher, db)
+    homework = ensure_homework_write_access(db.get(Homework, homework_id), current_teacher, db)
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+    next_classroom_id = update_data.get("classroom_id", homework.classroom_id)
+    next_lesson_id = update_data.get("lesson_id", homework.lesson_id)
+    if "classroom_id" in update_data or "lesson_id" in update_data:
+        ensure_subject_write_access(current_teacher, next_classroom_id, next_lesson_id, db)
+
+    for field, value in update_data.items():
         setattr(homework, field, value)
     db.commit()
     db.refresh(homework)
@@ -73,7 +85,7 @@ def delete_homework(
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Response:
-    homework = ensure_homework_owner(db.get(Homework, homework_id), current_teacher)
+    homework = ensure_homework_write_access(db.get(Homework, homework_id), current_teacher, db)
     db.delete(homework)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

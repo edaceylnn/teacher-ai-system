@@ -1,9 +1,9 @@
 from collections.abc import Generator
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -14,6 +14,7 @@ from app.core.security import create_access_token
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models import AcademicYear, TeacherAssignment
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +34,12 @@ def db_session() -> Generator[Session, None, None]:
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
+        # Every environment needs a current AcademicYear for classroom
+        # creation to attach a TeacherAssignment to.
+        session.add(
+            AcademicYear(label="2026-2027", start_date=date(2026, 9, 1), end_date=date(2027, 6, 30), is_current=True)
+        )
+        session.commit()
         yield session
 
     Base.metadata.drop_all(engine)
@@ -61,7 +68,7 @@ def _register_and_login(client: TestClient, email: str) -> tuple[dict, dict]:
 
 
 @pytest.fixture()
-def owner_resources(client: TestClient) -> dict:
+def owner_resources(client: TestClient, db_session: Session) -> dict:
     owner, owner_headers = _register_and_login(client, "owner@example.com")
 
     classroom = client.post(
@@ -77,6 +84,19 @@ def owner_resources(client: TestClient) -> dict:
     lesson = client.post(
         "/lessons", json={"teacher_id": owner["id"], "name": "Matematik"}, headers=owner_headers
     ).json()
+    # Assignment creation is admin-only, so wire it directly for this test
+    # setup — same as an admin's "Ders/Sınıf Ata" would.
+    academic_year = db_session.scalar(select(AcademicYear).where(AcademicYear.is_current.is_(True)))
+    db_session.add(
+        TeacherAssignment(
+            teacher_id=owner["id"],
+            classroom_id=classroom["id"],
+            lesson_id=lesson["id"],
+            academic_year_id=academic_year.id,
+            is_active=True,
+        )
+    )
+    db_session.commit()
     grade = client.post(
         "/grades",
         json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90"},

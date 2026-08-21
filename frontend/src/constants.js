@@ -34,35 +34,10 @@ export const schoolWeekDays = weekDays.slice(0, 5);
 
 export const schoolWeekdayOptions = weekdayOptions.slice(0, 5);
 
-// MEB'in okullarda ders/teneffüs sürelerine ilişkin genelgesine göre:
-// standart ders süresi 40 dakika, teneffüsler en az 15 dakika, öğle arası
-// en az 40 dakikadır (bkz. meb.gov.tr "Okullarda Derslerin Başlama ve Bitiş
-// Saatlerine İlişkin Genelge"). Kesin saatler il/okul bazında değişebildiği
-// için burada bu asgari sürelere uyan tipik bir tam gün programı kullanılır.
-export const lessonSlots = [
-  { period: "1. Ders", start: "08:30", end: "09:10", part: "Sabah" },
-  { period: "Teneffüs", start: "09:10", end: "09:25", part: "break" },
-  { period: "2. Ders", start: "09:25", end: "10:05", part: "Sabah" },
-  { period: "Teneffüs", start: "10:05", end: "10:20", part: "break" },
-  { period: "3. Ders", start: "10:20", end: "11:00", part: "Sabah" },
-  { period: "Teneffüs", start: "11:00", end: "11:15", part: "break" },
-  { period: "4. Ders", start: "11:15", end: "11:55", part: "Sabah" },
-  { period: "Öğle Arası", start: "11:55", end: "12:35", part: "break" },
-  { period: "5. Ders", start: "12:35", end: "13:15", part: "Öğleden Sonra" },
-  { period: "Teneffüs", start: "13:15", end: "13:30", part: "break" },
-  { period: "6. Ders", start: "13:30", end: "14:10", part: "Öğleden Sonra" },
-  { period: "Teneffüs", start: "14:10", end: "14:25", part: "break" },
-  { period: "7. Ders", start: "14:25", end: "15:05", part: "Öğleden Sonra" },
-  { period: "Teneffüs", start: "15:05", end: "15:20", part: "break" },
-  { period: "8. Ders", start: "15:20", end: "16:00", part: "Öğleden Sonra" },
-];
-
-export const scheduleSlotOptions = lessonSlots
-  .filter((slot) => slot.part !== "break")
-  .map((slot) => ({
-    label: `${slot.period} · ${slot.start} - ${slot.end}`,
-    value: `${slot.start}|${slot.end}`,
-  }));
+// The actual daily lesson/break timetable is no longer hard-coded here — it's
+// generated from Ayarlar → Ders Saatleri (see utils/scheduleSettings.js,
+// App.jsx's `lessonSlots`/`scheduleSlotOptions`) so a teacher can change the
+// school's start time, lesson length, etc. and have it apply everywhere.
 
 export const homeworkStatusLabels = {
   assigned: "Atandı",

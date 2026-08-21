@@ -6,9 +6,9 @@ import PaginationControls from "../components/PaginationControls";
 import StudentSearch from "../components/StudentSearch";
 
 const STATUS_DAY_CLASSES = {
-  present: "border-emerald-300 bg-emerald-50",
+  present: "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950",
   absent: "border-error/40 bg-error/5",
-  excused: "border-amber-300 bg-amber-50",
+  excused: "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950",
 };
 
 export default function AttendancePage({
@@ -240,7 +240,7 @@ export default function AttendancePage({
             <div className="rounded-lg border border-outline-variant/50 bg-surface-container-low p-4">
               <div className="flex items-center justify-between">
                 <span className="font-label-md text-label-md text-secondary">Mazeretli</span>
-                <span className="font-headline-md text-[20px] text-amber-600">
+                <span className="font-headline-md text-[20px] text-amber-600 dark:text-amber-400">
                   {profile?.attendance_summary?.excused || 0}
                 </span>
               </div>

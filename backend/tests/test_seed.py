@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -6,7 +8,18 @@ from app.core.config import settings
 from app.db import seed as seed_module
 from app.db.base import Base
 from app.db.seed import seed_demo_data
-from app.models import Attendance, Classroom, Grade, Homework, Lesson, ScheduleEntry, Student, Teacher
+from app.models import (
+    AcademicYear,
+    Attendance,
+    Classroom,
+    Grade,
+    Homework,
+    Lesson,
+    ScheduleEntry,
+    Student,
+    Teacher,
+    TeacherAssignment,
+)
 
 
 def test_seed_demo_data_creates_complete_idempotent_demo_dataset() -> None:
@@ -14,10 +27,19 @@ def test_seed_demo_data_creates_complete_idempotent_demo_dataset() -> None:
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
+        # Mirrors what the teacher_assignments migration seeds in real
+        # databases — seed_demo_data expects a current year to already exist.
+        session.add(
+            AcademicYear(label="2026-2027", start_date=date(2026, 9, 1), end_date=date(2027, 6, 30), is_current=True)
+        )
+        session.commit()
+
         seed_demo_data(session)
         seed_demo_data(session)
 
-        assert session.scalar(select(func.count()).select_from(Teacher)) == 1
+        # Eda Ceylan (rehber + Matematik/Turkce) and Ahmet Yılmaz (branş,
+        # Matematik-only) — see seed.py.
+        assert session.scalar(select(func.count()).select_from(Teacher)) == 2
         assert session.scalar(select(func.count()).select_from(Classroom)) == 1
         assert session.scalar(select(func.count()).select_from(Student)) == 3
         assert session.scalar(select(func.count()).select_from(Lesson)) == 2
@@ -25,6 +47,8 @@ def test_seed_demo_data_creates_complete_idempotent_demo_dataset() -> None:
         assert session.scalar(select(func.count()).select_from(Attendance)) == 6
         assert session.scalar(select(func.count()).select_from(ScheduleEntry)) == 3
         assert session.scalar(select(func.count()).select_from(Homework)) == 2
+        # 1 rehber + 2 branş for Eda, 1 branş for Ahmet.
+        assert session.scalar(select(func.count()).select_from(TeacherAssignment)) == 4
 
 
 def test_main_refuses_to_seed_production_without_explicit_opt_in(

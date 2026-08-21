@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
 from app.models import (
+    AcademicYear,
     Attendance,
     AttendanceStatus,
     Classroom,
@@ -21,14 +22,60 @@ from app.models import (
     Student,
     StudentEnrollmentStatus,
     Teacher,
+    TeacherAssignment,
+    TeacherRole,
 )
 
 
 DEMO_TEACHER_EMAIL = "eda@example.com"
 DEMO_TEACHER_PASSWORD = "demo12345"
 
+# A second, branş-only teacher so the TeacherAssignment isolation is actually
+# visible in the demo: Ahmet can grade Matematik in 5-A, but — unlike Eda,
+# who is 5-A's rehber — has no access to 5-A's Türkçe records or roster
+# management.
+DEMO_BRANCH_TEACHER_EMAIL = "ahmet@example.com"
+DEMO_BRANCH_TEACHER_PASSWORD = "demo12345"
+
+
+def _ensure_assignment(
+    db: Session,
+    *,
+    teacher_id: int,
+    classroom_id: int,
+    lesson_id: int | None,
+    academic_year_id: int,
+) -> None:
+    existing = db.scalar(
+        select(TeacherAssignment).where(
+            TeacherAssignment.teacher_id == teacher_id,
+            TeacherAssignment.classroom_id == classroom_id,
+            TeacherAssignment.lesson_id == lesson_id,
+            TeacherAssignment.academic_year_id == academic_year_id,
+        )
+    )
+    if existing is None:
+        db.add(
+            TeacherAssignment(
+                teacher_id=teacher_id,
+                classroom_id=classroom_id,
+                lesson_id=lesson_id,
+                academic_year_id=academic_year_id,
+                is_active=True,
+            )
+        )
+    elif not existing.is_active:
+        existing.is_active = True
+
 
 def seed_demo_data(db: Session) -> None:
+    academic_year = db.scalar(select(AcademicYear).where(AcademicYear.is_current.is_(True)))
+    if academic_year is None:
+        raise RuntimeError(
+            "No current AcademicYear found — run `alembic upgrade head` first "
+            "(the teacher_assignments migration seeds one)."
+        )
+
     teacher = db.scalar(select(Teacher).where(Teacher.email == DEMO_TEACHER_EMAIL))
     if teacher is None:
         teacher = Teacher(
@@ -36,6 +83,7 @@ def seed_demo_data(db: Session) -> None:
             email=DEMO_TEACHER_EMAIL,
             password_hash=hash_password(DEMO_TEACHER_PASSWORD),
             title="Kıdemli Sınıf Öğretmeni",
+            role=TeacherRole.admin,
         )
         db.add(teacher)
         db.flush()
@@ -44,6 +92,8 @@ def seed_demo_data(db: Session) -> None:
             teacher.password_hash = hash_password(DEMO_TEACHER_PASSWORD)
         if not teacher.title:
             teacher.title = "Kıdemli Sınıf Öğretmeni"
+        if teacher.role != TeacherRole.admin:
+            teacher.role = TeacherRole.admin
 
     classroom = db.scalar(
         select(Classroom).where(
@@ -59,6 +109,10 @@ def seed_demo_data(db: Session) -> None:
         )
         db.add(classroom)
         db.flush()
+
+    _ensure_assignment(
+        db, teacher_id=teacher.id, classroom_id=classroom.id, lesson_id=None, academic_year_id=academic_year.id
+    )
 
     students = [
         (
@@ -120,6 +174,35 @@ def seed_demo_data(db: Session) -> None:
             db.add(lesson)
             db.flush()
         lessons.append(lesson)
+        _ensure_assignment(
+            db, teacher_id=teacher.id, classroom_id=classroom.id, lesson_id=lesson.id, academic_year_id=academic_year.id
+        )
+
+    # Second, branş-only teacher: assigned to teach Matematik in the same
+    # 5-A classroom, with no homeroom and no Türkçe access — this is what
+    # makes the isolation actually demonstrable rather than theoretical.
+    branch_teacher = db.scalar(select(Teacher).where(Teacher.email == DEMO_BRANCH_TEACHER_EMAIL))
+    if branch_teacher is None:
+        branch_teacher = Teacher(
+            full_name="Ahmet Yılmaz",
+            email=DEMO_BRANCH_TEACHER_EMAIL,
+            password_hash=hash_password(DEMO_BRANCH_TEACHER_PASSWORD),
+            title="Branş Öğretmeni",
+            branch="Matematik",
+            role=TeacherRole.teacher,
+        )
+        db.add(branch_teacher)
+        db.flush()
+    elif not verify_password(DEMO_BRANCH_TEACHER_PASSWORD, branch_teacher.password_hash):
+        branch_teacher.password_hash = hash_password(DEMO_BRANCH_TEACHER_PASSWORD)
+
+    _ensure_assignment(
+        db,
+        teacher_id=branch_teacher.id,
+        classroom_id=classroom.id,
+        lesson_id=lessons[0].id,  # Matematik
+        academic_year_id=academic_year.id,
+    )
 
     grades = [
         (saved_students[0], lessons[0], "1. Yazili", Decimal("82.50")),

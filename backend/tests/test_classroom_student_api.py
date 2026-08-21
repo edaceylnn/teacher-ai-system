@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Teacher
+from app.models import AcademicYear, Teacher
 
 
 @pytest.fixture()
@@ -23,6 +24,12 @@ def db_session() -> Generator[Session, None, None]:
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
+        # Every environment needs a current AcademicYear for classroom
+        # creation to attach a TeacherAssignment to.
+        session.add(
+            AcademicYear(label="2026-2027", start_date=date(2026, 9, 1), end_date=date(2027, 6, 30), is_current=True)
+        )
+        session.commit()
         yield session
 
     Base.metadata.drop_all(engine)
