@@ -9,10 +9,12 @@ import {
   initialsOf,
   performanceStatus,
 } from "../utils/helpers";
+import { canManageRoster, homeroomClassroomIds, isAdmin } from "../utils/permissions";
 
 export default function StudentsPage({
   classrooms,
   classroomOptions,
+  currentTeacher,
   grades,
   searchTerm,
   selectedStudentId,
@@ -29,6 +31,7 @@ export default function StudentsPage({
   studentDirectoryClassroomId,
   studentDirectoryOffset,
   studentDirectoryPage,
+  teacherAssignments,
   handleDeleteStudent,
 }) {
   const classroomById = useMemo(
@@ -36,6 +39,8 @@ export default function StudentsPage({
     [classrooms],
   );
   const gradesByStudent = useMemo(() => buildGradesByStudent(grades), [grades]);
+  const canAddStudent =
+    isAdmin(currentTeacher) || homeroomClassroomIds(teacherAssignments).size > 0;
 
   return (
     <div className="wide-page">
@@ -46,16 +51,18 @@ export default function StudentsPage({
             Tüm sınıflardaki öğrencilerini yönet ve performanslarını takip et.
           </p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setStudentForm((form) => ({ ...form, classroom_id: studentDirectoryClassroomId || "" }));
-            setActiveModal("student");
-          }}
-          type="button"
-        >
-          <Icon name="person_add" /> Öğrenci Ekle
-        </button>
+        {canAddStudent && (
+          <button
+            className="primary-button"
+            onClick={() => {
+              setStudentForm((form) => ({ ...form, classroom_id: studentDirectoryClassroomId || "" }));
+              setActiveModal("student");
+            }}
+            type="button"
+          >
+            <Icon name="person_add" /> Öğrenci Ekle
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
@@ -118,6 +125,7 @@ export default function StudentsPage({
               {studentDirectoryPage.items.map((student) => {
                 const average = averageOfScores(gradesByStudent.get(student.id) || []);
                 const status = performanceStatus(average);
+                const canManage = canManageRoster(currentTeacher, teacherAssignments, student.classroom_id);
                 return (
                   <tr
                     className={`group cursor-pointer transition-colors hover:bg-surface-bright ${
@@ -166,40 +174,42 @@ export default function StudentsPage({
                       {student.observation_notes || "Yorum girilmedi."}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <span className="row-actions justify-end opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
-                          className="icon-action"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setEditingStudent(student);
-                            setStudentEditForm({
-                              first_name: student.first_name,
-                              last_name: student.last_name,
-                              parent_full_name: student.parent_full_name || "",
-                              parent_phone: student.parent_phone || "",
-                              parent_email: student.parent_email || "",
-                              home_address: student.home_address || "",
-                              observation_notes: student.observation_notes || "",
-                            });
-                            setActiveModal("editStudent");
-                          }}
-                          type="button"
-                        >
-                          <Icon name="edit" />
-                        </button>
-                        <button
-                          aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
-                          className="icon-action danger-action"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleDeleteStudent(student.id);
-                          }}
-                          type="button"
-                        >
-                          <Icon name="delete" />
-                        </button>
-                      </span>
+                      {canManage && (
+                        <span className="row-actions justify-end opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
+                            className="icon-action"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingStudent(student);
+                              setStudentEditForm({
+                                first_name: student.first_name,
+                                last_name: student.last_name,
+                                parent_full_name: student.parent_full_name || "",
+                                parent_phone: student.parent_phone || "",
+                                parent_email: student.parent_email || "",
+                                home_address: student.home_address || "",
+                                observation_notes: student.observation_notes || "",
+                              });
+                              setActiveModal("editStudent");
+                            }}
+                            type="button"
+                          >
+                            <Icon name="edit" />
+                          </button>
+                          <button
+                            aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
+                            className="icon-action danger-action"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteStudent(student.id);
+                            }}
+                            type="button"
+                          >
+                            <Icon name="delete" />
+                          </button>
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );

@@ -62,3 +62,13 @@ export function assignedLessonsForClassroom(assignments, classroomId, lessons) {
 export function isAdmin(teacher) {
   return teacher?.role === "admin";
 }
+
+// Roster management (add/edit/delete a student, change a classroom's own
+// fields) is homeroom-only on the backend (ensure_classroom_homeroom_access)
+// — a subject-only teacher can view the roster but not manage it. Mirrored
+// here so those controls aren't shown to someone who'd just get a 403.
+export function canManageRoster(teacher, assignments, classroomId) {
+  if (isAdmin(teacher)) return true;
+  if (classroomId === null || classroomId === undefined) return false;
+  return homeroomClassroomIds(assignments).has(classroomId);
+}

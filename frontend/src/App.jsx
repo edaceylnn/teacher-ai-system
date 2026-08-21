@@ -1076,6 +1076,8 @@ export default function App() {
     api.logout().catch(() => {});
     setAuthToken(null);
     setCurrentTeacher(null);
+    setError("");
+    setNotice("");
     setClassrooms([]);
     setStudents([]);
     setAllStudents([]);
@@ -1593,6 +1595,7 @@ export default function App() {
                 }
                 placeholder="85"
                 required
+                step="0.1"
                 type="number"
                 value={gradeForm.score}
               />
@@ -1637,6 +1640,7 @@ export default function App() {
                 }
                 placeholder="85"
                 required
+                step="0.1"
                 type="number"
                 value={gradeEditForm.score}
               />

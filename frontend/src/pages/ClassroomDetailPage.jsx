@@ -2,11 +2,13 @@ import Icon from "../components/Icon";
 import PaginationControls from "../components/PaginationControls";
 import StudentSearch from "../components/StudentSearch";
 import StudentTable from "../components/StudentTable";
+import { canManageRoster } from "../utils/permissions";
 
 export default function ClassroomDetailPage(props) {
   const {
     classroomStudentOffset,
     classroomStudentPage,
+    currentTeacher,
     isStudentPickerOpen,
     searchTerm,
     selectedClassroom,
@@ -22,6 +24,7 @@ export default function ClassroomDetailPage(props) {
     setStudentEditForm,
     setStudentForm,
     students,
+    teacherAssignments,
     handleDeleteStudent,
   } = props;
   const filteredClassStudents = students.filter((student) =>
@@ -29,6 +32,7 @@ export default function ClassroomDetailPage(props) {
       .toLocaleLowerCase("tr")
       .includes(searchTerm.toLocaleLowerCase("tr")),
   );
+  const canManage = canManageRoster(currentTeacher, teacherAssignments, selectedClassroom?.id);
 
   return (
     <div className="wide-page">
@@ -49,19 +53,21 @@ export default function ClassroomDetailPage(props) {
             </span>
           </h1>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setStudentForm((form) => ({
-              ...form,
-              classroom_id: selectedClassroom ? String(selectedClassroom.id) : "",
-            }));
-            setActiveModal("student");
-          }}
-          type="button"
-        >
-          <Icon name="person_add" /> Öğrenci Ekle
-        </button>
+        {canManage && (
+          <button
+            className="primary-button"
+            onClick={() => {
+              setStudentForm((form) => ({
+                ...form,
+                classroom_id: selectedClassroom ? String(selectedClassroom.id) : "",
+              }));
+              setActiveModal("student");
+            }}
+            type="button"
+          >
+            <Icon name="person_add" /> Öğrenci Ekle
+          </button>
+        )}
       </div>
 
       <StudentSearch
@@ -75,9 +81,11 @@ export default function ClassroomDetailPage(props) {
         setSelectedStudentId={setSelectedStudentId}
       />
       <StudentTable
+        canManage={canManage}
         handleDeleteStudent={handleDeleteStudent}
         selectedStudentId={selectedStudentId}
         setActiveModal={setActiveModal}
+        setActivePage={setActivePage}
         setEditingStudent={setEditingStudent}
         setSelectedStudentId={setSelectedStudentId}
         setStudentEditForm={setStudentEditForm}

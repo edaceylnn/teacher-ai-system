@@ -2,9 +2,11 @@ import Icon from "./Icon";
 import { enrollmentStatusLabels } from "../utils/helpers";
 
 export default function StudentTable({
+  canManage,
   handleDeleteStudent,
   selectedStudentId,
   setActiveModal,
+  setActivePage,
   setEditingStudent,
   setSelectedStudentId,
   setStudentEditForm,
@@ -30,7 +32,10 @@ export default function StudentTable({
                   student.id === selectedStudentId ? "bg-surface-container-low" : ""
                 }`}
                 key={student.id}
-                onClick={() => setSelectedStudentId(student.id)}
+                onClick={() => {
+                  setSelectedStudentId(student.id);
+                  setActivePage("studentDetail");
+                }}
               >
                 <td className="py-4 px-6 text-secondary">{student.id}</td>
                 <td className="py-4 px-6 font-medium">
@@ -47,40 +52,44 @@ export default function StudentTable({
                   </span>
                 </td>
                 <td className="py-4 px-6 text-right">
-                  <div className="row-actions">
-                    <button
-                      aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
-                      className="icon-action"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingStudent(student);
-                        setStudentEditForm({
-                          first_name: student.first_name,
-                          last_name: student.last_name,
-                          parent_full_name: student.parent_full_name || "",
-                          parent_phone: student.parent_phone || "",
-                          parent_email: student.parent_email || "",
-                          home_address: student.home_address || "",
-                          observation_notes: student.observation_notes || "",
-                        });
-                        setActiveModal("editStudent");
-                      }}
-                      type="button"
-                    >
-                      <Icon name="edit" />
-                    </button>
-                    <button
-                      aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
-                      className="icon-action danger-action"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDeleteStudent(student.id);
-                      }}
-                      type="button"
-                    >
-                      <Icon name="delete" />
-                    </button>
-                  </div>
+                  {canManage ? (
+                    <div className="row-actions">
+                      <button
+                        aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
+                        className="icon-action"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingStudent(student);
+                          setStudentEditForm({
+                            first_name: student.first_name,
+                            last_name: student.last_name,
+                            parent_full_name: student.parent_full_name || "",
+                            parent_phone: student.parent_phone || "",
+                            parent_email: student.parent_email || "",
+                            home_address: student.home_address || "",
+                            observation_notes: student.observation_notes || "",
+                          });
+                          setActiveModal("editStudent");
+                        }}
+                        type="button"
+                      >
+                        <Icon name="edit" />
+                      </button>
+                      <button
+                        aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
+                        className="icon-action danger-action"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteStudent(student.id);
+                        }}
+                        type="button"
+                      >
+                        <Icon name="delete" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="font-body-md text-body-md text-secondary">—</span>
+                  )}
                 </td>
               </tr>
             ))}
