@@ -34,7 +34,7 @@ export default function ClassroomsPage(props) {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">Sınıflarım</h1>
-          <p className="mt-1 font-body-md text-body-md text-on-surface-variant">
+          <p className="mt-1 font-body-md text-body-md text-secondary">
             Aktif dönemdeki tüm sınıflarını buradan yönetebilirsin.
           </p>
         </div>
@@ -42,7 +42,7 @@ export default function ClassroomsPage(props) {
           <div className="relative">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-outline" />
             <input
-              className="rounded-full border border-outline-variant bg-surface-container-lowest py-2 pl-9 pr-4 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary"
+              className="filter-input"
               onChange={(event) => setClassroomSearchTerm(event.target.value)}
               placeholder="Sınıf ara"
               type="text"
@@ -50,7 +50,7 @@ export default function ClassroomsPage(props) {
             />
           </div>
           <select
-            className="cursor-pointer rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 font-label-md text-label-md text-on-surface outline-none focus:border-primary"
+            className="filter-select"
             onChange={(event) => setClassroomGradeFilter(event.target.value)}
             value={classroomGradeFilter}
           >

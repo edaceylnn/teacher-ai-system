@@ -25,6 +25,7 @@ export default function StudentsPage({
   setStudentDirectoryClassroomId,
   setStudentDirectoryOffset,
   setStudentEditForm,
+  setStudentForm,
   studentDirectoryClassroomId,
   studentDirectoryOffset,
   studentDirectoryPage,
@@ -38,25 +39,30 @@ export default function StudentsPage({
 
   return (
     <div className="wide-page">
-      <section className="flex flex-col items-start justify-between gap-4 rounded-lg border border-outline-variant bg-surface p-6 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <h1 className="font-headline-lg text-headline-lg-mobile text-on-surface md:text-headline-lg">
-            Öğrencilerim
-          </h1>
+          <h1 className="font-headline-lg text-headline-lg text-on-surface">Öğrencilerim</h1>
           <p className="mt-1 font-body-md text-body-md text-secondary">
             Tüm sınıflardaki öğrencilerini yönet ve performanslarını takip et.
           </p>
         </div>
-        <button className="primary-button" onClick={() => setActiveModal("student")} type="button">
+        <button
+          className="primary-button"
+          onClick={() => {
+            setStudentForm((form) => ({ ...form, classroom_id: studentDirectoryClassroomId || "" }));
+            setActiveModal("student");
+          }}
+          type="button"
+        >
           <Icon name="person_add" /> Öğrenci Ekle
         </button>
-      </section>
+      </div>
 
       <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
         <div className="relative w-full sm:w-80">
           <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-outline" />
           <input
-            className="w-full rounded border border-outline-variant bg-surface py-2 pl-9 pr-4 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+            className="filter-input w-full"
             onChange={(event) => {
               setStudentDirectoryOffset(0);
               setSearchTerm(event.target.value);
@@ -80,7 +86,7 @@ export default function StudentsPage({
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
           <select
-            className="flex-1 rounded border border-outline-variant bg-surface px-3 py-2 font-body-md text-body-md text-on-surface outline-none focus:border-primary sm:w-40"
+            className="filter-select flex-1 sm:w-40"
             onChange={(event) => setStudentDirectoryClassroomId(event.target.value)}
             value={studentDirectoryClassroomId}
           >

@@ -81,7 +81,12 @@ export default function AttendancePage({
 
   return (
     <div className="wide-page">
-      <h1 className="font-headline-lg text-headline-lg text-on-surface">Devamsızlık Takibi</h1>
+      <div>
+        <h1 className="font-headline-lg text-headline-lg text-on-surface">Devamsızlık Takibi</h1>
+        <p className="mt-1 font-body-md text-body-md text-secondary">
+          Öğrenci devamsızlıklarını takvim üzerinden gir ve takip et.
+        </p>
+      </div>
 
       <div className="flex flex-col gap-card-gap lg:flex-row">
         <div className="flex flex-1 flex-col gap-card-gap">

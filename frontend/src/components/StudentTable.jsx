@@ -47,7 +47,7 @@ export default function StudentTable({
                   </span>
                 </td>
                 <td className="py-4 px-6 text-right">
-                  <div className="row-actions opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="row-actions">
                     <button
                       aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
                       className="icon-action"

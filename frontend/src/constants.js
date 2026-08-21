@@ -57,6 +57,7 @@ export const gradeLevelOptions = Array.from({ length: 12 }, (_, index) =>
 export const sectionOptions = ["A", "B", "C", "D", "E", "F"];
 
 export const emptyStudentForm = {
+  classroom_id: "",
   first_name: "",
   last_name: "",
   parent_full_name: "",

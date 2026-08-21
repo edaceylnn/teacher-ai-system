@@ -129,6 +129,28 @@
   body {
     @apply bg-background text-on-background font-body-md text-body-md antialiased transition-colors duration-150;
   }
+
+  /* Native <select> dropdown arrow, defined once so every select in the
+   * project (current and future) gets the same right-hand spacing instead of
+   * relying on each browser's own inconsistent native arrow inset. Only the
+   * arrow's position changes here — box size/color/border come from
+   * whatever classes (e.g. .filter-select) are applied to the element. */
+  /* !important on the arrow-only properties is deliberate: a class like
+   * .filter-select's `px-4` has higher specificity than a bare element
+   * selector and would otherwise silently win and re-break this spacing —
+   * this way the rule truly stays single-source-of-truth no matter what
+   * padding/utility classes a select picks up now or later. */
+  select {
+    appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%239498A5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 16px center !important;
+    background-size: 20px !important;
+    padding-right: 2.75rem !important;
+  }
+  .dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%23808496' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  }
 }
 
 @layer components {
@@ -181,6 +203,16 @@
   }
   .wide-page {
     @apply mx-auto flex w-full max-w-7xl flex-col gap-card-gap;
+  }
+
+  /* List-page filter bar (search input + dropdown used to filter a list
+     page's records, e.g. Sınıflarım/Öğrencilerim). Single source of truth so
+     a style change here applies to every page's filter bar at once. */
+  .filter-input {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest py-2 pl-9 pr-4 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary;
+  }
+  .filter-select {
+    @apply cursor-pointer rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary;
   }
   .empty-note {
     @apply p-4 text-center font-body-md text-body-md text-secondary;

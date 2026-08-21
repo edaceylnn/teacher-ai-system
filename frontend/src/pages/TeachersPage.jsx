@@ -9,7 +9,7 @@ export default function TeachersPage({
 }) {
   return (
     <div className="wide-page">
-      <section className="hero-card">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">Öğretmenler</h1>
           <p className="mt-1 font-body-md text-body-md text-secondary">
@@ -26,7 +26,7 @@ export default function TeachersPage({
         >
           <Icon name="add" /> Ders / Sınıf Ata
         </button>
-      </section>
+      </div>
 
       <section className="card overflow-hidden">
         <div className="overflow-x-auto">

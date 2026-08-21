@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import EmptyState from "../components/EmptyState";
 import Icon from "../components/Icon";
 import Insight from "../components/Insight";
@@ -212,19 +212,33 @@ export default function DashboardPage({
     ? `${linePath} L${chartPoints[chartPoints.length - 1].x.toFixed(1)} ${(chartPadding.top + plotHeight).toFixed(1)} L${chartPoints[0].x.toFixed(1)} ${(chartPadding.top + plotHeight).toFixed(1)} Z`
     : "";
   const chartGridLines = [0, 25, 50, 75, 100];
+  const attentionSectionRef = useRef(null);
+
+  function scrollToAttentionSection() {
+    attentionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="wide-page">
+      <div>
+        <h1 className="font-headline-lg text-headline-lg text-on-surface">Kontrol Paneli</h1>
+        <p className="mt-1 font-body-md text-body-md text-secondary">
+          Sınıflarının ve öğrencilerinin genel durumuna göz at.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 gap-card-gap md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon="groups"
           label="Toplam Öğrenci"
+          onClick={() => setActivePage("students")}
           trend={`${classrooms.length} sınıf`}
           value={studentsForAnalysis.length}
         />
         <StatCard
           icon="priority_high"
           label="Riskli Öğrenci"
+          onClick={scrollToAttentionSection}
           trend={riskStudents.length ? "Takip önerilir" : "Risk görünmüyor"}
           trendDirection={riskStudents.length ? "down" : "up"}
           value={riskStudents.length}
@@ -232,12 +246,14 @@ export default function DashboardPage({
         <StatCard
           icon="analytics"
           label="Sınıf Ortalaması"
+          onClick={() => setActivePage("gradebook")}
           trend={`${grades.length} not kaydı`}
           value={overallAverage}
         />
         <StatCard
           icon="auto_awesome"
           label="AI Bekleyen"
+          onClick={() => setActivePage("aiReports")}
           trend="Rapor veya veli mesajı eksik"
           value={aiPendingStudents.length}
         />
@@ -310,7 +326,7 @@ export default function DashboardPage({
             )}
           </section>
 
-          <section className="card overflow-hidden">
+          <section className="card overflow-hidden" ref={attentionSectionRef}>
             <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
               <h2>Dikkat Gerektiren Öğrenciler</h2>
               <span className="analysis-chip">{attentionStudents.length} kayıt</span>

@@ -1,14 +1,21 @@
 import Icon from "./Icon";
 
-export default function StatCard({ icon, label, trend, trendDirection, value }) {
+export default function StatCard({ icon, label, onClick, trend, trendDirection, value }) {
   const trendIcon =
     trendDirection === "up"
       ? "trending_up"
       : trendDirection === "down"
         ? "trending_down"
         : null;
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="stat-card">
+    <Wrapper
+      className={`stat-card text-left ${
+        onClick ? "cursor-pointer transition-all duration-200 hover:border-primary/50 hover:shadow-sm" : ""
+      }`}
+      onClick={onClick}
+      type={onClick ? "button" : undefined}
+    >
       <div className="stat-card-head">
         <span>{label}</span>
         <Icon name={icon} />
@@ -22,6 +29,6 @@ export default function StatCard({ icon, label, trend, trendDirection, value }) 
         )}
         {trend}
       </small>
-    </div>
+    </Wrapper>
   );
 }

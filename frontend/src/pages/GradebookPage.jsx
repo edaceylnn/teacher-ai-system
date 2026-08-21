@@ -95,8 +95,8 @@ export default function GradebookPage({
     <div className="wide-page">
       <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <h1 className="font-display-lg text-display-lg text-on-surface">Not Defteri</h1>
-          <p className="font-body-lg text-body-lg text-secondary">
+          <h1 className="font-headline-lg text-headline-lg text-on-surface">Not Defteri</h1>
+          <p className="mt-1 font-body-md text-body-md text-secondary">
             Öğrenci ders notlarını ve sınıf performansını takip et.
           </p>
         </div>
@@ -118,7 +118,7 @@ export default function GradebookPage({
       <div className="grid grid-cols-1 gap-card-gap lg:grid-cols-12">
         <div className="flex flex-col gap-card-gap lg:col-span-8">
           <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface p-6">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
               <div>
                 <h2>Sınıf Ortalamaları</h2>
                 <p className="section-subtext">
@@ -175,7 +175,7 @@ export default function GradebookPage({
           </section>
 
           <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface p-6">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
               <h2>
                 {selectedStudent
                   ? `${selectedStudent.first_name} ${selectedStudent.last_name} — Not Kayıtları`
@@ -254,7 +254,7 @@ export default function GradebookPage({
 
         <div className="flex flex-col gap-card-gap lg:col-span-4">
           <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface p-6">
+            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
               <h2>Aktif Dersler</h2>
               <button className="outline-button compact" onClick={() => setActiveModal("lesson")} type="button">
                 <Icon name="add" /> Ders Ekle

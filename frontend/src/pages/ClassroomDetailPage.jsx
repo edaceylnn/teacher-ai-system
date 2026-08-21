@@ -20,6 +20,7 @@ export default function ClassroomDetailPage(props) {
     setSearchTerm,
     setSelectedStudentId,
     setStudentEditForm,
+    setStudentForm,
     students,
     handleDeleteStudent,
   } = props;
@@ -48,7 +49,17 @@ export default function ClassroomDetailPage(props) {
             </span>
           </h1>
         </div>
-        <button className="primary-button" onClick={() => setActiveModal("student")} type="button">
+        <button
+          className="primary-button"
+          onClick={() => {
+            setStudentForm((form) => ({
+              ...form,
+              classroom_id: selectedClassroom ? String(selectedClassroom.id) : "",
+            }));
+            setActiveModal("student");
+          }}
+          type="button"
+        >
           <Icon name="person_add" /> Öğrenci Ekle
         </button>
       </div>

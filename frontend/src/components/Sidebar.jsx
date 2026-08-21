@@ -15,8 +15,6 @@ export default function Sidebar({
   isAdminUser,
   isMobileOpen,
   onCloseMobile,
-  onLogout,
-  setActiveModal,
   setActivePage,
 }) {
   const navItems = isAdminUser
@@ -71,16 +69,7 @@ export default function Sidebar({
           })}
         </nav>
 
-        <button
-          className="mb-6 mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 px-4 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container"
-          onClick={() => setActiveModal("classroom")}
-          type="button"
-        >
-          <Icon name="add" />
-          Sınıf Ekle
-        </button>
-
-        <div className="flex flex-col gap-1 border-t border-outline-variant pt-4">
+        <div className="mt-4 flex flex-col gap-1 border-t border-outline-variant pt-4">
           <button
             className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors ${
               activePage === "settings"
@@ -92,22 +81,6 @@ export default function Sidebar({
           >
             <Icon filled={activePage === "settings"} name="settings" />
             Ayarlar
-          </button>
-          <button
-            className="flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low"
-            onClick={() => setActivePage("profile")}
-            type="button"
-          >
-            <Icon name="account_circle" />
-            Profil
-          </button>
-          <button
-            className="flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low"
-            onClick={onLogout}
-            type="button"
-          >
-            <Icon name="logout" />
-            Çıkış Yap
           </button>
         </div>
       </aside>

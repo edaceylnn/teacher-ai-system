@@ -333,11 +333,12 @@ export default function App() {
     setIsLoading(true);
     setError("");
     try {
-      const [classroomData, lessonData, gradeData, assignmentData] = await Promise.all([
+      const [classroomData, lessonData, gradeData, assignmentData, teachersData] = await Promise.all([
         api.listClassrooms(teacherId),
         api.listLessons(teacherId),
         api.listGrades(),
         api.listTeacherAssignments(teacherId),
+        api.listTeachers(),
       ]);
       const studentPages = await Promise.all(
         classroomData.map((classroom) =>
@@ -361,6 +362,7 @@ export default function App() {
       setAiOutputsByStudent(Object.fromEntries(aiOutputEntries));
       setLessons(lessonData);
       setTeacherAssignments(assignmentData);
+      setTeachersAdminList(teachersData);
       setGrades(gradeData);
       const schedulePage = await api.listScheduleEntriesPage(teacherId, {
         limit: 500,
@@ -642,9 +644,10 @@ export default function App() {
   async function handleCreateStudent(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!selectedClassroomId) throw new Error("Önce bir sınıf seçmelisin.");
+      const classroomId = Number(studentForm.classroom_id) || null;
+      if (!classroomId) throw new Error("Bir sınıf seçmelisin.");
       const created = await api.createStudent({
-        classroom_id: selectedClassroomId,
+        classroom_id: classroomId,
         first_name: studentForm.first_name.trim(),
         last_name: studentForm.last_name.trim(),
         parent_full_name: studentForm.parent_full_name.trim() || null,
@@ -653,16 +656,20 @@ export default function App() {
         home_address: studentForm.home_address.trim() || null,
         observation_notes: null,
       });
-      setStudents((current) => [...current, created]);
       setAllStudents((current) => [...current, created]);
+      if (classroomId === selectedClassroomId) {
+        setStudents((current) => [...current, created]);
+      }
       setClassroomStudentCounts((current) => ({
         ...current,
-        [selectedClassroomId]: (current[selectedClassroomId] || 0) + 1,
+        [classroomId]: (current[classroomId] || 0) + 1,
       }));
       setStudentForm(emptyStudentForm);
       setSelectedStudentId(created.id);
       setActiveModal(null);
-      await loadClassroomStudentPage();
+      if (classroomId === selectedClassroomId) {
+        await loadClassroomStudentPage();
+      }
       await loadStudentDirectoryPage();
       showNotice("Öğrenci eklendi.");
     });
@@ -1191,6 +1198,7 @@ export default function App() {
     setStudentDirectoryClassroomId,
     setStudentDirectoryOffset,
     setStudentEditForm,
+    setStudentForm,
     students,
     scheduleEntries,
     scheduleForm,
@@ -1238,8 +1246,6 @@ export default function App() {
         isAdminUser={isAdminUser}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
-        onLogout={handleLogout}
-        setActiveModal={setActiveModal}
         setActivePage={(page) => {
           setActivePage(page);
           setIsMobileNavOpen(false);
@@ -1247,11 +1253,16 @@ export default function App() {
       />
       <div className="app-content-shell flex min-h-screen flex-col md:ml-[240px]">
         <Topbar
+          allStudents={allStudents}
+          classrooms={classrooms}
           currentTeacher={currentTeacher}
           onLogout={handleLogout}
           onToggleMobileNav={() => setIsMobileNavOpen((current) => !current)}
           onToggleTheme={toggleTheme}
           setActivePage={setActivePage}
+          setSelectedClassroomId={setSelectedClassroomId}
+          setSelectedStudentId={setSelectedStudentId}
+          teachersAdminList={teachersAdminList}
           theme={theme}
         />
 
@@ -1343,6 +1354,15 @@ export default function App() {
           )}
           {activeModal === "student" && (
             <FormPanel title="Öğrenci Ekle" onSubmit={handleCreateStudent}>
+              <SearchableSelect
+                label="Sınıf"
+                onChange={(value) =>
+                  setStudentForm((form) => ({ ...form, classroom_id: value }))
+                }
+                options={classroomOptions}
+                placeholder="Sınıf ara"
+                value={studentForm.classroom_id}
+              />
               <input
                 onChange={(event) =>
                   setStudentForm((form) => ({
