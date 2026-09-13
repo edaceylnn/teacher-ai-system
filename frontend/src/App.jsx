@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, setAuthToken } from "./api";
-import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeLevelOptions, homeworkStatusOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
-import { buildClassroomName, scheduleSlotValue, splitScheduleSlot } from "./utils/helpers";
+import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeCategoryLabels, gradeCategoryOptions, gradeLevelOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
+import { buildClassroomName, formatLocalDate, scheduleSlotValue, splitScheduleSlot } from "./utils/helpers";
 import { buildLessonSlots, loadStoredScheduleSettings, persistScheduleSettings, validateScheduleSettings } from "./utils/scheduleSettings";
 import { assignedLessonsForClassroom, isAdmin as isAdminTeacher } from "./utils/permissions";
 import AIReportsPage from "./pages/AIReportsPage";
@@ -11,6 +11,8 @@ import ClassroomsPage from "./pages/ClassroomsPage";
 import DashboardPage from "./pages/DashboardPage";
 import FormPanel from "./components/FormPanel";
 import GradebookPage from "./pages/GradebookPage";
+import Icon from "./components/Icon";
+import HomeworkPage from "./pages/HomeworkPage";
 import LoginPage from "./pages/LoginPage";
 import Modal from "./components/Modal";
 import ProfilePage from "./pages/ProfilePage";
@@ -71,28 +73,12 @@ export default function App() {
   const [lessons, setLessons] = useState([]);
   const [teacherAssignments, setTeacherAssignments] = useState([]);
   const [grades, setGrades] = useState([]);
-  const [gradeRecordPage, setGradeRecordPage] = useState({
-    items: [],
-    total: 0,
-    limit: TABLE_PAGE_SIZE,
-    offset: 0,
-  });
-  const [gradeRecordOffset, setGradeRecordOffset] = useState(0);
-  const [attendanceRecordPage, setAttendanceRecordPage] = useState({
-    items: [],
-    total: 0,
-    limit: TABLE_PAGE_SIZE,
-    offset: 0,
-  });
-  const [attendanceRecordOffset, setAttendanceRecordOffset] = useState(0);
+  const [activeAttendanceSession, setActiveAttendanceSession] = useState(null);
+  const [attendanceRecordsDraft, setAttendanceRecordsDraft] = useState({});
+  const [isLoadingAttendanceRecords, setIsLoadingAttendanceRecords] = useState(false);
+  const [isSavingAttendanceRecords, setIsSavingAttendanceRecords] = useState(false);
+  const [quickActionEntry, setQuickActionEntry] = useState(null);
   const [scheduleEntries, setScheduleEntries] = useState([]);
-  const [homeworkPage, setHomeworkPage] = useState({
-    items: [],
-    total: 0,
-    limit: TABLE_PAGE_SIZE,
-    offset: 0,
-  });
-  const [homeworkOffset, setHomeworkOffset] = useState(0);
   const [teachersAdminList, setTeachersAdminList] = useState([]);
   const [assignmentForm, setAssignmentForm] = useState({
     teacher_id: "",
@@ -131,23 +117,27 @@ export default function App() {
     lesson_id: "",
     exam_name: "",
     score: "",
+    category: "sinav",
   });
-  const [gradeEditForm, setGradeEditForm] = useState({
+  const [assessments, setAssessments] = useState([]);
+  const [assessmentForm, setAssessmentForm] = useState({
+    classroom_id: "",
     lesson_id: "",
-    exam_name: "",
-    score: "",
-  });
-  const [editingGrade, setEditingGrade] = useState(null);
-  const [attendanceForm, setAttendanceForm] = useState({
-    student_id: "",
+    assessment_type: "sinav",
+    title: "",
+    description: "",
     date: "",
-    status: "present",
   });
-  const [attendanceEditForm, setAttendanceEditForm] = useState({
+  const [assessmentEditForm, setAssessmentEditForm] = useState({
+    title: "",
+    description: "",
     date: "",
-    status: "present",
   });
-  const [editingAttendance, setEditingAttendance] = useState(null);
+  const [editingAssessment, setEditingAssessment] = useState(null);
+  const [activeAssessmentId, setActiveAssessmentId] = useState(null);
+  const [assessmentRecordsDraft, setAssessmentRecordsDraft] = useState({});
+  const [isLoadingAssessmentRecords, setIsLoadingAssessmentRecords] = useState(false);
+  const [isSavingAssessmentRecords, setIsSavingAssessmentRecords] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     classroom_id: "",
     lesson_id: "",
@@ -157,15 +147,6 @@ export default function App() {
     location: "",
   });
   const [editingScheduleEntry, setEditingScheduleEntry] = useState(null);
-  const [homeworkForm, setHomeworkForm] = useState({
-    classroom_id: "",
-    lesson_id: "",
-    title: "",
-    description: "",
-    due_date: "",
-    status: "assigned",
-  });
-  const [editingHomework, setEditingHomework] = useState(null);
   const [scheduleSettings, setScheduleSettings] = useState(() => loadStoredScheduleSettings());
 
   useEffect(() => {
@@ -279,19 +260,6 @@ export default function App() {
       })),
     [teacherAssignments, lessons],
   );
-  const attendanceStatusOptions = [
-    { label: "Var", value: "present" },
-    { label: "Yok", value: "absent" },
-    { label: "Mazeretli", value: "excused" },
-  ];
-  const isGradeStudentLocked =
-    activeModal === "grade" &&
-    activePage === "studentDetail" &&
-    selectedStudentId;
-  const isAttendanceStudentLocked =
-    activeModal === "attendance" &&
-    activePage === "studentDetail" &&
-    selectedStudentId;
   const teacherId = currentTeacher?.id || DEMO_TEACHER_ID;
 
   useEffect(() => {
@@ -450,33 +418,135 @@ export default function App() {
     setGrades(await api.listGrades());
   }
 
-  async function loadGradeRecordPage() {
-    const page = await api.listGradesPage({
-      classroomId: selectedClassroomId,
-      studentId: selectedStudentId,
-      limit: TABLE_PAGE_SIZE,
-      offset: gradeRecordOffset,
-    });
-    setGradeRecordPage(page);
+  async function loadAssessments() {
+    if (!selectedClassroomId) {
+      setAssessments([]);
+      return;
+    }
+    setAssessments(await api.listAssessments({ classroomId: selectedClassroomId, limit: 500, offset: 0 }));
   }
 
-  async function loadAttendanceRecordPage() {
-    if (!selectedStudentId) {
-      setAttendanceRecordPage({
-        items: [],
-        total: 0,
-        limit: TABLE_PAGE_SIZE,
+  async function loadAttendanceSessionRecords(sessionId) {
+    setIsLoadingAttendanceRecords(true);
+    try {
+      const records = await api.listAttendanceSessionRecords(sessionId);
+      const byStudentId = new Map(records.map((record) => [record.student_id, record]));
+      const draft = {};
+      students.forEach((student) => {
+        draft[student.id] = { status: byStudentId.get(student.id)?.status || null };
+      });
+      setAttendanceRecordsDraft(draft);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoadingAttendanceRecords(false);
+    }
+  }
+
+  // Tasarım gereği burada tutulan handler ileride Ders Programı'ndaki bir
+  // ders slotuna tıklanınca da (schedule_entry_id vererek) çağrılabilecek
+  // şekilde bağımsız parametrelerle çalışır — sayfa state'ine bağımlı değil.
+  async function openOrCreateAttendanceSession({ classroomId, lessonId, date, scheduleEntryId, startTime }) {
+    await runAction(async () => {
+      const existingSessions = await api.listAttendanceSessions({
+        classroomId,
+        lessonId,
+        date,
+        limit: 50,
         offset: 0,
+      });
+      const session =
+        (scheduleEntryId
+          ? existingSessions.find((item) => item.schedule_entry_id === scheduleEntryId)
+          : existingSessions[0]) ||
+        (await api.createAttendanceSession({
+          classroom_id: classroomId,
+          lesson_id: lessonId,
+          date,
+          schedule_entry_id: scheduleEntryId || null,
+          start_time: startTime || null,
+        }));
+      setActiveAttendanceSession(session);
+      await loadAttendanceSessionRecords(session.id);
+    });
+  }
+
+  function closeAttendanceSession() {
+    setActiveAttendanceSession(null);
+    setAttendanceRecordsDraft({});
+  }
+
+  function handleMarkAllPresent() {
+    setAttendanceRecordsDraft((draft) => {
+      const next = { ...draft };
+      students.forEach((student) => {
+        next[student.id] = { status: "present" };
+      });
+      return next;
+    });
+  }
+
+  async function handleSaveAttendanceRecords() {
+    if (!activeAttendanceSession) return;
+    const unmarked = students.filter((student) => !attendanceRecordsDraft[student.id]?.status);
+    if (unmarked.length) {
+      setError(
+        `${unmarked.length} öğrenci için durum seçilmedi: ${unmarked
+          .map((student) => `${student.first_name} ${student.last_name}`)
+          .join(", ")}`,
+      );
+      return;
+    }
+    setIsSavingAttendanceRecords(true);
+    await runAction(async () => {
+      const records = students.map((student) => ({
+        student_id: student.id,
+        status: attendanceRecordsDraft[student.id].status,
+      }));
+      await api.bulkUpsertAttendanceSessionRecords(activeAttendanceSession.id, records);
+      showNotice("Yoklama kaydedildi.");
+    });
+    setIsSavingAttendanceRecords(false);
+  }
+
+  // Ders Programı'ndaki bir ders slotunun hızlı işlem menüsünden (Yoklama
+  // Al / Değerlendirme Gir / Ödev Ver / Ders İçi Performans Gir) çağrılır —
+  // hepsi mevcut Not Defteri/Ödevler/Devamsızlık akışlarını, o ScheduleEntry
+  // context'iyle (sınıf, ders, saat) önceden doldurarak reuse eder; yeni bir
+  // state/veri modeli oluşturmaz.
+  function handleScheduleQuickAction(entry, action) {
+    setActiveModal(null);
+    setQuickActionEntry(null);
+    const dateValue = formatLocalDate(new Date());
+
+    if (action === "attendance") {
+      setSelectedClassroomId(entry.classroom_id);
+      setActivePage("attendance");
+      openOrCreateAttendanceSession({
+        classroomId: entry.classroom_id,
+        lessonId: entry.lesson_id,
+        date: dateValue,
+        scheduleEntryId: entry.id,
+        startTime: entry.start_time.slice(0, 5),
       });
       return;
     }
 
-    const page = await api.listAttendancePage({
-      studentId: selectedStudentId,
-      limit: TABLE_PAGE_SIZE,
-      offset: attendanceRecordOffset,
-    });
-    setAttendanceRecordPage(page);
+    const typeByAction = {
+      assessment: "sinav",
+      homework: "odev",
+      performance: "ders_ici_performans",
+    };
+    setAssessmentForm((form) => ({
+      ...form,
+      classroom_id: String(entry.classroom_id),
+      lesson_id: String(entry.lesson_id),
+      assessment_type: typeByAction[action],
+      title: "",
+      description: "",
+      date: dateValue,
+    }));
+    setActiveModal(action === "assessment" ? "newAssessment" : "newHomework");
   }
 
   async function loadScheduleEntries() {
@@ -487,14 +557,6 @@ export default function App() {
     setScheduleEntries(page.items);
   }
 
-  async function loadHomeworkPage() {
-    const page = await api.listHomeworksPage(teacherId, {
-      limit: TABLE_PAGE_SIZE,
-      offset: homeworkOffset,
-    });
-    setHomeworkPage(page);
-  }
-
   async function loadTeachersAdminList() {
     setTeachersAdminList(await api.listTeachers());
   }
@@ -502,24 +564,31 @@ export default function App() {
   useEffect(() => {
     if (!currentTeacher) return;
     loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeacher]);
 
   useEffect(() => {
     loadStudents(selectedClassroomId).catch((err) => setError(err.message));
     setClassroomStudentOffset(0);
-    setGradeRecordOffset(0);
     setSearchTerm("");
   }, [selectedClassroomId]);
 
   useEffect(() => {
-    setAttendanceRecordOffset(0);
-    setGradeRecordOffset(0);
+    if (!selectedStudentId) {
+      loadProfile(null).catch((err) => setError(err.message));
+      return;
+    }
+    // Not Defteri/Ödevler/Devamsızlık'ta yapılan değişiklikler bu sayfaya
+    // dönüldüğünde görünsün diye selectedStudentId aynı kalsa bile Öğrenci
+    // Detay'a her girişte profili tazele.
+    if (activePage !== "studentDetail") return;
     loadProfile(selectedStudentId).catch((err) => setError(err.message));
-  }, [selectedStudentId]);
+  }, [selectedStudentId, activePage]);
 
   useEffect(() => {
     if (activePage !== "students") return;
     loadStudentDirectoryPage().catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, searchTerm, studentDirectoryOffset, studentDirectoryClassroomId]);
 
   useEffect(() => {
@@ -529,27 +598,28 @@ export default function App() {
   useEffect(() => {
     if (activePage !== "classroomDetail") return;
     loadClassroomStudentPage().catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, selectedClassroomId, classroomStudentOffset]);
 
   useEffect(() => {
-    if (activePage !== "gradebook") return;
-    loadGradeRecordPage().catch((err) => setError(err.message));
-  }, [activePage, selectedClassroomId, selectedStudentId, gradeRecordOffset]);
+    if (activePage !== "gradebook" && activePage !== "homework") return;
+    setActiveAssessmentId(null);
+    setAssessmentRecordsDraft({});
+    loadAssessments().catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, selectedClassroomId]);
 
   useEffect(() => {
     if (activePage !== "attendance") return;
-    loadAttendanceRecordPage().catch((err) => setError(err.message));
-  }, [activePage, selectedStudentId, attendanceRecordOffset]);
+    setActiveAttendanceSession(null);
+    setAttendanceRecordsDraft({});
+  }, [activePage, selectedClassroomId]);
 
   useEffect(() => {
     if (activePage !== "schedule") return;
     loadScheduleEntries().catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage]);
-
-  useEffect(() => {
-    if (activePage !== "homework") return;
-    loadHomeworkPage().catch((err) => setError(err.message));
-  }, [activePage, homeworkOffset]);
 
   useEffect(() => {
     if (activePage !== "teachers" || !isAdminUser) return;
@@ -790,107 +860,125 @@ export default function App() {
   async function handleCreateGrade(event) {
     event.preventDefault();
     await runAction(async () => {
-      const studentId = isGradeStudentLocked
-        ? selectedStudentId
-        : Number(gradeForm.student_id);
+      const studentId = Number(gradeForm.student_id);
       if (!studentId) throw new Error("Önce bir öğrenci seçmelisin.");
       await api.createGrade({
         student_id: studentId,
         lesson_id: Number(gradeForm.lesson_id),
         exam_name: gradeForm.exam_name.trim(),
         score: gradeForm.score,
+        category: gradeForm.category,
       });
-      setGradeForm({ student_id: "", lesson_id: "", exam_name: "", score: "" });
+      setGradeForm({ student_id: "", lesson_id: "", exam_name: "", score: "", category: "sinav" });
       setActiveModal(null);
       setSelectedStudentId(studentId);
       await loadGrades();
-      await loadGradeRecordPage();
       await loadProfile(studentId);
       showNotice("Not kaydedildi.");
     });
   }
 
-  async function handleUpdateGrade(event) {
+  async function handleCreateAssessment(event) {
     event.preventDefault();
     await runAction(async () => {
-      if (!editingGrade) throw new Error("Düzenlenecek not bulunamadı.");
-      await api.updateGrade(editingGrade.id, {
-        lesson_id: Number(gradeEditForm.lesson_id),
-        exam_name: gradeEditForm.exam_name.trim(),
-        score: gradeEditForm.score,
+      const created = await api.createAssessment({
+        classroom_id: Number(assessmentForm.classroom_id),
+        lesson_id: Number(assessmentForm.lesson_id),
+        assessment_type: assessmentForm.assessment_type,
+        title: assessmentForm.title.trim(),
+        description: assessmentForm.description.trim() || null,
+        date: assessmentForm.date,
       });
-      setGradeEditForm({ lesson_id: "", exam_name: "", score: "" });
-      setEditingGrade(null);
+      setAssessmentForm((form) => ({
+        ...form,
+        lesson_id: "",
+        title: "",
+        description: "",
+        date: "",
+      }));
       setActiveModal(null);
-      await loadGrades();
-      await loadGradeRecordPage();
-      if (selectedStudentId) await loadProfile(selectedStudentId);
-      showNotice("Not güncellendi.");
+      await loadAssessments();
+      await openAssessmentForEntry(created);
+      showNotice("Değerlendirme oluşturuldu.");
     });
   }
 
-  async function handleDeleteGrade(gradeId) {
+  async function handleUpdateAssessment(event) {
+    event.preventDefault();
     await runAction(async () => {
-      const shouldDelete = window.confirm("Bu not silinsin mi?");
+      if (!editingAssessment) throw new Error("Düzenlenecek değerlendirme bulunamadı.");
+      // Sınıf/ders/tür değiştirilemez — kayıtlar bu üçlüye göre girildiği
+      // için değişmesi mevcut öğrenci sonuçlarını anlamsız kılar.
+      await api.updateAssessment(editingAssessment.id, {
+        title: assessmentEditForm.title.trim(),
+        description: assessmentEditForm.description.trim() || null,
+        date: assessmentEditForm.date,
+      });
+      setEditingAssessment(null);
+      setActiveModal(null);
+      await loadAssessments();
+      showNotice("Değerlendirme güncellendi.");
+    });
+  }
+
+  async function handleDeleteAssessment(assessmentId) {
+    await runAction(async () => {
+      const shouldDelete = window.confirm("Bu değerlendirme ve tüm öğrenci kayıtları silinsin mi?");
       if (!shouldDelete) return;
 
-      await api.deleteGrade(gradeId);
-      await loadGrades();
-      await loadGradeRecordPage();
-      if (selectedStudentId) await loadProfile(selectedStudentId);
-      showNotice("Not silindi.");
+      await api.deleteAssessment(assessmentId);
+      if (activeAssessmentId === assessmentId) {
+        setActiveAssessmentId(null);
+        setAssessmentRecordsDraft({});
+      }
+      await loadAssessments();
+      showNotice("Değerlendirme silindi.");
     });
   }
 
-  async function handleCreateAttendance(event) {
-    event.preventDefault();
-    await runAction(async () => {
-      const studentId = isAttendanceStudentLocked
-        ? selectedStudentId
-        : Number(attendanceForm.student_id);
-      if (!studentId) throw new Error("Önce bir öğrenci seçmelisin.");
-      await api.createAttendance({
-        student_id: studentId,
-        date: attendanceForm.date,
-        status: attendanceForm.status,
+  async function openAssessmentForEntry(assessment) {
+    setActiveAssessmentId(assessment.id);
+    setIsLoadingAssessmentRecords(true);
+    try {
+      const records = await api.listAssessmentRecords(assessment.id);
+      const recordByStudentId = new Map(records.map((record) => [record.student_id, record]));
+      // Hydrate every roster student, not just ones with an existing
+      // record, so the table always reflects the full classroom.
+      const draft = {};
+      students.forEach((student) => {
+        const record = recordByStudentId.get(student.id);
+        draft[student.id] = {
+          score: record?.score == null ? "" : String(record.score),
+          is_completed: Boolean(record?.is_completed),
+        };
       });
-      setAttendanceForm({ student_id: "", date: "", status: "present" });
-      setActiveModal(null);
-      setSelectedStudentId(studentId);
-      await loadProfile(studentId);
-      await loadAttendanceRecordPage();
-      showNotice("Devamsızlık kaydedildi.");
-    });
+      setAssessmentRecordsDraft(draft);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoadingAssessmentRecords(false);
+    }
   }
 
-  async function handleUpdateAttendance(event) {
-    event.preventDefault();
-    await runAction(async () => {
-      if (!editingAttendance)
-        throw new Error("Düzenlenecek devamsızlık kaydı bulunamadı.");
-      await api.updateAttendance(editingAttendance.id, {
-        date: attendanceEditForm.date,
-        status: attendanceEditForm.status,
-      });
-      setAttendanceEditForm({ date: "", status: "present" });
-      setEditingAttendance(null);
-      setActiveModal(null);
-      await loadProfile(selectedStudentId);
-      await loadAttendanceRecordPage();
-      showNotice("Devamsızlık güncellendi.");
-    });
+  function closeAssessmentEntry() {
+    setActiveAssessmentId(null);
+    setAssessmentRecordsDraft({});
   }
 
-  async function handleDeleteAttendance(attendanceId) {
+  async function handleSaveAssessmentRecords() {
+    if (!activeAssessmentId) return;
+    const isHomework = assessments.find((assessment) => assessment.id === activeAssessmentId)?.assessment_type === "odev";
+    setIsSavingAssessmentRecords(true);
     await runAction(async () => {
-      const shouldDelete = window.confirm("Bu devamsızlık kaydı silinsin mi?");
-      if (!shouldDelete) return;
-
-      await api.deleteAttendance(attendanceId);
-      await loadProfile(selectedStudentId);
-      await loadAttendanceRecordPage();
-      showNotice("Devamsızlık silindi.");
+      const records = Object.entries(assessmentRecordsDraft).map(([studentId, draft]) => ({
+        student_id: Number(studentId),
+        score: draft.score === "" ? null : draft.score,
+        is_completed: isHomework ? draft.is_completed : null,
+      }));
+      await api.bulkUpsertAssessmentRecords(activeAssessmentId, records);
+      showNotice("Notlar kaydedildi.");
     });
+    setIsSavingAssessmentRecords(false);
   }
 
   async function handleCreateScheduleEntry(event) {
@@ -962,32 +1050,6 @@ export default function App() {
     });
   }
 
-  async function handleCreateHomework(event) {
-    event.preventDefault();
-    await runAction(async () => {
-      await api.createHomework({
-        teacher_id: teacherId,
-        classroom_id: Number(homeworkForm.classroom_id),
-        lesson_id: Number(homeworkForm.lesson_id),
-        title: homeworkForm.title.trim(),
-        description: homeworkForm.description.trim() || null,
-        due_date: homeworkForm.due_date,
-        status: homeworkForm.status,
-      });
-      setHomeworkForm({
-        classroom_id: "",
-        lesson_id: "",
-        title: "",
-        description: "",
-        due_date: "",
-        status: "assigned",
-      });
-      setActiveModal(null);
-      await loadHomeworkPage();
-      showNotice("Ödev eklendi.");
-    });
-  }
-
   async function handleCreateTeacherAssignment(event) {
     event.preventDefault();
     await runAction(async () => {
@@ -1011,33 +1073,6 @@ export default function App() {
       await api.updateTeacherAssignment(assignmentId, { is_active: false });
       await loadTeachersAdminList();
       showNotice("Atama kaldırıldı.");
-    });
-  }
-
-  async function handleUpdateHomework(event) {
-    event.preventDefault();
-    await runAction(async () => {
-      if (!editingHomework) throw new Error("Düzenlenecek ödev bulunamadı.");
-      await api.updateHomework(editingHomework.id, {
-        classroom_id: Number(homeworkForm.classroom_id),
-        lesson_id: Number(homeworkForm.lesson_id),
-        title: homeworkForm.title.trim(),
-        description: homeworkForm.description.trim() || null,
-        due_date: homeworkForm.due_date,
-        status: homeworkForm.status,
-      });
-      setEditingHomework(null);
-      setActiveModal(null);
-      await loadHomeworkPage();
-      showNotice("Ödev güncellendi.");
-    });
-  }
-
-  async function handleDeleteHomework(homeworkId) {
-    await runAction(async () => {
-      await api.deleteHomework(homeworkId);
-      await loadHomeworkPage();
-      showNotice("Ödev silindi.");
     });
   }
 
@@ -1086,7 +1121,7 @@ export default function App() {
     setTeacherAssignments([]);
     setGrades([]);
     setScheduleEntries([]);
-    setHomeworkPage({ items: [], total: 0, limit: TABLE_PAGE_SIZE, offset: 0 });
+    setAssessments([]);
     setProfile(null);
     setSelectedClassroomId(null);
     setSelectedStudentId(null);
@@ -1132,8 +1167,18 @@ export default function App() {
     setAssignmentForm,
     teacherAssignments,
     teachersAdminList,
-    attendanceRecordOffset,
-    attendanceRecordPage,
+    activeAttendanceSession,
+    attendanceRecordsDraft,
+    isLoadingAttendanceRecords,
+    isSavingAttendanceRecords,
+    openOrCreateAttendanceSession,
+    closeAttendanceSession,
+    handleMarkAllPresent,
+    handleSaveAttendanceRecords,
+    setAttendanceRecordsDraft,
+    quickActionEntry,
+    setQuickActionEntry,
+    handleScheduleQuickAction,
     allStudents,
     attendanceRate,
     classroomGradeFilter,
@@ -1145,14 +1190,28 @@ export default function App() {
     classroomOptions,
     filteredStudents,
     gradeAverages,
-    gradeRecordOffset,
-    gradeRecordPage,
+    gradeCategoryLabels,
+    gradeCategoryOptions,
     grades,
+    assessments,
+    assessmentForm,
+    assessmentEditForm,
+    editingAssessment,
+    activeAssessmentId,
+    assessmentRecordsDraft,
+    isLoadingAssessmentRecords,
+    isSavingAssessmentRecords,
+    setAssessmentForm,
+    setAssessmentEditForm,
+    setEditingAssessment,
+    setAssessmentRecordsDraft,
+    handleCreateAssessment,
+    handleUpdateAssessment,
+    handleDeleteAssessment,
+    openAssessmentForEntry,
+    closeAssessmentEntry,
+    handleSaveAssessmentRecords,
     isStudentPickerOpen,
-    homeworkForm,
-    homeworkOffset,
-    homeworkPage,
-    homeworkStatusOptions,
     handleUpdateScheduleSettings,
     handleUpdateTeacherProfile,
     isGeneratingWeeklySummary,
@@ -1171,25 +1230,15 @@ export default function App() {
     studentDirectoryPage,
     setActiveModal,
     setActivePage,
-    setAttendanceEditForm,
-    setAttendanceRecordOffset,
     setClassroomGradeFilter,
     setClassroomSearchTerm,
     setClassroomEditForm,
     setClassroomStudentOffset,
-    setEditingAttendance,
     setEditingClassroom,
-    setEditingGrade,
-    setEditingHomework,
     setEditingLesson,
     setEditingScheduleEntry,
     setEditingStudent,
-    setGradeEditForm,
     setGradeForm,
-    setGradeRecordOffset,
-    setAttendanceForm,
-    setHomeworkForm,
-    setHomeworkOffset,
     setIsStudentPickerOpen,
     setLessonEditForm,
     setScheduleForm,
@@ -1208,10 +1257,7 @@ export default function App() {
     teacherProfileForm,
     weeklySummary,
     weekdayOptions,
-    handleDeleteAttendance,
     handleDeleteClassroom,
-    handleDeleteGrade,
-    handleDeleteHomework,
     handleDeleteLesson,
     handleDeleteScheduleEntry,
     handleMoveScheduleEntry,
@@ -1279,6 +1325,7 @@ export default function App() {
         {activePage === "studentDetail" && <StudentDetailPage {...shared} />}
         {activePage === "attendance" && <AttendancePage {...shared} />}
         {activePage === "schedule" && <SchedulePage {...shared} />}
+        {activePage === "homework" && <HomeworkPage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
         {activePage === "profile" && <ProfilePage {...shared} />}
         {activePage === "settings" && <SettingsPage {...shared} />}
@@ -1535,30 +1582,18 @@ export default function App() {
           )}
           {activeModal === "grade" && (
             <FormPanel title="Not Gir" onSubmit={handleCreateGrade}>
-              {isGradeStudentLocked ? (
-                <input
-                  aria-label="Not girilecek öğrenci"
-                  readOnly
-                  value={
-                    selectedStudent
-                      ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
-                      : ""
-                  }
-                />
-              ) : (
-                <SearchableSelect
-                  label="Öğrenci"
-                  onChange={(value) =>
-                    setGradeForm((form) => ({
-                      ...form,
-                      student_id: value,
-                    }))
-                  }
-                  options={studentOptions}
-                  placeholder="Öğrenci ara"
-                  value={gradeForm.student_id}
-                />
-              )}
+              <SearchableSelect
+                label="Öğrenci"
+                onChange={(value) =>
+                  setGradeForm((form) => ({
+                    ...form,
+                    student_id: value,
+                  }))
+                }
+                options={studentOptions}
+                placeholder="Öğrenci ara"
+                value={gradeForm.student_id}
+              />
               <SearchableSelect
                 label="Ders"
                 onChange={(value) =>
@@ -1599,145 +1634,145 @@ export default function App() {
                 type="number"
                 value={gradeForm.score}
               />
+              <SearchableSelect
+                label="Kategori"
+                onChange={(value) =>
+                  setGradeForm((form) => ({
+                    ...form,
+                    category: value,
+                  }))
+                }
+                options={gradeCategoryOptions}
+                placeholder="Kategori ara"
+                value={gradeForm.category}
+              />
               <button className="primary-button" type="submit">
                 Notu Kaydet
               </button>
             </FormPanel>
           )}
-          {activeModal === "editGrade" && (
-            <FormPanel title="Notu Düzenle" onSubmit={handleUpdateGrade}>
+          {activeModal === "newAssessment" && (
+            <FormPanel title="Yeni Değerlendirme" onSubmit={handleCreateAssessment}>
+              <SearchableSelect
+                label="Sınıf"
+                onChange={(value) =>
+                  setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
+                }
+                options={classroomOptions}
+                placeholder="Sınıf ara"
+                value={assessmentForm.classroom_id}
+              />
               <SearchableSelect
                 label="Ders"
-                onChange={(value) =>
-                  setGradeEditForm((form) => ({
-                    ...form,
-                    lesson_id: value,
-                  }))
+                onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
+                options={
+                  assessmentForm.classroom_id
+                    ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
+                    : lessonOptions
                 }
-                options={selectedClassroomId ? assignedLessonOptionsForClassroom(selectedClassroomId) : lessonOptions}
                 placeholder="Ders ara"
-                value={gradeEditForm.lesson_id}
+                value={assessmentForm.lesson_id}
+              />
+              <SearchableSelect
+                label="Değerlendirme Türü"
+                onChange={(value) => setAssessmentForm((form) => ({ ...form, assessment_type: value }))}
+                options={gradeCategoryOptions}
+                placeholder="Tür ara"
+                value={assessmentForm.assessment_type}
               />
               <input
-                onChange={(event) =>
-                  setGradeEditForm((form) => ({
-                    ...form,
-                    exam_name: event.target.value,
-                  }))
-                }
+                onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
                 placeholder="1. Yazılı"
                 required
-                value={gradeEditForm.exam_name}
+                value={assessmentForm.title}
+              />
+              <textarea
+                onChange={(event) => setAssessmentForm((form) => ({ ...form, description: event.target.value }))}
+                placeholder="Açıklama (opsiyonel)"
+                value={assessmentForm.description}
               />
               <input
-                max="100"
-                min="0"
-                onChange={(event) =>
-                  setGradeEditForm((form) => ({
-                    ...form,
-                    score: event.target.value,
-                  }))
-                }
-                placeholder="85"
+                onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
                 required
-                step="0.1"
-                type="number"
-                value={gradeEditForm.score}
+                type="date"
+                value={assessmentForm.date}
+              />
+              <button className="primary-button" type="submit">
+                Değerlendirmeyi Oluştur
+              </button>
+            </FormPanel>
+          )}
+          {activeModal === "editAssessment" && (
+            <FormPanel title="Değerlendirmeyi Düzenle" onSubmit={handleUpdateAssessment}>
+              <p className="font-label-md text-label-md text-secondary">
+                Sınıf: {classrooms.find((classroom) => classroom.id === editingAssessment?.classroom_id)?.name || "-"}
+                {" · "}
+                Ders: {lessons.find((lesson) => lesson.id === editingAssessment?.lesson_id)?.name || "-"}
+                {" · "}
+                Tür: {gradeCategoryLabels[editingAssessment?.assessment_type] || "-"}
+              </p>
+              <input
+                onChange={(event) => setAssessmentEditForm((form) => ({ ...form, title: event.target.value }))}
+                placeholder="1. Yazılı"
+                required
+                value={assessmentEditForm.title}
+              />
+              <textarea
+                onChange={(event) =>
+                  setAssessmentEditForm((form) => ({ ...form, description: event.target.value }))
+                }
+                placeholder="Açıklama (opsiyonel)"
+                value={assessmentEditForm.description}
+              />
+              <input
+                onChange={(event) => setAssessmentEditForm((form) => ({ ...form, date: event.target.value }))}
+                required
+                type="date"
+                value={assessmentEditForm.date}
               />
               <button className="primary-button" type="submit">
                 Değişiklikleri Kaydet
               </button>
             </FormPanel>
           )}
-          {activeModal === "attendance" && (
-            <FormPanel
-              title="Devamsızlık Gir"
-              onSubmit={handleCreateAttendance}
-            >
-              {isAttendanceStudentLocked ? (
-                <input
-                  aria-label="Devamsızlık girilecek öğrenci"
-                  readOnly
-                  value={
-                    selectedStudent
-                      ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
-                      : ""
-                  }
-                />
-              ) : (
-                <SearchableSelect
-                  label="Öğrenci"
-                  onChange={(value) =>
-                    setAttendanceForm((form) => ({
-                      ...form,
-                      student_id: value,
-                    }))
-                  }
-                  options={studentOptions}
-                  placeholder="Öğrenci ara"
-                  value={attendanceForm.student_id}
-                />
-              )}
-              <input
-                onChange={(event) =>
-                  setAttendanceForm((form) => ({
-                    ...form,
-                    date: event.target.value,
-                  }))
-                }
-                required
-                type="date"
-                value={attendanceForm.date}
-              />
-              <SearchableSelect
-                label="Durum"
-                onChange={(value) =>
-                  setAttendanceForm((form) => ({
-                    ...form,
-                    status: value,
-                  }))
-                }
-                options={attendanceStatusOptions}
-                placeholder="Durum ara"
-                value={attendanceForm.status}
-              />
-              <button className="primary-button" type="submit">
-                Kaydet
+          {activeModal === "scheduleQuickActions" && quickActionEntry && (
+            <div className="flex flex-col gap-1">
+              <h2 className="mb-2 font-headline-sm text-headline-sm text-on-surface">
+                {classrooms.find((classroom) => classroom.id === quickActionEntry.classroom_id)?.name || "Sınıf"} —{" "}
+                {lessons.find((lesson) => lesson.id === quickActionEntry.lesson_id)?.name || "Ders"}
+              </h2>
+              <p className="mb-2 font-label-md text-label-md text-secondary">
+                {quickActionEntry.start_time?.slice(0, 5)} – {quickActionEntry.end_time?.slice(0, 5)}
+              </p>
+              <button
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low"
+                onClick={() => handleScheduleQuickAction(quickActionEntry, "attendance")}
+                type="button"
+              >
+                <Icon name="fact_check" /> Yoklama Al
               </button>
-            </FormPanel>
-          )}
-          {activeModal === "editAttendance" && (
-            <FormPanel
-              title="Devamsızlığı Düzenle"
-              onSubmit={handleUpdateAttendance}
-            >
-              <input
-                onChange={(event) =>
-                  setAttendanceEditForm((form) => ({
-                    ...form,
-                    date: event.target.value,
-                  }))
-                }
-                required
-                type="date"
-                value={attendanceEditForm.date}
-              />
-              <SearchableSelect
-                label="Durum"
-                onChange={(value) =>
-                  setAttendanceEditForm((form) => ({
-                    ...form,
-                    status: value,
-                  }))
-                }
-                options={attendanceStatusOptions}
-                placeholder="Durum ara"
-                value={attendanceEditForm.status}
-              />
-              <button className="primary-button" type="submit">
-                Değişiklikleri Kaydet
+              <button
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low"
+                onClick={() => handleScheduleQuickAction(quickActionEntry, "assessment")}
+                type="button"
+              >
+                <Icon name="history_edu" /> Değerlendirme Gir
               </button>
-            </FormPanel>
+              <button
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low"
+                onClick={() => handleScheduleQuickAction(quickActionEntry, "homework")}
+                type="button"
+              >
+                <Icon name="assignment" /> Ödev Ver
+              </button>
+              <button
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low"
+                onClick={() => handleScheduleQuickAction(quickActionEntry, "performance")}
+                type="button"
+              >
+                <Icon name="insights" /> Ders İçi Performans Gir
+              </button>
+            </div>
           )}
           {(activeModal === "schedule" || activeModal === "editSchedule") && (
             <FormPanel
@@ -1810,80 +1845,52 @@ export default function App() {
               </button>
             </FormPanel>
           )}
-          {(activeModal === "homework" || activeModal === "editHomework") && (
+          {activeModal === "newHomework" && (
             <FormPanel
-              title={activeModal === "homework" ? "Ödev Ekle" : "Ödevi Düzenle"}
-              onSubmit={
-                activeModal === "homework"
-                  ? handleCreateHomework
-                  : handleUpdateHomework
-              }
+              title={assessmentForm.assessment_type === "odev" ? "Ödev Ekle" : "Ders İçi Performans Ekle"}
+              onSubmit={handleCreateAssessment}
             >
               <SearchableSelect
                 label="Sınıf"
                 onChange={(value) =>
-                  setHomeworkForm((form) => ({ ...form, classroom_id: value }))
+                  setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
                 }
                 options={classroomOptions}
                 placeholder="Sınıf ara"
-                value={homeworkForm.classroom_id}
+                value={assessmentForm.classroom_id}
               />
               <SearchableSelect
                 label="Ders"
-                onChange={(value) =>
-                  setHomeworkForm((form) => ({ ...form, lesson_id: value }))
-                }
+                onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
                 options={
-                  homeworkForm.classroom_id
-                    ? assignedLessonOptionsForClassroom(homeworkForm.classroom_id)
+                  assessmentForm.classroom_id
+                    ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
                     : lessonOptions
                 }
                 placeholder="Ders ara"
-                value={homeworkForm.lesson_id}
+                value={assessmentForm.lesson_id}
               />
               <input
-                onChange={(event) =>
-                  setHomeworkForm((form) => ({
-                    ...form,
-                    title: event.target.value,
-                  }))
-                }
-                placeholder="Ödev başlığı"
+                onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
+                placeholder={assessmentForm.assessment_type === "odev" ? "Ödev başlığı" : "Başlık"}
                 required
-                value={homeworkForm.title}
+                value={assessmentForm.title}
               />
               <textarea
                 onChange={(event) =>
-                  setHomeworkForm((form) => ({
-                    ...form,
-                    description: event.target.value,
-                  }))
+                  setAssessmentForm((form) => ({ ...form, description: event.target.value }))
                 }
-                placeholder="Açıklama"
-                value={homeworkForm.description}
+                placeholder="Açıklama (opsiyonel)"
+                value={assessmentForm.description}
               />
               <input
-                onChange={(event) =>
-                  setHomeworkForm((form) => ({
-                    ...form,
-                    due_date: event.target.value,
-                  }))
-                }
+                onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
                 required
                 type="date"
-                value={homeworkForm.due_date}
-              />
-              <SearchableSelect
-                label="Durum"
-                onChange={(value) =>
-                  setHomeworkForm((form) => ({ ...form, status: value }))
-                }
-                options={homeworkStatusOptions}
-                placeholder="Durum ara"
-                value={homeworkForm.status}
+                value={assessmentForm.date}
               />
               <button className="primary-button" type="submit">
-                Kaydet
+                {assessmentForm.assessment_type === "odev" ? "Ödevi Kaydet" : "Kaydet"}
               </button>
             </FormPanel>
           )}

@@ -10,10 +10,11 @@ from app.db.base import Base
 from app.db.seed import seed_demo_data
 from app.models import (
     AcademicYear,
-    Attendance,
+    Assessment,
+    AssessmentRecord,
+    AttendanceRecord,
+    AttendanceSession,
     Classroom,
-    Grade,
-    Homework,
     Lesson,
     ScheduleEntry,
     Student,
@@ -43,10 +44,13 @@ def test_seed_demo_data_creates_complete_idempotent_demo_dataset() -> None:
         assert session.scalar(select(func.count()).select_from(Classroom)) == 1
         assert session.scalar(select(func.count()).select_from(Student)) == 3
         assert session.scalar(select(func.count()).select_from(Lesson)) == 2
-        assert session.scalar(select(func.count()).select_from(Grade)) == 6
-        assert session.scalar(select(func.count()).select_from(Attendance)) == 6
+        # 2 sınav Assessments (one per lesson, shared by all 3 students) + 2
+        # ödev Assessments (Homework equivalents).
+        assert session.scalar(select(func.count()).select_from(Assessment)) == 4
+        assert session.scalar(select(func.count()).select_from(AssessmentRecord)) == 6
+        assert session.scalar(select(func.count()).select_from(AttendanceSession)) == 2
+        assert session.scalar(select(func.count()).select_from(AttendanceRecord)) == 6
         assert session.scalar(select(func.count()).select_from(ScheduleEntry)) == 3
-        assert session.scalar(select(func.count()).select_from(Homework)) == 2
         # 1 rehber + 2 branş for Eda, 1 branş for Ahmet.
         assert session.scalar(select(func.count()).select_from(TeacherAssignment)) == 4
 

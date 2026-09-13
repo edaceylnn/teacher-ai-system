@@ -11,12 +11,13 @@ from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
 from app.models import (
     AcademicYear,
-    Attendance,
+    Assessment,
+    AssessmentRecord,
+    AssessmentType,
+    AttendanceRecord,
+    AttendanceSession,
     AttendanceStatus,
     Classroom,
-    Grade,
-    Homework,
-    HomeworkStatus,
     Lesson,
     ScheduleEntry,
     Student,
@@ -213,22 +214,33 @@ def seed_demo_data(db: Session) -> None:
         (saved_students[2], lessons[1], "1. Yazili", Decimal("90.00")),
     ]
     for student, lesson, exam_name, score in grades:
-        existing_grade = db.scalar(
-            select(Grade).where(
-                Grade.student_id == student.id,
-                Grade.lesson_id == lesson.id,
-                Grade.exam_name == exam_name,
+        existing_assessment = db.scalar(
+            select(Assessment).where(
+                Assessment.classroom_id == classroom.id,
+                Assessment.lesson_id == lesson.id,
+                Assessment.title == exam_name,
+                Assessment.assessment_type == AssessmentType.sinav,
             )
         )
-        if existing_grade is None:
-            db.add(
-                Grade(
-                    student_id=student.id,
-                    lesson_id=lesson.id,
-                    exam_name=exam_name,
-                    score=score,
-                )
+        if existing_assessment is None:
+            existing_assessment = Assessment(
+                classroom_id=classroom.id,
+                lesson_id=lesson.id,
+                teacher_id=teacher.id,
+                assessment_type=AssessmentType.sinav,
+                title=exam_name,
+                date=date(2026, 1, 11),
             )
+            db.add(existing_assessment)
+            db.flush()
+        existing_record = db.scalar(
+            select(AssessmentRecord).where(
+                AssessmentRecord.assessment_id == existing_assessment.id,
+                AssessmentRecord.student_id == student.id,
+            )
+        )
+        if existing_record is None:
+            db.add(AssessmentRecord(assessment_id=existing_assessment.id, student_id=student.id, score=score))
 
     attendance_records = [
         (saved_students[0], date(2026, 1, 15), AttendanceStatus.present),
@@ -239,20 +251,30 @@ def seed_demo_data(db: Session) -> None:
         (saved_students[2], date(2026, 1, 16), AttendanceStatus.present),
     ]
     for student, attendance_date, status in attendance_records:
-        existing_attendance = db.scalar(
-            select(Attendance).where(
-                Attendance.student_id == student.id,
-                Attendance.date == attendance_date,
+        session = db.scalar(
+            select(AttendanceSession).where(
+                AttendanceSession.classroom_id == classroom.id,
+                AttendanceSession.lesson_id.is_(None),
+                AttendanceSession.date == attendance_date,
             )
         )
-        if existing_attendance is None:
-            db.add(
-                Attendance(
-                    student_id=student.id,
-                    date=attendance_date,
-                    status=status,
-                )
+        if session is None:
+            session = AttendanceSession(
+                classroom_id=classroom.id,
+                lesson_id=None,
+                teacher_id=teacher.id,
+                date=attendance_date,
             )
+            db.add(session)
+            db.flush()
+        existing_record = db.scalar(
+            select(AttendanceRecord).where(
+                AttendanceRecord.session_id == session.id,
+                AttendanceRecord.student_id == student.id,
+            )
+        )
+        if existing_record is None:
+            db.add(AttendanceRecord(session_id=session.id, student_id=student.id, status=status))
 
     schedule_entries = [
         (classroom, lessons[0], 0, time(8, 30), time(9, 10), "5-A Derslik"),
@@ -282,28 +304,29 @@ def seed_demo_data(db: Session) -> None:
             )
 
     homeworks = [
-        (lessons[0], "Kesir problemleri", "Sayfa 42-43 alistirmalari", date(2026, 1, 20), HomeworkStatus.assigned),
-        (lessons[1], "Okuma gunlugu", "Bu haftaki metin icin 5 cumlelik ozet", date(2026, 1, 22), HomeworkStatus.completed),
+        (lessons[0], "Kesir problemleri", "Sayfa 42-43 alistirmalari", date(2026, 1, 20)),
+        (lessons[1], "Okuma gunlugu", "Bu haftaki metin icin 5 cumlelik ozet", date(2026, 1, 22)),
     ]
-    for lesson, title, description, due_date, status in homeworks:
+    for lesson, title, description, due_date in homeworks:
         existing_homework = db.scalar(
-            select(Homework).where(
-                Homework.teacher_id == teacher.id,
-                Homework.classroom_id == classroom.id,
-                Homework.lesson_id == lesson.id,
-                Homework.title == title,
+            select(Assessment).where(
+                Assessment.teacher_id == teacher.id,
+                Assessment.classroom_id == classroom.id,
+                Assessment.lesson_id == lesson.id,
+                Assessment.title == title,
+                Assessment.assessment_type == AssessmentType.odev,
             )
         )
         if existing_homework is None:
             db.add(
-                Homework(
+                Assessment(
                     teacher_id=teacher.id,
                     classroom_id=classroom.id,
                     lesson_id=lesson.id,
+                    assessment_type=AssessmentType.odev,
                     title=title,
                     description=description,
-                    due_date=due_date,
-                    status=status,
+                    date=due_date,
                 )
             )
 

@@ -6,9 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_teacher
+from app.core.config import settings
 from app.db.session import get_db
 from app.main import app
 from app.models import Teacher
+
+
+@pytest.fixture(autouse=True)
+def strong_test_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "secret_key", "test-secret-key-with-at-least-32-chars")
 
 
 def override_current_teacher(db: Session = Depends(get_db)) -> Teacher:

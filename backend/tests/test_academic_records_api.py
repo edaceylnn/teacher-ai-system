@@ -135,6 +135,7 @@ def test_grade_crud_flow(client: TestClient, db_session: Session, teacher: Teach
             "lesson_id": lesson["id"],
             "exam_name": "1. Yazili",
             "score": "82.50",
+            "category": "sinav",
         },
     )
 
@@ -144,6 +145,7 @@ def test_grade_crud_flow(client: TestClient, db_session: Session, teacher: Teach
     assert created["lesson_id"] == lesson["id"]
     assert created["exam_name"] == "1. Yazili"
     assert created["score"] == "82.50"
+    assert created["category"] == "sinav"
 
     list_response = client.get("/grades", params={"student_id": student["id"]})
     assert list_response.status_code == 200
@@ -200,6 +202,7 @@ def test_grades_can_be_filtered_by_classroom(client: TestClient, db_session: Ses
             "lesson_id": lesson["id"],
             "exam_name": "1. Yazili",
             "score": "80.00",
+            "category": "sinav",
         },
     )
     client.post(
@@ -209,6 +212,7 @@ def test_grades_can_be_filtered_by_classroom(client: TestClient, db_session: Ses
             "lesson_id": lesson["id"],
             "exam_name": "2. Yazili",
             "score": "90.00",
+            "category": "sinav",
         },
     )
 
@@ -227,7 +231,7 @@ def test_create_grade_requires_existing_student_and_lesson(client: TestClient, t
 
     missing_student_response = client.post(
         "/grades",
-        json={"student_id": 999, "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "82.50"},
+        json={"student_id": 999, "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "82.50", "category": "sinav"},
     )
     assert missing_student_response.status_code == 404
     assert missing_student_response.json()["detail"] == "Student not found"
@@ -237,7 +241,7 @@ def test_create_grade_requires_existing_student_and_lesson(client: TestClient, t
     # so it's a 403 like any other unassigned-subject write attempt.
     missing_lesson_response = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": 999, "exam_name": "1. Yazili", "score": "82.50"},
+        json={"student_id": student["id"], "lesson_id": 999, "exam_name": "1. Yazili", "score": "82.50", "category": "sinav"},
     )
     assert missing_lesson_response.status_code == 403
     assert missing_lesson_response.json()["detail"] == "Bu ders için yetkiniz yok."
@@ -339,15 +343,85 @@ def test_homework_crud_flow(client: TestClient, db_session: Session, teacher: Te
     list_response = client.get("/homeworks", params={"teacher_id": teacher.id})
     assert list_response.status_code == 200
     assert list_response.json()["total"] == 1
+    assert list_response.json()["items"][0]["status"] == "assigned"
 
     update_response = client.patch(
         f"/homeworks/{created['id']}",
-        json={"status": "completed"},
+        json={"description": "20 sayfa okuma"},
     )
     assert update_response.status_code == 200
-    assert update_response.json()["status"] == "completed"
+    assert update_response.json()["description"] == "20 sayfa okuma"
+
+    # "status" is derived from per-student completion, not stored directly —
+    # once every roster student's submission is marked done, it reads back
+    # as "completed".
+    client.put(
+        f"/homeworks/{created['id']}/submissions/{student['id']}",
+        json={"is_completed": True},
+    )
+    completed_list = client.get("/homeworks", params={"teacher_id": teacher.id}).json()
+    assert completed_list["items"][0]["status"] == "completed"
 
     delete_response = client.delete(f"/homeworks/{created['id']}")
+    assert delete_response.status_code == 204
+
+
+def test_homework_submission_tracks_per_student_completion(
+    client: TestClient, db_session: Session, teacher: Teacher, student: dict
+) -> None:
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Fen Bilimleri"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
+    homework = client.post(
+        "/homeworks",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": student["classroom_id"],
+            "lesson_id": lesson["id"],
+            "title": "Deney raporu",
+            "due_date": "2026-02-01",
+            "status": "assigned",
+        },
+    ).json()
+
+    empty_list = client.get(f"/homeworks/{homework['id']}/submissions")
+    assert empty_list.status_code == 200
+    assert empty_list.json() == []
+
+    mark_done = client.put(
+        f"/homeworks/{homework['id']}/submissions/{student['id']}",
+        json={"is_completed": True},
+    )
+    assert mark_done.status_code == 200
+    marked = mark_done.json()
+    assert marked["student_id"] == student["id"]
+    assert marked["is_completed"] is True
+
+    # Marking again updates the same row instead of creating a duplicate.
+    unmark = client.put(
+        f"/homeworks/{homework['id']}/submissions/{student['id']}",
+        json={"is_completed": False},
+    )
+    assert unmark.status_code == 200
+    assert unmark.json()["id"] == marked["id"]
+    assert unmark.json()["is_completed"] is False
+
+    submissions = client.get(f"/homeworks/{homework['id']}/submissions").json()
+    assert len(submissions) == 1
+
+    other_classroom = client.post(
+        "/classrooms", json={"teacher_id": teacher.id, "name": "6-B", "grade_level": "6"}
+    ).json()
+    outside_student = client.post(
+        "/students",
+        json={"classroom_id": other_classroom["id"], "first_name": "Ali", "last_name": "Kaya"},
+    ).json()
+    wrong_classroom = client.put(
+        f"/homeworks/{homework['id']}/submissions/{outside_student['id']}",
+        json={"is_completed": True},
+    )
+    assert wrong_classroom.status_code == 404
+
+    delete_response = client.delete(f"/homeworks/{homework['id']}")
     assert delete_response.status_code == 204
 
 
@@ -375,6 +449,7 @@ def test_student_profile_returns_academic_summary(
             "lesson_id": math_lesson["id"],
             "exam_name": "1. Yazili",
             "score": "82.50",
+            "category": "sinav",
         },
     )
     client.post(
@@ -384,6 +459,7 @@ def test_student_profile_returns_academic_summary(
             "lesson_id": turkish_lesson["id"],
             "exam_name": "1. Yazili",
             "score": "91.00",
+            "category": "ders_ici_performans",
         },
     )
     client.post(
@@ -393,6 +469,32 @@ def test_student_profile_returns_academic_summary(
     client.post(
         "/attendance-records",
         json={"student_id": student["id"], "date": "2026-01-16", "status": "absent"},
+    )
+    math_homework = client.post(
+        "/homeworks",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": student["classroom_id"],
+            "lesson_id": math_lesson["id"],
+            "title": "Problem seti",
+            "due_date": "2026-01-20",
+            "status": "assigned",
+        },
+    ).json()
+    client.post(
+        "/homeworks",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": student["classroom_id"],
+            "lesson_id": turkish_lesson["id"],
+            "title": "Kompozisyon",
+            "due_date": "2026-01-22",
+            "status": "assigned",
+        },
+    )
+    client.put(
+        f"/homeworks/{math_homework['id']}/submissions/{student['id']}",
+        json={"is_completed": True},
     )
 
     response = client.get(f"/students/{student['id']}/profile")
@@ -409,6 +511,8 @@ def test_student_profile_returns_academic_summary(
             "lesson_name": "Matematik",
             "exam_name": "1. Yazili",
             "score": "82.50",
+            "category": "sinav",
+            "date": date.today().isoformat(),
         },
         {
             "id": 2,
@@ -416,11 +520,33 @@ def test_student_profile_returns_academic_summary(
             "lesson_name": "Turkce",
             "exam_name": "1. Yazili",
             "score": "91.00",
+            "category": "ders_ici_performans",
+            "date": date.today().isoformat(),
+        },
+    ]
+    assert profile["homeworks"] == [
+        {
+            "id": math_homework["id"],
+            "lesson_id": math_lesson["id"],
+            "lesson_name": "Matematik",
+            "title": "Problem seti",
+            "due_date": "2026-01-20",
+            "is_completed": True,
+            "score": None,
+        },
+        {
+            "id": math_homework["id"] + 1,
+            "lesson_id": turkish_lesson["id"],
+            "lesson_name": "Turkce",
+            "title": "Kompozisyon",
+            "due_date": "2026-01-22",
+            "is_completed": False,
+            "score": None,
         },
     ]
     assert profile["attendance_records"] == [
-        {"id": 1, "date": "2026-01-15", "status": "present"},
-        {"id": 2, "date": "2026-01-16", "status": "absent"},
+        {"id": 1, "date": "2026-01-15", "lesson_id": None, "lesson_name": None, "start_time": None, "status": "present"},
+        {"id": 2, "date": "2026-01-16", "lesson_id": None, "lesson_name": None, "start_time": None, "status": "absent"},
     ]
     assert profile["attendance_summary"] == {
         "present": 1,

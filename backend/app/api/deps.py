@@ -7,9 +7,9 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models import (
     AcademicYear,
+    Assessment,
+    AttendanceSession,
     Classroom,
-    Grade,
-    Homework,
     Lesson,
     ScheduleEntry,
     Student,
@@ -91,6 +91,12 @@ def assigned_classroom_ids(teacher: Teacher, db: Session) -> set[int]:
 
 
 def assigned_subject_pairs(teacher: Teacher, db: Session) -> set[tuple[int, int]]:
+    """Active subject (branş) assignments only — deliberately has NO admin
+    bypass, unlike assigned_classroom_ids/visible_academic_scope: a full
+    (classroom × lesson) cross product would include pairs that were never
+    actually taught anywhere. Callers needing admin-inclusive visibility
+    should use visible_academic_scope instead; ensure_subject_write_access
+    already short-circuits for admins before ever consulting this."""
     return {(a.classroom_id, a.lesson_id) for a in _active_assignments(teacher, db) if a.lesson_id is not None}
 
 
@@ -142,29 +148,36 @@ def ensure_student_owner(student: Student | None, teacher: Teacher, db: Session)
     return student
 
 
-def ensure_grade_view_access(grade: Grade | None, teacher: Teacher, db: Session) -> Grade:
-    if grade is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grade not found")
-    student = db.get(Student, grade.student_id)
+def ensure_assessment_view_access(assessment: Assessment | None, teacher: Teacher, db: Session) -> Assessment:
+    if assessment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
     homeroom_ids, subject_pairs = visible_academic_scope(teacher, db)
-    if student.classroom_id in homeroom_ids or (student.classroom_id, grade.lesson_id) in subject_pairs:
-        return grade
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grade not found")
+    if assessment.classroom_id in homeroom_ids or (assessment.classroom_id, assessment.lesson_id) in subject_pairs:
+        return assessment
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
 
 
-def ensure_grade_write_access(grade: Grade | None, teacher: Teacher, db: Session) -> Grade:
-    if grade is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grade not found")
-    student = db.get(Student, grade.student_id)
-    ensure_subject_write_access(teacher, student.classroom_id, grade.lesson_id, db)
-    return grade
+def ensure_assessment_write_access(assessment: Assessment | None, teacher: Teacher, db: Session) -> Assessment:
+    if assessment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    ensure_subject_write_access(teacher, assessment.classroom_id, assessment.lesson_id, db)
+    return assessment
 
 
-def ensure_homework_write_access(homework: Homework | None, teacher: Teacher, db: Session) -> Homework:
-    if homework is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Homework not found")
-    ensure_subject_write_access(teacher, homework.classroom_id, homework.lesson_id, db)
-    return homework
+def ensure_attendance_session_write_access(
+    session: AttendanceSession | None, teacher: Teacher, db: Session
+) -> AttendanceSession:
+    """A lesson-tied session (taken from the schedule) needs subject write
+    access for that exact classroom+lesson, same as grades/homework. A
+    lesson-less (general/day-level) session only needs classroom-level
+    access, matching the legacy per-student attendance behavior."""
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendance session not found")
+    if session.lesson_id is not None:
+        ensure_subject_write_access(teacher, session.classroom_id, session.lesson_id, db)
+    else:
+        ensure_classroom_access(db.get(Classroom, session.classroom_id), teacher, db)
+    return session
 
 
 def ensure_schedule_write_access(entry: ScheduleEntry | None, teacher: Teacher, db: Session) -> ScheduleEntry:
@@ -192,7 +205,9 @@ def visible_lesson_ids_for_classroom(teacher: Teacher, classroom_id: int, db: Se
 def visible_lesson_ids(teacher: Teacher, db: Session) -> set[int]:
     """Every lesson_id this teacher may reference — either because they
     created it (catalog authorship) or because they hold an active subject
-    assignment for it in some classroom."""
+    assignment for it in some classroom. Madde 12: admin sees every lesson."""
+    if teacher.role == TeacherRole.admin:
+        return set(db.scalars(select(Lesson.id)).all())
     created = set(db.scalars(select(Lesson.id).where(Lesson.teacher_id == teacher.id)).all())
     _, subject_pairs = visible_academic_scope(teacher, db)
     return created | {lesson_id for _classroom_id, lesson_id in subject_pairs}

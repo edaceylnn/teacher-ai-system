@@ -99,7 +99,7 @@ def owner_resources(client: TestClient, db_session: Session) -> dict:
     db_session.commit()
     grade = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90"},
+        json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90", "category": "sinav"},
         headers=owner_headers,
     ).json()
     attendance = client.post(

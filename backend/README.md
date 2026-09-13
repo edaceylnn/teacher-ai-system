@@ -83,16 +83,28 @@ curl http://127.0.0.1:8000/health
 - `GET /lessons/{lesson_id}`
 - `PATCH /lessons/{lesson_id}`
 - `DELETE /lessons/{lesson_id}`
-- `POST /grades`
-- `GET /grades`
-- `GET /grades/{grade_id}`
-- `PATCH /grades/{grade_id}`
-- `DELETE /grades/{grade_id}`
-- `POST /attendance-records`
-- `GET /attendance-records`
-- `GET /attendance-records/{attendance_id}`
-- `PATCH /attendance-records/{attendance_id}`
-- `DELETE /attendance-records/{attendance_id}`
+- `POST /assessments`
+- `GET /assessments`
+- `GET /assessments/{assessment_id}`
+- `PATCH /assessments/{assessment_id}`
+- `DELETE /assessments/{assessment_id}`
+- `GET /assessments/{assessment_id}/records`
+- `PUT /assessments/{assessment_id}/records`
+- `PUT /assessments/{assessment_id}/records/{student_id}`
+- `POST /grades` (legacy compatibility)
+- `GET /grades` (legacy compatibility)
+- `GET /grades/{grade_id}` (legacy compatibility)
+- `PATCH /grades/{grade_id}` (legacy compatibility)
+- `DELETE /grades/{grade_id}` (legacy compatibility)
+- `POST /attendance-sessions`
+- `GET /attendance-sessions`
+- `GET /attendance-sessions/{session_id}/records`
+- `PUT /attendance-sessions/{session_id}/records`
+- `POST /attendance-records` (legacy compatibility)
+- `GET /attendance-records` (legacy compatibility)
+- `GET /attendance-records/{attendance_id}` (legacy compatibility)
+- `PATCH /attendance-records/{attendance_id}` (legacy compatibility)
+- `DELETE /attendance-records/{attendance_id}` (legacy compatibility)
 - `POST /schedule-entries`
 - `GET /schedule-entries`
 - `PATCH /schedule-entries/{entry_id}`
@@ -101,6 +113,8 @@ curl http://127.0.0.1:8000/health
 - `GET /homeworks`
 - `PATCH /homeworks/{homework_id}`
 - `DELETE /homeworks/{homework_id}`
+- `GET /homeworks/{homework_id}/submissions`
+- `PUT /homeworks/{homework_id}/submissions/{student_id}`
 - `GET /ai/outputs`
 - `PATCH /ai/outputs/{output_id}`
 - `POST /ai/report-comments`
@@ -115,8 +129,11 @@ curl http://127.0.0.1:8000/health
 - Classroom
 - Student
 - Lesson
-- Grade
-- Attendance
+- Assessment
+- AssessmentRecord
+- AttendanceSession
+- AttendanceRecord
 - ScheduleEntry
-- Homework
 - AIOutput
+
+`/grades`, `/homeworks` and `/attendance-records` are kept for compatibility with existing UI/API flows. New bulk-entry screens use `/assessments` and `/attendance-sessions`; homework records are stored as `Assessment(assessment_type="odev")`.

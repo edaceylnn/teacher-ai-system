@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { page: "gradebook", icon: "menu_book", label: "Not Defteri" },
   { page: "attendance", icon: "calendar_today", label: "Devamsızlık" },
   { page: "schedule", icon: "schedule", label: "Ders Programı" },
+  { page: "homework", icon: "assignment", label: "Ödevler" },
   { page: "aiReports", icon: "analytics", label: "AI Raporları" },
 ];
 

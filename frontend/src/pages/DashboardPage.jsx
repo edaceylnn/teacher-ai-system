@@ -66,9 +66,6 @@ export default function DashboardPage({
   const riskStudents = studentAverages.filter(
     (student) => student.average !== null && student.average < 70,
   );
-  const missingGradeStudents = studentAverages.filter(
-    (student) => student.gradeCount === 0,
-  );
   const aiPendingStudents = studentAverages.filter(
     (student) => !student.hasReport || !student.hasParentMessage,
   );

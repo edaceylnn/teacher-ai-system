@@ -237,23 +237,12 @@ export const api = {
     ),
   listGrades: async (pagination = { limit: 500, offset: 0 }) =>
     pageItems(await api.listGradesPage(pagination)),
-  updateGrade: (gradeId, payload) =>
-    request(`/grades/${gradeId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
-  deleteGrade: (gradeId) =>
-    request(`/grades/${gradeId}`, {
-      method: "DELETE",
-    }),
-  createAttendance: (payload) =>
-    request("/attendance-records", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-  listAttendancePage: (pagination = {}) =>
+  listAssessmentsPage: (pagination = {}) =>
     request(
-      `/attendance-records${buildQuery({
+      `/assessments${buildQuery({
+        classroom_id: pagination.classroomId,
+        lesson_id: pagination.lessonId,
+        assessment_type: pagination.assessmentType,
         student_id: pagination.studentId,
         limit: pagination.limit,
         offset: pagination.offset,
@@ -261,14 +250,67 @@ export const api = {
     ).then((page) =>
       normalizePage(page, pagination.limit, pagination.offset),
     ),
-  updateAttendance: (attendanceId, payload) =>
-    request(`/attendance-records/${attendanceId}`, {
+  listAssessments: async (pagination = { limit: 500, offset: 0 }) => {
+    // Guards against the classroom having more assessments than fit in one
+    // page — keeps paging until every item is fetched rather than trusting
+    // a single large limit.
+    const limit = pagination.limit || 500;
+    let offset = pagination.offset || 0;
+    let items = [];
+    for (;;) {
+      const page = await api.listAssessmentsPage({ ...pagination, limit, offset });
+      items = items.concat(page.items);
+      if (items.length >= page.total || !page.items.length) break;
+      offset += limit;
+    }
+    return items;
+  },
+  createAssessment: (payload) =>
+    request("/assessments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateAssessment: (assessmentId, payload) =>
+    request(`/assessments/${assessmentId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  deleteAttendance: (attendanceId) =>
-    request(`/attendance-records/${attendanceId}`, {
+  deleteAssessment: (assessmentId) =>
+    request(`/assessments/${assessmentId}`, {
       method: "DELETE",
+    }),
+  listAssessmentRecords: (assessmentId) =>
+    request(`/assessments/${assessmentId}/records`),
+  bulkUpsertAssessmentRecords: (assessmentId, records) =>
+    request(`/assessments/${assessmentId}/records`, {
+      method: "PUT",
+      body: JSON.stringify({ records }),
+    }),
+  listAttendanceSessionsPage: (pagination = {}) =>
+    request(
+      `/attendance-sessions${buildQuery({
+        classroom_id: pagination.classroomId,
+        lesson_id: pagination.lessonId,
+        date: pagination.date,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) =>
+      normalizePage(page, pagination.limit, pagination.offset),
+    ),
+  listAttendanceSessions: async (pagination = { limit: 50, offset: 0 }) =>
+    pageItems(await api.listAttendanceSessionsPage(pagination)),
+  createAttendanceSession: (payload) =>
+    request("/attendance-sessions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  listAttendanceSessionRecords: (sessionId) =>
+    request(`/attendance-sessions/${sessionId}/records`),
+  bulkUpsertAttendanceSessionRecords: (sessionId, records) =>
+    request(`/attendance-sessions/${sessionId}/records`, {
+      method: "PUT",
+      body: JSON.stringify({ records }),
     }),
   listScheduleEntriesPage: (teacherId, pagination = {}) =>
     request(
@@ -293,31 +335,6 @@ export const api = {
     }),
   deleteScheduleEntry: (entryId) =>
     request(`/schedule-entries/${entryId}`, {
-      method: "DELETE",
-    }),
-  listHomeworksPage: (teacherId, pagination = {}) =>
-    request(
-      `/homeworks${buildQuery({
-        teacher_id: teacherId,
-        classroom_id: pagination.classroomId,
-        limit: pagination.limit,
-        offset: pagination.offset,
-      })}`,
-    ).then((page) =>
-      normalizePage(page, pagination.limit, pagination.offset),
-    ),
-  createHomework: (payload) =>
-    request("/homeworks", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-  updateHomework: (homeworkId, payload) =>
-    request(`/homeworks/${homeworkId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
-  deleteHomework: (homeworkId) =>
-    request(`/homeworks/${homeworkId}`, {
       method: "DELETE",
     }),
   generateReportComment: (studentId) =>

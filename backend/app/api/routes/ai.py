@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -18,11 +19,13 @@ from app.db.session import get_db
 from app.models import (
     AIOutput,
     AIOutputType,
-    Attendance,
+    Assessment,
+    AssessmentRecord,
+    AssessmentType,
+    AttendanceRecord,
+    AttendanceSession,
     AttendanceStatus,
     Classroom,
-    Grade,
-    Homework,
     Lesson,
     Student,
     Teacher,
@@ -50,29 +53,51 @@ def _decimal_to_float(value: Decimal) -> float:
     return float(value)
 
 
+GRADE_CATEGORY_LABELS_TR = {
+    AssessmentType.sinav: "Sınav",
+    AssessmentType.ders_ici_performans: "Ders İçi Performans",
+    AssessmentType.performans_odevi: "Performans Ödevi",
+    AssessmentType.odev: "Ödev",
+}
+
+
+def _homework_status_label(assessment_date, records: list) -> str:
+    if not records:
+        return "assigned"
+    if all(record.is_completed for record in records):
+        return "completed"
+    if assessment_date < date.today():
+        return "missing"
+    return "assigned"
+
+
 def _build_student_payload(student_id: int, db: Session, teacher: Teacher) -> dict[str, Any]:
     student = ensure_student_owner(db.get(Student, student_id), teacher, db)
 
     classroom = db.get(Classroom, student.classroom_id)
     grades = db.execute(
-        select(Grade, Lesson.name)
-        .join(Lesson, Lesson.id == Grade.lesson_id)
-        .where(Grade.student_id == student.id)
-        .order_by(Lesson.name, Grade.id)
+        select(AssessmentRecord, Assessment, Lesson.name)
+        .join(Assessment, Assessment.id == AssessmentRecord.assessment_id)
+        .join(Lesson, Lesson.id == Assessment.lesson_id)
+        .where(AssessmentRecord.student_id == student.id, AssessmentRecord.score.is_not(None))
+        .order_by(Lesson.name, AssessmentRecord.id)
     ).all()
     # Madde 19: a subject teacher's AI context must never include another
     # subject's detailed records — only a rehber (homeroom) assignment sees
     # everything for this student.
     visible_lessons = visible_lesson_ids_for_classroom(teacher, student.classroom_id, db)
     if visible_lessons is not None:
-        grades = [(grade, lesson_name) for grade, lesson_name in grades if grade.lesson_id in visible_lessons]
+        grades = [row for row in grades if row[1].lesson_id in visible_lessons]
     attendance_records = list(
-        db.scalars(
-            select(Attendance).where(Attendance.student_id == student.id).order_by(Attendance.date, Attendance.id)
+        db.execute(
+            select(AttendanceRecord, AttendanceSession.date)
+            .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+            .where(AttendanceRecord.student_id == student.id)
+            .order_by(AttendanceSession.date, AttendanceRecord.id)
         ).all()
     )
     attendance_counts = {attendance_status: 0 for attendance_status in AttendanceStatus}
-    for attendance in attendance_records:
+    for attendance, _attendance_date in attendance_records:
         attendance_counts[attendance.status] += 1
 
     return {
@@ -90,15 +115,16 @@ def _build_student_payload(student_id: int, db: Session, teacher: Teacher) -> di
         "grades": [
             {
                 "lesson_name": lesson_name,
-                "exam_name": grade.exam_name,
-                "score": _decimal_to_float(grade.score),
+                "exam_name": assessment.title,
+                "category": GRADE_CATEGORY_LABELS_TR[assessment.assessment_type],
+                "score": _decimal_to_float(record.score),
             }
-            for grade, lesson_name in grades
+            for record, assessment, lesson_name in grades
         ],
         "attendance": {
             "records": [
-                {"date": attendance.date.isoformat(), "status": attendance.status.value}
-                for attendance in attendance_records
+                {"date": attendance_date.isoformat(), "status": attendance.status.value}
+                for attendance, attendance_date in attendance_records
             ],
             "summary": {
                 "present": attendance_counts[AttendanceStatus.present],
@@ -185,27 +211,29 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
     student_ids = [student.id for student in students]
     all_grades = (
         db.execute(
-            select(Grade, Lesson.name, Student.first_name, Student.last_name, Student.classroom_id)
-            .join(Lesson, Lesson.id == Grade.lesson_id)
-            .join(Student, Student.id == Grade.student_id)
-            .where(Grade.student_id.in_(student_ids))
-            .order_by(Grade.id.desc())
+            select(AssessmentRecord, Assessment, Lesson.name, Student.first_name, Student.last_name, Student.classroom_id)
+            .join(Assessment, Assessment.id == AssessmentRecord.assessment_id)
+            .join(Lesson, Lesson.id == Assessment.lesson_id)
+            .join(Student, Student.id == AssessmentRecord.student_id)
+            .where(AssessmentRecord.student_id.in_(student_ids), AssessmentRecord.score.is_not(None))
+            .order_by(AssessmentRecord.id.desc())
             .limit(200)
         ).all()
         if student_ids
         else []
     )
     grades = [
-        (grade, lesson_name, first_name, last_name)
-        for grade, lesson_name, first_name, last_name, classroom_id in all_grades
-        if classroom_id in homeroom_ids or (classroom_id, grade.lesson_id) in subject_pairs
+        (record, assessment, lesson_name, first_name, last_name)
+        for record, assessment, lesson_name, first_name, last_name, classroom_id in all_grades
+        if classroom_id in homeroom_ids or (classroom_id, assessment.lesson_id) in subject_pairs
     ][:80]
     attendance_records = (
         db.execute(
-            select(Attendance, Student.first_name, Student.last_name)
-            .join(Student, Student.id == Attendance.student_id)
-            .where(Attendance.student_id.in_(student_ids))
-            .order_by(Attendance.date.desc(), Attendance.id.desc())
+            select(AttendanceRecord, AttendanceSession.date, Student.first_name, Student.last_name)
+            .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+            .join(Student, Student.id == AttendanceRecord.student_id)
+            .where(AttendanceRecord.student_id.in_(student_ids))
+            .order_by(AttendanceSession.date.desc(), AttendanceRecord.id.desc())
             .limit(80)
         ).all()
         if student_ids
@@ -213,11 +241,11 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
     )
     all_homeworks = (
         db.execute(
-            select(Homework, Classroom.name, Lesson.name)
-            .join(Classroom, Classroom.id == Homework.classroom_id)
-            .join(Lesson, Lesson.id == Homework.lesson_id)
-            .where(Homework.classroom_id.in_(classroom_ids))
-            .order_by(Homework.due_date.desc(), Homework.id.desc())
+            select(Assessment, Classroom.name, Lesson.name)
+            .join(Classroom, Classroom.id == Assessment.classroom_id)
+            .join(Lesson, Lesson.id == Assessment.lesson_id)
+            .where(Assessment.classroom_id.in_(classroom_ids), Assessment.assessment_type == AssessmentType.odev)
+            .order_by(Assessment.date.desc(), Assessment.id.desc())
             .limit(200)
         ).all()
         if classroom_ids
@@ -228,6 +256,13 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
         for homework, classroom_name, lesson_name in all_homeworks
         if homework.classroom_id in homeroom_ids or (homework.classroom_id, homework.lesson_id) in subject_pairs
     ][:40]
+    homework_ids = [homework.id for homework, _classroom_name, _lesson_name in homeworks]
+    homework_records_by_assessment: dict[int, list[AssessmentRecord]] = {homework_id: [] for homework_id in homework_ids}
+    if homework_ids:
+        for record in db.scalars(
+            select(AssessmentRecord).where(AssessmentRecord.assessment_id.in_(homework_ids))
+        ).all():
+            homework_records_by_assessment[record.assessment_id].append(record)
 
     return {
         "teacher": {"id": teacher.id, "full_name": teacher.full_name},
@@ -237,26 +272,27 @@ def _build_weekly_payload(payload: AIWeeklySummaryRequest, db: Session, teacher:
             {
                 "student": f"{first_name} {last_name}",
                 "lesson": lesson_name,
-                "exam_name": grade.exam_name,
-                "score": _decimal_to_float(grade.score),
+                "exam_name": assessment.title,
+                "category": GRADE_CATEGORY_LABELS_TR[assessment.assessment_type],
+                "score": _decimal_to_float(record.score),
             }
-            for grade, lesson_name, first_name, last_name in grades
+            for record, assessment, lesson_name, first_name, last_name in grades
         ],
         "recent_attendance": [
             {
                 "student": f"{first_name} {last_name}",
-                "date": attendance.date.isoformat(),
+                "date": attendance_date.isoformat(),
                 "status": attendance.status.value,
             }
-            for attendance, first_name, last_name in attendance_records
+            for attendance, attendance_date, first_name, last_name in attendance_records
         ],
         "homeworks": [
             {
                 "title": homework.title,
                 "classroom": classroom_name,
                 "lesson": lesson_name,
-                "due_date": homework.due_date.isoformat(),
-                "status": homework.status.value,
+                "due_date": homework.date.isoformat(),
+                "status": _homework_status_label(homework.date, homework_records_by_assessment[homework.id]),
             }
             for homework, classroom_name, lesson_name in homeworks
         ],
@@ -276,10 +312,15 @@ def _build_lesson_plan_payload(payload: AILessonPlanRequest, db: Session, teache
     student_ids = [student.id for student in students]
     grades = (
         db.execute(
-            select(Grade, Student.first_name, Student.last_name)
-            .join(Student, Student.id == Grade.student_id)
-            .where(Grade.lesson_id == lesson.id, Grade.student_id.in_(student_ids))
-            .order_by(Grade.id.desc())
+            select(AssessmentRecord, Assessment, Student.first_name, Student.last_name)
+            .join(Assessment, Assessment.id == AssessmentRecord.assessment_id)
+            .join(Student, Student.id == AssessmentRecord.student_id)
+            .where(
+                Assessment.lesson_id == lesson.id,
+                AssessmentRecord.student_id.in_(student_ids),
+                AssessmentRecord.score.is_not(None),
+            )
+            .order_by(AssessmentRecord.id.desc())
             .limit(40)
         ).all()
         if student_ids
@@ -295,10 +336,11 @@ def _build_lesson_plan_payload(payload: AILessonPlanRequest, db: Session, teache
         "recent_lesson_grades": [
             {
                 "student": f"{first_name} {last_name}",
-                "exam_name": grade.exam_name,
-                "score": _decimal_to_float(grade.score),
+                "exam_name": assessment.title,
+                "category": GRADE_CATEGORY_LABELS_TR[assessment.assessment_type],
+                "score": _decimal_to_float(record.score),
             }
-            for grade, first_name, last_name in grades
+            for record, assessment, first_name, last_name in grades
         ],
     }
 

@@ -6,7 +6,6 @@ import StudentSearch from "../components/StudentSearch";
 export default function AIReportsPage({
   filteredStudents,
   isStudentPickerOpen,
-  profile,
   searchTerm,
   selectedStudent,
   selectedStudentId,

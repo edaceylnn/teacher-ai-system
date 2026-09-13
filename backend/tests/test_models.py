@@ -8,13 +8,14 @@ from app.db.base import Base
 from app.models import (
     AIOutput,
     AIOutputType,
-    Attendance,
+    Assessment,
+    AssessmentRecord,
+    AssessmentType,
+    AttendanceRecord,
+    AttendanceSession,
     AttendanceStatus,
     AuditLog,
     Classroom,
-    Grade,
-    Homework,
-    HomeworkStatus,
     Lesson,
     ScheduleEntry,
     Student,
@@ -31,11 +32,12 @@ def test_database_models_create_expected_tables() -> None:
     assert table_names == {
         "academic_years",
         "ai_outputs",
+        "assessments",
+        "assessment_records",
+        "attendance_sessions",
         "attendance_records",
         "audit_logs",
         "classrooms",
-        "grades",
-        "homeworks",
         "lessons",
         "schedule_entries",
         "students",
@@ -63,8 +65,22 @@ def test_teacher_student_ai_output_relationships() -> None:
             observation_notes="Derse katilimi iyi, problem cozme pratigine ihtiyaci var.",
         )
         lesson = Lesson(name="Matematik", teacher=teacher)
-        grade = Grade(student=student, lesson=lesson, exam_name="1. Yazili", score=Decimal("82.50"))
-        attendance = Attendance(student=student, date=date(2026, 1, 15), status=AttendanceStatus.present)
+        assessment = Assessment(
+            classroom=classroom,
+            lesson=lesson,
+            teacher=teacher,
+            assessment_type=AssessmentType.sinav,
+            title="1. Yazili",
+            date=date(2026, 1, 11),
+        )
+        assessment_record = AssessmentRecord(assessment=assessment, student=student, score=Decimal("82.50"))
+        attendance_session = AttendanceSession(
+            classroom=classroom,
+            lesson=lesson,
+            teacher=teacher,
+            date=date(2026, 1, 15),
+        )
+        attendance_record = AttendanceRecord(session=attendance_session, student=student, status=AttendanceStatus.present)
         schedule_entry = ScheduleEntry(
             teacher=teacher,
             classroom=classroom,
@@ -74,13 +90,13 @@ def test_teacher_student_ai_output_relationships() -> None:
             end_time=time(9, 40),
             location="Derslik 2",
         )
-        homework = Homework(
+        homework = Assessment(
             teacher=teacher,
             classroom=classroom,
             lesson=lesson,
+            assessment_type=AssessmentType.odev,
             title="Kesir problemleri",
-            due_date=date(2026, 1, 20),
-            status=HomeworkStatus.assigned,
+            date=date(2026, 1, 20),
         )
         ai_output = AIOutput(
             student=student,
@@ -89,11 +105,25 @@ def test_teacher_student_ai_output_relationships() -> None:
             output_payload={"comment": "Ada matematikte guclu bir ilerleme gosteriyor."},
         )
 
-        session.add_all([teacher, classroom, student, lesson, grade, attendance, schedule_entry, homework, ai_output])
+        session.add_all(
+            [
+                teacher,
+                classroom,
+                student,
+                lesson,
+                assessment,
+                assessment_record,
+                attendance_session,
+                attendance_record,
+                schedule_entry,
+                homework,
+                ai_output,
+            ]
+        )
         session.commit()
 
         saved_student = session.query(Student).filter_by(first_name="Ada").one()
         assert saved_student.classroom.name == "5-A"
-        assert saved_student.grades[0].lesson.name == "Matematik"
+        assert saved_student.assessment_records[0].assessment.lesson.name == "Matematik"
         assert saved_student.attendance_records[0].status == AttendanceStatus.present
         assert saved_student.ai_outputs[0].output_type == AIOutputType.report_comment

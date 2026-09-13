@@ -327,7 +327,7 @@ def test_generate_report_comment_regenerates_when_data_changed(
     _assign_subject(db_session, teacher_id=teacher.id, classroom_id=student["classroom_id"], lesson_id=lesson["id"])
     client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90"},
+        json={"student_id": student["id"], "lesson_id": lesson["id"], "exam_name": "1. Yazili", "score": "90", "category": "sinav"},
     )
 
     second = client.post("/ai/report-comments", json={"student_id": student["id"]})

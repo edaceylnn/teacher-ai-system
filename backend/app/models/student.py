@@ -33,11 +33,11 @@ class Student(TimestampMixin, Base):
     observation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     classroom: Mapped["Classroom"] = relationship(back_populates="students")
-    grades: Mapped[list["Grade"]] = relationship(
+    assessment_records: Mapped[list["AssessmentRecord"]] = relationship(
         back_populates="student",
         cascade="all, delete-orphan",
     )
-    attendance_records: Mapped[list["Attendance"]] = relationship(
+    attendance_records: Mapped[list["AttendanceRecord"]] = relationship(
         back_populates="student",
         cascade="all, delete-orphan",
     )

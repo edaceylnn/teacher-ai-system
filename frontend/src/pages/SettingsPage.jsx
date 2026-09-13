@@ -8,13 +8,9 @@ import {
   validateScheduleSettings,
 } from "../utils/scheduleSettings";
 
-// Only Ders Saatleri is real today. The other three are placeholders so the
-// nav doesn't need reshaping when they're built — kept disabled, no behavior.
 const SETTINGS_SECTIONS = [
-  { id: "general", icon: "tune", label: "Genel", enabled: false },
-  { id: "lessonHours", icon: "schedule", label: "Ders Saatleri", enabled: true },
-  { id: "schoolInfo", icon: "apartment", label: "Okul Bilgileri", enabled: false },
-  { id: "academicCalendar", icon: "event", label: "Akademik Takvim", enabled: false },
+  { id: "lessonHours", icon: "schedule", label: "Ders Saatleri" },
+  { id: "privacy", icon: "privacy_tip", label: "Gizlilik ve Veri" },
 ];
 
 const inputClass =
@@ -42,18 +38,14 @@ export default function SettingsPage({ handleUpdateScheduleSettings, scheduleSet
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left font-label-md text-label-md transition-colors ${
                     isActive
                       ? "bg-surface-container-low font-bold text-primary"
-                      : section.enabled
-                        ? "text-secondary hover:bg-surface-container-low"
-                        : "cursor-not-allowed text-secondary/50"
+                      : "text-secondary hover:bg-surface-container-low"
                   }`}
-                  disabled={!section.enabled}
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
                   type="button"
                 >
                   <Icon filled={isActive} name={section.icon} />
                   <span className="flex-1">{section.label}</span>
-                  {!section.enabled && <span className="badge badge-neutral">Yakında</span>}
                 </button>
               );
             })}
@@ -64,8 +56,43 @@ export default function SettingsPage({ handleUpdateScheduleSettings, scheduleSet
           {activeSection === "lessonHours" && (
             <LessonHoursSettings onSave={handleUpdateScheduleSettings} scheduleSettings={scheduleSettings} />
           )}
+          {activeSection === "privacy" && <PrivacyDataSettings />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PrivacyDataSettings() {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="card p-8 shadow-sm">
+        <div className="mb-2 flex items-center gap-3">
+          <Icon className="text-primary" name="privacy_tip" />
+          <h3 className="font-headline-md text-headline-md text-on-background">
+            Öğrenci Verisi ve Yapay Zeka
+          </h3>
+        </div>
+        <p className="font-body-md text-body-md text-secondary">
+          Karne yorumu, veli mesajı, eksik konu analizi ve haftalık özet gibi AI destekli çıktılar
+          üretilirken, ürettiğin çıktıyla ilgili öğrencinin adı, notları, devamsızlık kayıtları ve
+          varsa gözlem notların OpenAI API'sine gönderilir. Bu veri yalnızca ilgili çıktıyı üretmek
+          için kullanılır; bir öğrenci veya sınıf için AI çıktısı üretmediğin sürece hiçbir veri
+          dışarı gönderilmez.
+        </p>
+        <p className="mt-4 font-body-md text-body-md text-secondary">
+          Bu paylaşım için okulunun veya kurumunun kişisel veri politikasına göre veli/idare
+          bilgilendirmesi veya onayı gerekebilir — bu süreci işletmek öğretmenin/kurumun
+          sorumluluğundadır.
+        </p>
+        <div className="mt-6 flex items-start gap-2 rounded border border-outline-variant bg-surface-container-low p-4">
+          <Icon className="mt-0.5 text-secondary" name="info" />
+          <p className="font-body-md text-body-md text-on-surface">
+            AI ile üretilen her çıktı kaydetmeden önce düzenlenebilir; öğrenciyi tanımlayabilecek
+            hatalı veya gereksiz ayrıntıları kaydetmeden önce metinden çıkarabilirsin.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

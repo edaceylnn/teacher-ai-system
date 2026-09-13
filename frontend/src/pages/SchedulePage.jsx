@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { schoolWeekDays } from "../constants";
 import { buildScheduleTimeBounds, minutesToTime, timeToMinutes } from "../utils/helpers";
+import { canAccessClassSubject, isAdmin } from "../utils/permissions";
 import Icon from "../components/Icon";
 
 // 120px/hour (2px/min) so a standard 40-minute lesson renders ~76px tall —
@@ -29,6 +30,7 @@ function nearestPeriodAt(periods, clickedMinute) {
 
 export default function SchedulePage({
   classrooms,
+  currentTeacher,
   handleDeleteScheduleEntry,
   lessonSlots,
   lessons,
@@ -36,7 +38,9 @@ export default function SchedulePage({
   scheduleEntries,
   setActiveModal,
   setEditingScheduleEntry,
+  setQuickActionEntry,
   setScheduleForm,
+  teacherAssignments,
 }) {
   const [draggingEntryId, setDraggingEntryId] = useState(null);
   const [dragOverWeekday, setDragOverWeekday] = useState(null);
@@ -83,6 +87,14 @@ export default function SchedulePage({
     });
     return grouped;
   }, [scheduleEntries]);
+
+  // Madde 9/11: bir sınıfın programını görebilmek (rehber olarak) o dersin
+  // branşına yazma yetkisi vermez — hızlı işlem menüsü sadece gerçekten o
+  // ders için değerlendirme/yoklama girebilecek öğretmene gösterilir.
+  function canActOnEntry(entry) {
+    if (isAdmin(currentTeacher)) return true;
+    return canAccessClassSubject(teacherAssignments, entry.classroom_id, entry.lesson_id);
+  }
 
   function openEntry(entry) {
     setEditingScheduleEntry(entry);
@@ -288,6 +300,20 @@ export default function SchedulePage({
                           height: Math.max((entryEnd - entryStart) * PX_PER_MINUTE - 4, 56),
                         }}
                       >
+                        {canActOnEntry(entry) && (
+                          <button
+                            aria-label="Hızlı işlemler"
+                            className="absolute right-6 top-1 flex items-center rounded bg-black/10 p-0.5 text-current hover:text-primary"
+                            onClick={(clickEvent) => {
+                              clickEvent.stopPropagation();
+                              setQuickActionEntry(entry);
+                              setActiveModal("scheduleQuickActions");
+                            }}
+                            type="button"
+                          >
+                            <Icon name="more_vert" className="text-[13px]" />
+                          </button>
+                        )}
                         <button
                           aria-label="Ders programı kaydını sil"
                           className="absolute right-1 top-1 hidden items-center rounded bg-black/10 p-0.5 text-current hover:text-error group-hover:flex"

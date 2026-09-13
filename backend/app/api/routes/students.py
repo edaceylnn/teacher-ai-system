@@ -11,7 +11,18 @@ from app.api.deps import (
 )
 from app.core.email import send_parent_message_email
 from app.db.session import get_db
-from app.models import Attendance, AttendanceStatus, Classroom, Grade, Lesson, Student, Teacher
+from app.models import (
+    Assessment,
+    AssessmentRecord,
+    AssessmentType,
+    AttendanceRecord,
+    AttendanceSession,
+    AttendanceStatus,
+    Classroom,
+    Lesson,
+    Student,
+    Teacher,
+)
 from app.schemas.pagination import PageResponse
 from app.schemas.student import (
     StudentCreate,
@@ -20,6 +31,7 @@ from app.schemas.student import (
     StudentProfileAttendanceSummary,
     StudentProfileClassroom,
     StudentProfileGrade,
+    StudentProfileHomework,
     StudentProfileResponse,
     StudentResponse,
     StudentUpdate,
@@ -104,23 +116,43 @@ def get_student_profile(
     student = ensure_student_owner(db.get(Student, student_id), current_teacher, db)
     classroom = db.get(Classroom, student.classroom_id)
     grades = db.execute(
-        select(Grade, Lesson.name)
-        .join(Lesson, Lesson.id == Grade.lesson_id)
-        .where(Grade.student_id == student.id)
-        .order_by(Lesson.name, Grade.id)
+        select(AssessmentRecord, Assessment, Lesson.name)
+        .join(Assessment, Assessment.id == AssessmentRecord.assessment_id)
+        .join(Lesson, Lesson.id == Assessment.lesson_id)
+        .where(AssessmentRecord.student_id == student.id, AssessmentRecord.score.is_not(None))
+        .order_by(Lesson.name, AssessmentRecord.id)
     ).all()
     # Madde 5: a branş öğretmeni sees this student's roster entry, but only
     # their own subject's grades — a rehber sees every subject's grades.
     visible_lessons = visible_lesson_ids_for_classroom(current_teacher, student.classroom_id, db)
     if visible_lessons is not None:
-        grades = [(grade, lesson_name) for grade, lesson_name in grades if grade.lesson_id in visible_lessons]
+        grades = [row for row in grades if row[1].lesson_id in visible_lessons]
+
+    homeworks = db.execute(
+        select(Assessment, Lesson.name, AssessmentRecord.is_completed, AssessmentRecord.score)
+        .join(Lesson, Lesson.id == Assessment.lesson_id)
+        .outerjoin(
+            AssessmentRecord,
+            (AssessmentRecord.assessment_id == Assessment.id)
+            & (AssessmentRecord.student_id == student.id),
+        )
+        .where(Assessment.classroom_id == student.classroom_id, Assessment.assessment_type == AssessmentType.odev)
+        .order_by(Assessment.date, Assessment.id)
+    ).all()
+    if visible_lessons is not None:
+        homeworks = [row for row in homeworks if row[0].lesson_id in visible_lessons]
+
     attendance_records = list(
-        db.scalars(
-            select(Attendance).where(Attendance.student_id == student.id).order_by(Attendance.date, Attendance.id)
+        db.execute(
+            select(AttendanceRecord, AttendanceSession.date, AttendanceSession.lesson_id, Lesson.name, AttendanceSession.start_time)
+            .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
+            .outerjoin(Lesson, Lesson.id == AttendanceSession.lesson_id)
+            .where(AttendanceRecord.student_id == student.id)
+            .order_by(AttendanceSession.date, AttendanceRecord.id)
         ).all()
     )
     attendance_counts = {attendance_status: 0 for attendance_status in AttendanceStatus}
-    for attendance in attendance_records:
+    for attendance, _attendance_date, _lesson_id, _lesson_name, _start_time in attendance_records:
         attendance_counts[attendance.status] += 1
 
     return StudentProfileResponse(
@@ -144,21 +176,38 @@ def get_student_profile(
         ),
         grades=[
             StudentProfileGrade(
-                id=grade.id,
-                lesson_id=grade.lesson_id,
+                id=record.id,
+                lesson_id=assessment.lesson_id,
                 lesson_name=lesson_name,
-                exam_name=grade.exam_name,
-                score=grade.score,
+                exam_name=assessment.title,
+                score=record.score,
+                category=assessment.assessment_type,
+                date=assessment.date.isoformat(),
             )
-            for grade, lesson_name in grades
+            for record, assessment, lesson_name in grades
+        ],
+        homeworks=[
+            StudentProfileHomework(
+                id=homework.id,
+                lesson_id=homework.lesson_id,
+                lesson_name=lesson_name,
+                title=homework.title,
+                due_date=homework.date.isoformat(),
+                is_completed=bool(is_completed),
+                score=score,
+            )
+            for homework, lesson_name, is_completed, score in homeworks
         ],
         attendance_records=[
             StudentProfileAttendanceRecord(
                 id=attendance.id,
-                date=attendance.date.isoformat(),
+                date=attendance_date.isoformat(),
+                lesson_id=lesson_id,
+                lesson_name=lesson_name,
+                start_time=start_time.isoformat() if start_time else None,
                 status=attendance.status,
             )
-            for attendance in attendance_records
+            for attendance, attendance_date, lesson_id, lesson_name, start_time in attendance_records
         ],
         attendance_summary=StudentProfileAttendanceSummary(
             present=attendance_counts[AttendanceStatus.present],

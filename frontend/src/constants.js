@@ -39,14 +39,14 @@ export const schoolWeekdayOptions = weekdayOptions.slice(0, 5);
 // App.jsx's `lessonSlots`/`scheduleSlotOptions`) so a teacher can change the
 // school's start time, lesson length, etc. and have it apply everywhere.
 
-export const homeworkStatusLabels = {
-  assigned: "Atandı",
-  completed: "Tamamlandı",
-  missing: "Eksik",
-  late: "Geç Teslim",
+export const gradeCategoryLabels = {
+  sinav: "Sınav",
+  ders_ici_performans: "Ders İçi Performans",
+  performans_odevi: "Performans Ödevi",
+  odev: "Ödev",
 };
 
-export const homeworkStatusOptions = Object.entries(homeworkStatusLabels).map(
+export const gradeCategoryOptions = Object.entries(gradeCategoryLabels).map(
   ([value, label]) => ({ label, value }),
 );
 

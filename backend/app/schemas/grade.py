@@ -3,10 +3,13 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models import AssessmentType
+
 
 class GradeBase(BaseModel):
     exam_name: str = Field(min_length=1, max_length=120)
     score: Decimal = Field(ge=0, le=100, max_digits=5, decimal_places=2)
+    category: AssessmentType
 
 
 class GradeCreate(GradeBase):
@@ -19,6 +22,7 @@ class GradeUpdate(BaseModel):
     lesson_id: int | None = None
     exam_name: str | None = Field(default=None, min_length=1, max_length=120)
     score: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
+    category: AssessmentType | None = None
 
 
 class GradeResponse(GradeBase):

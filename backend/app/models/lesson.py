@@ -18,8 +18,4 @@ class Lesson(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     teacher: Mapped["Teacher | None"] = relationship(back_populates="lessons")
-    grades: Mapped[list["Grade"]] = relationship(
-        back_populates="lesson",
-        cascade="all, delete-orphan",
-    )
 

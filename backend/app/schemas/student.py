@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import AttendanceStatus, StudentEnrollmentStatus
+from app.models import AssessmentType, AttendanceStatus, StudentEnrollmentStatus
 
 
 class StudentBase(BaseModel):
@@ -61,11 +61,26 @@ class StudentProfileGrade(BaseModel):
     lesson_name: str
     exam_name: str
     score: Decimal
+    category: AssessmentType
+    date: str
+
+
+class StudentProfileHomework(BaseModel):
+    id: int
+    lesson_id: int
+    lesson_name: str
+    title: str
+    due_date: str
+    is_completed: bool
+    score: Decimal | None
 
 
 class StudentProfileAttendanceRecord(BaseModel):
     id: int
     date: str
+    lesson_id: int | None
+    lesson_name: str | None
+    start_time: str | None
     status: AttendanceStatus
 
 
@@ -79,5 +94,6 @@ class StudentProfileAttendanceSummary(BaseModel):
 class StudentProfileResponse(StudentResponse):
     classroom: StudentProfileClassroom
     grades: list[StudentProfileGrade]
+    homeworks: list[StudentProfileHomework]
     attendance_records: list[StudentProfileAttendanceRecord]
     attendance_summary: StudentProfileAttendanceSummary

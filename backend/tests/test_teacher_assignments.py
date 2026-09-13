@@ -144,7 +144,7 @@ def test_admin_can_create_assignment_and_it_grants_access(
     assert client.get(f"/classrooms/{classroom['id']}", headers=branch_headers).status_code == 200
     grade_response = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": math["id"], "exam_name": "1. Yazili", "score": "88"},
+        json={"student_id": student["id"], "lesson_id": math["id"], "exam_name": "1. Yazili", "score": "88", "category": "sinav"},
         headers=branch_headers,
     )
     assert grade_response.status_code == 201
@@ -190,7 +190,7 @@ def test_subject_assignment_does_not_grant_other_subjects(
     # this classroom exists, they just aren't assigned to this subject.
     forbidden = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70"},
+        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70", "category": "sinav"},
         headers=branch_headers,
     )
     assert forbidden.status_code == 403
@@ -231,7 +231,7 @@ def test_homeroom_view_does_not_grant_other_subject_write(
 
     forbidden = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70"},
+        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70", "category": "sinav"},
         headers=homeroom_headers,
     )
     assert forbidden.status_code == 403
@@ -250,7 +250,7 @@ def test_admin_has_blanket_access_without_any_explicit_assignment(
     assert client.get(f"/classrooms/{classroom['id']}", headers=admin_headers).status_code == 200
     grade = client.post(
         "/grades",
-        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70"},
+        json={"student_id": student["id"], "lesson_id": turkish["id"], "exam_name": "1. Yazili", "score": "70", "category": "sinav"},
         headers=admin_headers,
     )
     assert grade.status_code == 201

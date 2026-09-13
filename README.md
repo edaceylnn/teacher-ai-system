@@ -1,14 +1,15 @@
 # Teacher AI System
 
-Teacher AI System, öğretmenlerin sınıf, öğrenci, not, devamsızlık ve AI destekli değerlendirme süreçlerini tek panelden yönetebilmesi için geliştirilmiş bir web uygulamasıdır.
+Teacher AI System, öğretmenlerin sınıf, öğrenci, değerlendirme, yoklama, ödev ve AI destekli raporlama süreçlerini tek panelden yönetebilmesi için geliştirilmiş bir web uygulamasıdır.
 
 Proje; öğretmenin girdiği öğrenci verilerini kullanarak karne yorumu ve veli mesajı üretir, öğretmenin bu çıktıları düzenleyip kaydedebilmesini sağlar.
 
 ## Öne Çıkan Özellikler
 
-- Sınıf, öğrenci, ders, not ve devamsızlık yönetimi
+- Sınıf, öğrenci, ders, değerlendirme, yoklama ve ödev yönetimi
 - Öğrenci detay sayfasında akademik durum, devam bilgisi ve veli iletişim bilgileri
-- Takvim tabanlı devamsızlık takibi
+- Ders bazlı yoklama oturumları ve toplu devamsızlık girişi
+- Değerlendirme bazlı toplu not/ödev sonucu girişi
 - Searchable select/input bileşenleri
 - Backend destekli pagination
 - OpenAI API ile AI karne yorumu ve veli mesajı üretimi
@@ -90,6 +91,15 @@ Demo giriş bilgileri:
 - E-posta: `eda@example.com`
 - Parola: `demo12345`
 
+## Production Checklist
+
+- `SECRET_KEY` en az 32 karakterlik güçlü ve ortama özel bir değer olmalı.
+- `POSTGRES_PASSWORD`, `CORS_ORIGINS`, `FRONTEND_BASE_URL` ve build-time `VITE_API_BASE_URL` gerçek ortama göre ayarlanmalı.
+- Şifre sıfırlama için `SMTP_HOST` ve `SMTP_FROM_EMAIL` üretimde zorunludur; SMTP hesabı gerçek gönderimle test edilmeli.
+- AI özellikleri kullanılacaksa `OPENAI_API_KEY` tanımlanmalı; kurum/veli veri paylaşımı onay süreci uygulama dışında işletilmelidir.
+- Yayın ortamında HTTPS, veritabanı yedekleme, log saklama ve veri silme/iade prosedürleri netleştirilmeli.
+- `alembic upgrade head`, backend container başlangıcında otomatik çalışır; canlı veri taşıma gerektiren migration'lar ayrıca prova edilmelidir.
+
 ## Test
 
 ```bash
@@ -105,6 +115,6 @@ make test
 
 ## Durum
 
-Proje aktif olarak geliştirilen bir MVP'dir. Temel CRUD akışları, öğrenci profili, not/devamsızlık yönetimi, ders programı, ödev takibi, AI rapor üretimi, eksik konu analizi, ders planı üretimi, PDF'e yazdırma ve pagination desteği çalışır durumdadır.
+Proje aktif olarak geliştirilen bir MVP'dir. Temel CRUD akışları, öğrenci profili, değerlendirme/yoklama yönetimi, ders programı, ödev takibi, AI rapor üretimi, eksik konu analizi, ders planı üretimi, PDF'e yazdırma ve pagination desteği çalışır durumdadır.
 
-Uygulama token tabanlı öğretmen oturumu ile çalışır. Backend sınıf, öğrenci, not, devamsızlık, ödev, ders programı ve AI çıktılarını oturumdaki öğretmene göre izole eder.
+Uygulama token tabanlı öğretmen oturumu ile çalışır. Backend sınıf, öğrenci, değerlendirme, yoklama, ödev, ders programı ve AI çıktılarını oturumdaki öğretmene göre izole eder.
