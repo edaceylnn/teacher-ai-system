@@ -27,6 +27,24 @@ import StudentDetailPage from "./pages/StudentDetailPage";
 import StudentsPage from "./pages/StudentsPage";
 import Topbar from "./components/Topbar";
 
+function ModalSection({ children, title }) {
+  return (
+    <section className="modal-form-section">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function FormField({ children, label }) {
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export default function App() {
   const [resetToken] = useState(() => {
     if (window.location.pathname !== "/reset-password") return null;
@@ -70,6 +88,7 @@ export default function App() {
     offset: 0,
   });
   const [classroomStudentOffset, setClassroomStudentOffset] = useState(0);
+  const [classroomTodayAbsentCount, setClassroomTodayAbsentCount] = useState(0);
   const [lessons, setLessons] = useState([]);
   const [teacherAssignments, setTeacherAssignments] = useState([]);
   const [grades, setGrades] = useState([]);
@@ -406,6 +425,35 @@ export default function App() {
     setClassroomStudentPage(page);
   }
 
+  async function loadClassroomTodayAttendanceSummary() {
+    if (!selectedClassroomId) {
+      setClassroomTodayAbsentCount(0);
+      return;
+    }
+
+    const today = formatLocalDate(new Date());
+    const sessions = await api.listAttendanceSessions({
+      classroomId: selectedClassroomId,
+      date: today,
+      limit: 500,
+      offset: 0,
+    });
+
+    if (!sessions.length) {
+      setClassroomTodayAbsentCount(0);
+      return;
+    }
+
+    const recordGroups = await Promise.all(
+      sessions.map((session) => api.listAttendanceSessionRecords(session.id)),
+    );
+    const absentStudentIds = new Set();
+    recordGroups.flat().forEach((record) => {
+      if (record.status === "absent") absentStudentIds.add(record.student_id);
+    });
+    setClassroomTodayAbsentCount(absentStudentIds.size);
+  }
+
   async function loadProfile(studentId) {
     if (!studentId) {
       setProfile(null);
@@ -598,6 +646,7 @@ export default function App() {
   useEffect(() => {
     if (activePage !== "classroomDetail") return;
     loadClassroomStudentPage().catch((err) => setError(err.message));
+    loadClassroomTodayAttendanceSummary().catch((err) => setError(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, selectedClassroomId, classroomStudentOffset]);
 
@@ -1186,6 +1235,7 @@ export default function App() {
     classroomStudentCounts,
     classroomStudentPage,
     classroomStudentOffset,
+    classroomTodayAbsentCount,
     classrooms,
     classroomOptions,
     filteredStudents,
@@ -1287,6 +1337,14 @@ export default function App() {
     );
   }
 
+  const wideModalIds = new Set(["student", "editStudent", "schedule", "editSchedule", "newAssessment", "newHomework"]);
+  const standardModalIds = new Set(["grade", "editAssessment", "assignTeacher"]);
+  const modalSize = wideModalIds.has(activeModal)
+    ? "wide"
+    : standardModalIds.has(activeModal)
+      ? "standard"
+      : "compact";
+
   return (
     <main className="min-h-screen bg-background">
       <Sidebar
@@ -1335,9 +1393,15 @@ export default function App() {
       </div>
 
       {activeModal && (
-        <Modal onClose={() => setActiveModal(null)}>
+        <Modal onClose={() => setActiveModal(null)} size={modalSize}>
           {activeModal === "classroom" && (
-            <FormPanel title="Sınıf Ekle" onSubmit={handleCreateClassroom}>
+            <FormPanel
+              description="Yeni sınıf düzeyi ve şubesini oluştur."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateClassroom}
+              submitLabel="Sınıfı Kaydet"
+              title="Sınıf Ekle"
+            >
               <SearchableSelect
                 label="Sınıf düzeyi"
                 onChange={(value) =>
@@ -1362,13 +1426,16 @@ export default function App() {
                 placeholder="Şube ara"
                 value={classroomForm.section}
               />
-              <button className="primary-button" type="submit">
-                Sınıfı Kaydet
-              </button>
             </FormPanel>
           )}
           {activeModal === "editClassroom" && (
-            <FormPanel title="Sınıfı Düzenle" onSubmit={handleUpdateClassroom}>
+            <FormPanel
+              description="Sınıf düzeyi ve şube bilgisini güncelle."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleUpdateClassroom}
+              submitLabel="Değişiklikleri Kaydet"
+              title="Sınıfı Düzenle"
+            >
               <SearchableSelect
                 label="Sınıf düzeyi"
                 onChange={(value) =>
@@ -1396,192 +1463,255 @@ export default function App() {
                 placeholder="Şube ara"
                 value={classroomEditForm.section}
               />
-              <button className="primary-button" type="submit">
-                Değişiklikleri Kaydet
-              </button>
             </FormPanel>
           )}
           {activeModal === "student" && (
-            <FormPanel title="Öğrenci Ekle" onSubmit={handleCreateStudent}>
-              <SearchableSelect
-                label="Sınıf"
-                onChange={(value) =>
-                  setStudentForm((form) => ({ ...form, classroom_id: value }))
-                }
-                options={classroomOptions}
-                placeholder="Sınıf ara"
-                value={studentForm.classroom_id}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    first_name: event.target.value,
-                  }))
-                }
-                placeholder="Ad"
-                required
-                value={studentForm.first_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    last_name: event.target.value,
-                  }))
-                }
-                placeholder="Soyad"
-                required
-                value={studentForm.last_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    parent_full_name: event.target.value,
-                  }))
-                }
-                placeholder="Veli ad soyad"
-                value={studentForm.parent_full_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    parent_phone: event.target.value,
-                  }))
-                }
-                placeholder="Veli telefon"
-                value={studentForm.parent_phone}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    parent_email: event.target.value,
-                  }))
-                }
-                placeholder="Veli e-posta"
-                type="email"
-                value={studentForm.parent_email}
-              />
-              <textarea
-                onChange={(event) =>
-                  setStudentForm((form) => ({
-                    ...form,
-                    home_address: event.target.value,
-                  }))
-                }
-                placeholder="Öğrenci ev adresi"
-                value={studentForm.home_address}
-              />
-              <button className="primary-button" type="submit">
-                Öğrenciyi Kaydet
-              </button>
+            <FormPanel
+              description="Öğrenci ve veli bilgilerini girin."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateStudent}
+              submitLabel="Öğrenciyi Kaydet"
+              title="Öğrenci Ekle"
+            >
+              <ModalSection title="Öğrenci Bilgileri">
+                <SearchableSelect
+                  label="Sınıf"
+                  onChange={(value) =>
+                    setStudentForm((form) => ({ ...form, classroom_id: value }))
+                  }
+                  options={classroomOptions}
+                  placeholder="Sınıf ara"
+                  value={studentForm.classroom_id}
+                />
+                <div className="form-field-grid">
+                  <FormField label="Ad">
+                    <input
+                      onChange={(event) =>
+                        setStudentForm((form) => ({
+                          ...form,
+                          first_name: event.target.value,
+                        }))
+                      }
+                      placeholder="Ada"
+                      required
+                      value={studentForm.first_name}
+                    />
+                  </FormField>
+                  <FormField label="Soyad">
+                    <input
+                      onChange={(event) =>
+                        setStudentForm((form) => ({
+                          ...form,
+                          last_name: event.target.value,
+                        }))
+                      }
+                      placeholder="Yılmaz"
+                      required
+                      value={studentForm.last_name}
+                    />
+                  </FormField>
+                </div>
+              </ModalSection>
+              <ModalSection title="Veli Bilgileri">
+                <FormField label="Veli ad soyad">
+                  <input
+                    onChange={(event) =>
+                      setStudentForm((form) => ({
+                        ...form,
+                        parent_full_name: event.target.value,
+                      }))
+                    }
+                    placeholder="Ayşe Yılmaz"
+                    value={studentForm.parent_full_name}
+                  />
+                </FormField>
+                <div className="form-field-grid">
+                  <FormField label="Veli telefon">
+                    <input
+                      onChange={(event) =>
+                        setStudentForm((form) => ({
+                          ...form,
+                          parent_phone: event.target.value,
+                        }))
+                      }
+                      placeholder="05xx xxx xx xx"
+                      value={studentForm.parent_phone}
+                    />
+                  </FormField>
+                  <FormField label="Veli e-posta">
+                    <input
+                      onChange={(event) =>
+                        setStudentForm((form) => ({
+                          ...form,
+                          parent_email: event.target.value,
+                        }))
+                      }
+                      placeholder="veli@ornek.com"
+                      type="email"
+                      value={studentForm.parent_email}
+                    />
+                  </FormField>
+                </div>
+              </ModalSection>
+              <ModalSection title="İletişim">
+                <FormField label="Ev adresi">
+                  <textarea
+                    onChange={(event) =>
+                      setStudentForm((form) => ({
+                        ...form,
+                        home_address: event.target.value,
+                      }))
+                    }
+                    placeholder="Öğrenci ev adresi"
+                    value={studentForm.home_address}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "editStudent" && (
-            <FormPanel title="Öğrenciyi Düzenle" onSubmit={handleUpdateStudent}>
-              <input
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    first_name: event.target.value,
-                  }))
-                }
-                placeholder="Ad"
-                required
-                value={studentEditForm.first_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    last_name: event.target.value,
-                  }))
-                }
-                placeholder="Soyad"
-                required
-                value={studentEditForm.last_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    parent_full_name: event.target.value,
-                  }))
-                }
-                placeholder="Veli ad soyad"
-                value={studentEditForm.parent_full_name}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    parent_phone: event.target.value,
-                  }))
-                }
-                placeholder="Veli telefon"
-                value={studentEditForm.parent_phone}
-              />
-              <input
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    parent_email: event.target.value,
-                  }))
-                }
-                placeholder="Veli e-posta"
-                type="email"
-                value={studentEditForm.parent_email}
-              />
-              <textarea
-                onChange={(event) =>
-                  setStudentEditForm((form) => ({
-                    ...form,
-                    home_address: event.target.value,
-                  }))
-                }
-                placeholder="Öğrenci ev adresi"
-                value={studentEditForm.home_address}
-              />
-              <button className="primary-button" type="submit">
-                Değişiklikleri Kaydet
-              </button>
+            <FormPanel
+              description="Öğrencinin temel ve veli bilgilerini güncelle."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleUpdateStudent}
+              submitLabel="Değişiklikleri Kaydet"
+              title="Öğrenciyi Düzenle"
+            >
+              <ModalSection title="Öğrenci Bilgileri">
+                <div className="form-field-grid">
+                  <FormField label="Ad">
+                    <input
+                      onChange={(event) =>
+                        setStudentEditForm((form) => ({
+                          ...form,
+                          first_name: event.target.value,
+                        }))
+                      }
+                      placeholder="Ad"
+                      required
+                      value={studentEditForm.first_name}
+                    />
+                  </FormField>
+                  <FormField label="Soyad">
+                    <input
+                      onChange={(event) =>
+                        setStudentEditForm((form) => ({
+                          ...form,
+                          last_name: event.target.value,
+                        }))
+                      }
+                      placeholder="Soyad"
+                      required
+                      value={studentEditForm.last_name}
+                    />
+                  </FormField>
+                </div>
+              </ModalSection>
+              <ModalSection title="Veli Bilgileri">
+                <FormField label="Veli ad soyad">
+                  <input
+                    onChange={(event) =>
+                      setStudentEditForm((form) => ({
+                        ...form,
+                        parent_full_name: event.target.value,
+                      }))
+                    }
+                    placeholder="Veli ad soyad"
+                    value={studentEditForm.parent_full_name}
+                  />
+                </FormField>
+                <div className="form-field-grid">
+                  <FormField label="Veli telefon">
+                    <input
+                      onChange={(event) =>
+                        setStudentEditForm((form) => ({
+                          ...form,
+                          parent_phone: event.target.value,
+                        }))
+                      }
+                      placeholder="05xx xxx xx xx"
+                      value={studentEditForm.parent_phone}
+                    />
+                  </FormField>
+                  <FormField label="Veli e-posta">
+                    <input
+                      onChange={(event) =>
+                        setStudentEditForm((form) => ({
+                          ...form,
+                          parent_email: event.target.value,
+                        }))
+                      }
+                      placeholder="veli@ornek.com"
+                      type="email"
+                      value={studentEditForm.parent_email}
+                    />
+                  </FormField>
+                </div>
+              </ModalSection>
+              <ModalSection title="İletişim">
+                <FormField label="Ev adresi">
+                  <textarea
+                    onChange={(event) =>
+                      setStudentEditForm((form) => ({
+                        ...form,
+                        home_address: event.target.value,
+                      }))
+                    }
+                    placeholder="Öğrenci ev adresi"
+                    value={studentEditForm.home_address}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "lesson" && (
-            <FormPanel title="Ders Ekle" onSubmit={handleCreateLesson}>
-              <input
-                onChange={(event) =>
-                  setLessonForm({ name: event.target.value })
-                }
-                placeholder="Matematik"
-                required
-                value={lessonForm.name}
-              />
-              <button className="primary-button" type="submit">
-                Dersi Kaydet
-              </button>
+            <FormPanel
+              description="Sınıflarda kullanılacak yeni ders adını ekle."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateLesson}
+              submitLabel="Dersi Kaydet"
+              title="Ders Ekle"
+            >
+              <FormField label="Ders adı">
+                <input
+                  onChange={(event) =>
+                    setLessonForm({ name: event.target.value })
+                  }
+                  placeholder="Matematik"
+                  required
+                  value={lessonForm.name}
+                />
+              </FormField>
             </FormPanel>
           )}
           {activeModal === "editLesson" && (
-            <FormPanel title="Dersi Düzenle" onSubmit={handleUpdateLesson}>
-              <input
-                onChange={(event) =>
-                  setLessonEditForm({ name: event.target.value })
-                }
-                placeholder="Matematik"
-                required
-                value={lessonEditForm.name}
-              />
-              <button className="primary-button" type="submit">
-                Değişiklikleri Kaydet
-              </button>
+            <FormPanel
+              description="Ders adını güncelle."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleUpdateLesson}
+              submitLabel="Değişiklikleri Kaydet"
+              title="Dersi Düzenle"
+            >
+              <FormField label="Ders adı">
+                <input
+                  onChange={(event) =>
+                    setLessonEditForm({ name: event.target.value })
+                  }
+                  placeholder="Matematik"
+                  required
+                  value={lessonEditForm.name}
+                />
+              </FormField>
             </FormPanel>
           )}
           {activeModal === "grade" && (
-            <FormPanel title="Not Gir" onSubmit={handleCreateGrade}>
+            <FormPanel
+              description="Öğrenci için tekil not kaydı oluştur."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateGrade}
+              submitLabel="Notu Kaydet"
+              title="Not Gir"
+            >
               <SearchableSelect
                 label="Öğrenci"
                 onChange={(value) =>
@@ -1608,32 +1738,38 @@ export default function App() {
                 placeholder="Ders ara"
                 value={gradeForm.lesson_id}
               />
-              <input
-                onChange={(event) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    exam_name: event.target.value,
-                  }))
-                }
-                placeholder="1. Yazılı"
-                required
-                value={gradeForm.exam_name}
-              />
-              <input
-                max="100"
-                min="0"
-                onChange={(event) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    score: event.target.value,
-                  }))
-                }
-                placeholder="85"
-                required
-                step="0.1"
-                type="number"
-                value={gradeForm.score}
-              />
+              <div className="form-field-grid">
+                <FormField label="Başlık">
+                  <input
+                    onChange={(event) =>
+                      setGradeForm((form) => ({
+                        ...form,
+                        exam_name: event.target.value,
+                      }))
+                    }
+                    placeholder="1. Yazılı"
+                    required
+                    value={gradeForm.exam_name}
+                  />
+                </FormField>
+                <FormField label="Puan">
+                  <input
+                    max="100"
+                    min="0"
+                    onChange={(event) =>
+                      setGradeForm((form) => ({
+                        ...form,
+                        score: event.target.value,
+                      }))
+                    }
+                    placeholder="85"
+                    required
+                    step="0.1"
+                    type="number"
+                    value={gradeForm.score}
+                  />
+                </FormField>
+              </div>
               <SearchableSelect
                 label="Kategori"
                 onChange={(value) =>
@@ -1646,64 +1782,80 @@ export default function App() {
                 placeholder="Kategori ara"
                 value={gradeForm.category}
               />
-              <button className="primary-button" type="submit">
-                Notu Kaydet
-              </button>
             </FormPanel>
           )}
           {activeModal === "newAssessment" && (
-            <FormPanel title="Yeni Değerlendirme" onSubmit={handleCreateAssessment}>
-              <SearchableSelect
-                label="Sınıf"
-                onChange={(value) =>
-                  setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
-                }
-                options={classroomOptions}
-                placeholder="Sınıf ara"
-                value={assessmentForm.classroom_id}
-              />
-              <SearchableSelect
-                label="Ders"
-                onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
-                options={
-                  assessmentForm.classroom_id
-                    ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
-                    : lessonOptions
-                }
-                placeholder="Ders ara"
-                value={assessmentForm.lesson_id}
-              />
-              <SearchableSelect
-                label="Değerlendirme Türü"
-                onChange={(value) => setAssessmentForm((form) => ({ ...form, assessment_type: value }))}
-                options={gradeCategoryOptions}
-                placeholder="Tür ara"
-                value={assessmentForm.assessment_type}
-              />
-              <input
-                onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
-                placeholder="1. Yazılı"
-                required
-                value={assessmentForm.title}
-              />
-              <textarea
-                onChange={(event) => setAssessmentForm((form) => ({ ...form, description: event.target.value }))}
-                placeholder="Açıklama (opsiyonel)"
-                value={assessmentForm.description}
-              />
-              <input
-                onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
-                required
-                type="date"
-                value={assessmentForm.date}
-              />
-              <button className="primary-button" type="submit">
-                Değerlendirmeyi Oluştur
-              </button>
+            <FormPanel
+              description="Değerlendirme türünü seçip sınıf için sonuç girişi hazırlayın."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateAssessment}
+              submitLabel="Değerlendirmeyi Oluştur"
+              title="Yeni Değerlendirme"
+            >
+              <ModalSection title="Kapsam">
+                <SearchableSelect
+                  label="Sınıf"
+                  onChange={(value) =>
+                    setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
+                  }
+                  options={classroomOptions}
+                  placeholder="Sınıf ara"
+                  value={assessmentForm.classroom_id}
+                />
+                <SearchableSelect
+                  label="Ders"
+                  onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
+                  options={
+                    assessmentForm.classroom_id
+                      ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
+                      : lessonOptions
+                  }
+                  placeholder="Ders ara"
+                  value={assessmentForm.lesson_id}
+                />
+                <SearchableSelect
+                  label="Değerlendirme Türü"
+                  onChange={(value) => setAssessmentForm((form) => ({ ...form, assessment_type: value }))}
+                  options={gradeCategoryOptions}
+                  placeholder="Tür ara"
+                  value={assessmentForm.assessment_type}
+                />
+              </ModalSection>
+              <ModalSection title="Değerlendirme Detayı">
+                <FormField label="Başlık">
+                  <input
+                    onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
+                    placeholder="1. Yazılı, Okuma günlüğü..."
+                    required
+                    value={assessmentForm.title}
+                  />
+                </FormField>
+                <FormField label="Açıklama">
+                  <textarea
+                    onChange={(event) => setAssessmentForm((form) => ({ ...form, description: event.target.value }))}
+                    placeholder="Opsiyonel açıklama"
+                    value={assessmentForm.description}
+                  />
+                </FormField>
+                <FormField label="Tarih">
+                  <input
+                    onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
+                    required
+                    type="date"
+                    value={assessmentForm.date}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "editAssessment" && (
-            <FormPanel title="Değerlendirmeyi Düzenle" onSubmit={handleUpdateAssessment}>
+            <FormPanel
+              description="Değerlendirme başlığı, açıklaması ve tarihini güncelle."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleUpdateAssessment}
+              submitLabel="Değişiklikleri Kaydet"
+              title="Değerlendirmeyi Düzenle"
+            >
               <p className="font-label-md text-label-md text-secondary">
                 Sınıf: {classrooms.find((classroom) => classroom.id === editingAssessment?.classroom_id)?.name || "-"}
                 {" · "}
@@ -1711,28 +1863,33 @@ export default function App() {
                 {" · "}
                 Tür: {gradeCategoryLabels[editingAssessment?.assessment_type] || "-"}
               </p>
-              <input
-                onChange={(event) => setAssessmentEditForm((form) => ({ ...form, title: event.target.value }))}
-                placeholder="1. Yazılı"
-                required
-                value={assessmentEditForm.title}
-              />
-              <textarea
-                onChange={(event) =>
-                  setAssessmentEditForm((form) => ({ ...form, description: event.target.value }))
-                }
-                placeholder="Açıklama (opsiyonel)"
-                value={assessmentEditForm.description}
-              />
-              <input
-                onChange={(event) => setAssessmentEditForm((form) => ({ ...form, date: event.target.value }))}
-                required
-                type="date"
-                value={assessmentEditForm.date}
-              />
-              <button className="primary-button" type="submit">
-                Değişiklikleri Kaydet
-              </button>
+              <ModalSection title="Değerlendirme Detayı">
+                <FormField label="Başlık">
+                  <input
+                    onChange={(event) => setAssessmentEditForm((form) => ({ ...form, title: event.target.value }))}
+                    placeholder="1. Yazılı"
+                    required
+                    value={assessmentEditForm.title}
+                  />
+                </FormField>
+                <FormField label="Açıklama">
+                  <textarea
+                    onChange={(event) =>
+                      setAssessmentEditForm((form) => ({ ...form, description: event.target.value }))
+                    }
+                    placeholder="Opsiyonel açıklama"
+                    value={assessmentEditForm.description}
+                  />
+                </FormField>
+                <FormField label="Tarih">
+                  <input
+                    onChange={(event) => setAssessmentEditForm((form) => ({ ...form, date: event.target.value }))}
+                    required
+                    type="date"
+                    value={assessmentEditForm.date}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "scheduleQuickActions" && quickActionEntry && (
@@ -1776,6 +1933,9 @@ export default function App() {
           )}
           {(activeModal === "schedule" || activeModal === "editSchedule") && (
             <FormPanel
+              description="Sınıf, ders, gün ve saat bilgileriyle program kaydı oluştur."
+              onCancel={() => setActiveModal(null)}
+              submitLabel="Kaydet"
               title={
                 activeModal === "schedule"
                   ? "Ders Programı Ekle"
@@ -1787,115 +1947,136 @@ export default function App() {
                   : handleUpdateScheduleEntry
               }
             >
-              <SearchableSelect
-                label="Sınıf"
-                onChange={(value) =>
-                  setScheduleForm((form) => ({ ...form, classroom_id: value }))
-                }
-                options={classroomOptions}
-                placeholder="Sınıf ara"
-                value={scheduleForm.classroom_id}
-              />
-              <SearchableSelect
-                label="Ders"
-                onChange={(value) =>
-                  setScheduleForm((form) => ({ ...form, lesson_id: value }))
-                }
-                options={
-                  scheduleForm.classroom_id
-                    ? assignedLessonOptionsForClassroom(scheduleForm.classroom_id)
-                    : lessonOptions
-                }
-                placeholder="Ders ara"
-                value={scheduleForm.lesson_id}
-              />
-              <SearchableSelect
-                label="Gün"
-                onChange={(value) =>
-                  setScheduleForm((form) => ({ ...form, weekday: value }))
-                }
-                options={schoolWeekdayOptions}
-                placeholder="Gün ara"
-                value={scheduleForm.weekday}
-              />
-              <SearchableSelect
-                label="Ders saati"
-                onChange={(value) =>
-                  setScheduleForm((form) => ({
-                    ...form,
-                    ...splitScheduleSlot(value),
-                  }))
-                }
-                options={scheduleSlotOptions}
-                placeholder="Ders saati ara"
-                value={scheduleSlotValue(scheduleForm)}
-              />
-              <input
-                onChange={(event) =>
-                  setScheduleForm((form) => ({
-                    ...form,
-                    location: event.target.value,
-                  }))
-                }
-                placeholder="Derslik"
-                value={scheduleForm.location}
-              />
-              <button className="primary-button" type="submit">
-                Kaydet
-              </button>
+              <ModalSection title="Ders Bilgileri">
+                <SearchableSelect
+                  label="Sınıf"
+                  onChange={(value) =>
+                    setScheduleForm((form) => ({ ...form, classroom_id: value }))
+                  }
+                  options={classroomOptions}
+                  placeholder="Sınıf ara"
+                  value={scheduleForm.classroom_id}
+                />
+                <SearchableSelect
+                  label="Ders"
+                  onChange={(value) =>
+                    setScheduleForm((form) => ({ ...form, lesson_id: value }))
+                  }
+                  options={
+                    scheduleForm.classroom_id
+                      ? assignedLessonOptionsForClassroom(scheduleForm.classroom_id)
+                      : lessonOptions
+                  }
+                  placeholder="Ders ara"
+                  value={scheduleForm.lesson_id}
+                />
+              </ModalSection>
+              <ModalSection title="Zaman ve Yer">
+                <div className="form-field-grid">
+                  <SearchableSelect
+                    label="Gün"
+                    onChange={(value) =>
+                      setScheduleForm((form) => ({ ...form, weekday: value }))
+                    }
+                    options={schoolWeekdayOptions}
+                    placeholder="Gün ara"
+                    value={scheduleForm.weekday}
+                  />
+                  <SearchableSelect
+                    label="Ders saati"
+                    onChange={(value) =>
+                      setScheduleForm((form) => ({
+                        ...form,
+                        ...splitScheduleSlot(value),
+                      }))
+                    }
+                    options={scheduleSlotOptions}
+                    placeholder="Ders saati ara"
+                    value={scheduleSlotValue(scheduleForm)}
+                  />
+                </div>
+                <FormField label="Derslik">
+                  <input
+                    onChange={(event) =>
+                      setScheduleForm((form) => ({
+                        ...form,
+                        location: event.target.value,
+                      }))
+                    }
+                    placeholder="Derslik"
+                    value={scheduleForm.location}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "newHomework" && (
             <FormPanel
+              description={assessmentForm.assessment_type === "odev" ? "Sınıfa ödev tanımlayın ve teslim takibini başlatın." : "Ders içi performans değerlendirmesi oluşturun."}
+              onCancel={() => setActiveModal(null)}
+              submitLabel={assessmentForm.assessment_type === "odev" ? "Ödevi Kaydet" : "Kaydet"}
               title={assessmentForm.assessment_type === "odev" ? "Ödev Ekle" : "Ders İçi Performans Ekle"}
               onSubmit={handleCreateAssessment}
             >
-              <SearchableSelect
-                label="Sınıf"
-                onChange={(value) =>
-                  setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
-                }
-                options={classroomOptions}
-                placeholder="Sınıf ara"
-                value={assessmentForm.classroom_id}
-              />
-              <SearchableSelect
-                label="Ders"
-                onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
-                options={
-                  assessmentForm.classroom_id
-                    ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
-                    : lessonOptions
-                }
-                placeholder="Ders ara"
-                value={assessmentForm.lesson_id}
-              />
-              <input
-                onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
-                placeholder={assessmentForm.assessment_type === "odev" ? "Ödev başlığı" : "Başlık"}
-                required
-                value={assessmentForm.title}
-              />
-              <textarea
-                onChange={(event) =>
-                  setAssessmentForm((form) => ({ ...form, description: event.target.value }))
-                }
-                placeholder="Açıklama (opsiyonel)"
-                value={assessmentForm.description}
-              />
-              <input
-                onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
-                required
-                type="date"
-                value={assessmentForm.date}
-              />
-              <button className="primary-button" type="submit">
-                {assessmentForm.assessment_type === "odev" ? "Ödevi Kaydet" : "Kaydet"}
-              </button>
+              <ModalSection title="Kapsam">
+                <SearchableSelect
+                  label="Sınıf"
+                  onChange={(value) =>
+                    setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
+                  }
+                  options={classroomOptions}
+                  placeholder="Sınıf ara"
+                  value={assessmentForm.classroom_id}
+                />
+                <SearchableSelect
+                  label="Ders"
+                  onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
+                  options={
+                    assessmentForm.classroom_id
+                      ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
+                      : lessonOptions
+                  }
+                  placeholder="Ders ara"
+                  value={assessmentForm.lesson_id}
+                />
+              </ModalSection>
+              <ModalSection title="Detay">
+                <FormField label="Başlık">
+                  <input
+                    onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
+                    placeholder={assessmentForm.assessment_type === "odev" ? "Okuma günlüğü" : "Başlık"}
+                    required
+                    value={assessmentForm.title}
+                  />
+                </FormField>
+                <FormField label="Açıklama">
+                  <textarea
+                    onChange={(event) =>
+                      setAssessmentForm((form) => ({ ...form, description: event.target.value }))
+                    }
+                    placeholder="Opsiyonel açıklama"
+                    value={assessmentForm.description}
+                  />
+                </FormField>
+                <FormField label={assessmentForm.assessment_type === "odev" ? "Teslim tarihi" : "Tarih"}>
+                  <input
+                    onChange={(event) => setAssessmentForm((form) => ({ ...form, date: event.target.value }))}
+                    required
+                    type="date"
+                    value={assessmentForm.date}
+                  />
+                </FormField>
+              </ModalSection>
             </FormPanel>
           )}
           {activeModal === "assignTeacher" && (
-            <FormPanel title="Ders / Sınıf Ata" onSubmit={handleCreateTeacherAssignment}>
+            <FormPanel
+              description="Öğretmeni sınıfa rehber veya ders sorumlusu olarak ata."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateTeacherAssignment}
+              submitLabel="Atamayı Kaydet"
+              title="Ders / Sınıf Ata"
+            >
               <SearchableSelect
                 label="Öğretmen"
                 onChange={(value) =>
@@ -1926,9 +2107,6 @@ export default function App() {
                 placeholder="Ders ara"
                 value={assignmentForm.lesson_id}
               />
-              <button className="primary-button" type="submit">
-                Ata
-              </button>
             </FormPanel>
           )}
         </Modal>

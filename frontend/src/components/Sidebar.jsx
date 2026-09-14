@@ -56,7 +56,7 @@ export default function Sidebar({
               <button
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors duration-100 ${
                   isActive
-                    ? "bg-surface-container-low font-bold text-primary"
+                    ? "bg-primary/5 font-bold text-primary"
                     : "text-secondary hover:bg-surface-container-low"
                 }`}
                 key={item.page}
@@ -74,7 +74,7 @@ export default function Sidebar({
           <button
             className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors ${
               activePage === "settings"
-                ? "font-bold text-primary"
+                ? "bg-primary/5 font-bold text-primary"
                 : "text-secondary hover:bg-surface-container-low"
             }`}
             onClick={() => setActivePage("settings")}

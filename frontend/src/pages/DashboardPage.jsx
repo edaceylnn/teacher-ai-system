@@ -324,11 +324,11 @@ export default function DashboardPage({
           </section>
 
           <section className="card overflow-hidden" ref={attentionSectionRef}>
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+            <div className="section-heading p-5 pb-2">
               <h2>Dikkat Gerektiren Öğrenciler</h2>
               <span className="analysis-chip">{attentionStudents.length} kayıt</span>
             </div>
-            <div className="divide-y divide-outline-variant">
+            <div className="divide-y divide-outline-variant/60">
               {attentionStudents.map((student) => (
                 <button
                   className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-surface-container-low"
@@ -370,7 +370,7 @@ export default function DashboardPage({
           </section>
 
           <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+            <div className="section-heading p-5 pb-2">
               <h2>Sınıf Kırılımı</h2>
               <span className="analysis-chip">Özet</span>
             </div>
@@ -384,7 +384,7 @@ export default function DashboardPage({
                     <th className="p-4 font-medium">Riskli</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-outline-variant font-body-md text-body-md text-on-surface">
+                <tbody className="divide-y divide-outline-variant/60 font-body-md text-body-md text-on-surface">
                   {classBreakdown.map((item) => (
                     <tr
                       className="cursor-pointer transition-colors hover:bg-surface-container-low"
@@ -439,7 +439,7 @@ export default function DashboardPage({
             )}
           </section>
           <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+            <div className="section-heading p-5 pb-2">
               <h2>Bugünkü Dersler</h2>
               <button className="outline-button compact" onClick={() => setActivePage("schedule")} type="button">
                 Aç

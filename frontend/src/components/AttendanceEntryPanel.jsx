@@ -4,10 +4,10 @@ import { avatarToneFor, initialsOf } from "../utils/helpers";
 
 const STATUS_OPTIONS = ["present", "absent", "excused"];
 
-const STATUS_BUTTON_CLASSES = {
-  present: "border-emerald-500 bg-emerald-500 text-white dark:border-emerald-600 dark:bg-emerald-600",
-  absent: "border-error bg-error text-white",
-  excused: "border-amber-500 bg-amber-500 text-white dark:border-amber-600 dark:bg-amber-600",
+const STATUS_CLASS_NAMES = {
+  present: "present",
+  absent: "absent",
+  excused: "excused",
 };
 
 // Şu anki toplu yoklama oturumu için sınıf rosterini gösteren, tekrar
@@ -28,6 +28,7 @@ export default function AttendanceEntryPanel({
   if (!activeSession) return null;
 
   const markedCount = students.filter((student) => attendanceRecordsDraft[student.id]?.status).length;
+  const progressPercent = students.length ? Math.round((markedCount / students.length) * 100) : 0;
 
   function updateStatus(studentId, status) {
     setAttendanceRecordsDraft((draft) => ({
@@ -36,22 +37,41 @@ export default function AttendanceEntryPanel({
     }));
   }
 
+  function clearDraft() {
+    setAttendanceRecordsDraft((draft) => {
+      const next = { ...draft };
+      students.forEach((student) => {
+        next[student.id] = { status: null };
+      });
+      return next;
+    });
+  }
+
   return (
-    <section className="card overflow-hidden">
-      <div className="section-heading flex-wrap gap-3 border-b border-outline-variant bg-surface-bright p-5">
+    <section className="attendance-entry-panel">
+      <div className="attendance-entry-head">
         <div>
           <p className="font-label-md text-label-md uppercase tracking-wider text-secondary">Toplu Yoklama</p>
           <h2>{lessonName || "Ders"} — {activeSession.date}</h2>
-          <p className="section-subtext">
-            {markedCount}/{students.length} öğrenci işaretlendi
-          </p>
+          <div className="attendance-progress" aria-label={`${markedCount}/${students.length} öğrenci işaretlendi`}>
+            <p>
+              <span>{markedCount}/{students.length} öğrenci işaretlendi</span>
+              <span>%{progressPercent}</span>
+            </p>
+            <div>
+              <span style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
         </div>
-        <div className="row-actions">
+        <div className="attendance-actions">
           <button className="outline-button compact" onClick={onMarkAllPresent} type="button">
             <Icon name="done_all" /> Tümünü Var İşaretle
           </button>
+          <button className="outline-button compact" onClick={clearDraft} type="button">
+            <Icon name="backspace" /> Temizle
+          </button>
           <button className="outline-button compact" onClick={onClose} type="button">
-            Kapat
+            Vazgeç
           </button>
           <button
             className="primary-button compact"
@@ -66,25 +86,21 @@ export default function AttendanceEntryPanel({
       {isLoadingAttendanceRecords ? (
         <p className="empty-note">Yükleniyor…</p>
       ) : (
-        <ul className="divide-y divide-outline-variant/50">
+        <ul className="attendance-roster-list">
           {students.map((student) => {
             const status = attendanceRecordsDraft[student.id]?.status || null;
             return (
-              <li className="flex items-center justify-between gap-4 p-4" key={student.id}>
-                <div className="flex items-center gap-2 font-body-md text-body-md font-medium text-on-surface">
-                  <span className={`avatar-circle h-6 w-6 text-xs ${avatarToneFor(student.id)}`}>
+              <li className="attendance-roster-row" key={student.id}>
+                <div className="attendance-student-name">
+                  <span className={`avatar-circle h-7 w-7 text-[11px] ${avatarToneFor(student.id)}`}>
                     {initialsOf(student.first_name, student.last_name)}
                   </span>
                   {student.first_name} {student.last_name}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="attendance-segmented-control" role="group" aria-label={`${student.first_name} ${student.last_name} yoklama durumu`}>
                   {STATUS_OPTIONS.map((option) => (
                     <button
-                      className={`rounded-full border px-3 py-1.5 font-label-md text-label-md transition-colors ${
-                        status === option
-                          ? STATUS_BUTTON_CLASSES[option]
-                          : "border-outline-variant text-secondary hover:bg-surface-container-low"
-                      }`}
+                      className={`${STATUS_CLASS_NAMES[option]} ${status === option ? "selected" : ""}`}
                       key={option}
                       onClick={() => updateStatus(student.id, option)}
                       type="button"

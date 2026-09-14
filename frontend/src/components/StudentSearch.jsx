@@ -1,6 +1,7 @@
 import Icon from "./Icon";
 
 export default function StudentSearch({
+  className = "",
   filteredStudents,
   isStudentPickerOpen,
   searchTerm,
@@ -13,7 +14,7 @@ export default function StudentSearch({
   const hasValue = Boolean(searchTerm || selectedStudentId);
 
   return (
-    <div className="student-search">
+    <div className={`student-search ${className}`.trim()}>
       <Icon name="search" />
       <div className="student-combobox">
         <input

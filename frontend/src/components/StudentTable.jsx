@@ -1,5 +1,5 @@
-import Icon from "./Icon";
-import { enrollmentStatusLabels } from "../utils/helpers";
+import { useState } from "react";
+import { avatarToneFor, enrollmentStatusLabels, initialsOf } from "../utils/helpers";
 
 export default function StudentTable({
   canManage,
@@ -12,24 +12,41 @@ export default function StudentTable({
   setStudentEditForm,
   students,
 }) {
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  function openEditModal(student) {
+    setEditingStudent(student);
+    setStudentEditForm({
+      first_name: student.first_name,
+      last_name: student.last_name,
+      parent_full_name: student.parent_full_name || "",
+      parent_phone: student.parent_phone || "",
+      parent_email: student.parent_email || "",
+      home_address: student.home_address || "",
+      observation_notes: student.observation_notes || "",
+    });
+    setActiveModal("editStudent");
+    setOpenMenuId(null);
+  }
+
   return (
-    <section className="card overflow-hidden">
+    <section className="student-roster-table">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left">
           <thead>
-            <tr className="border-b border-outline-variant bg-surface-container-low">
-              <th className="w-16 py-3 px-6 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">No</th>
-              <th className="py-3 px-6 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">Ad Soyad</th>
-              <th className="py-3 px-6 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">Veli</th>
-              <th className="py-3 px-6 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">Durum</th>
-              <th className="py-3 px-6 text-right font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">İşlemler</th>
+            <tr>
+              <th className="w-20">No</th>
+              <th>Ad Soyad</th>
+              <th>Veli</th>
+              <th>Durum</th>
+              <th className="w-16 text-right">İşlemler</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-outline-variant font-body-md text-body-md text-on-surface">
+          <tbody>
             {students.map((student) => (
               <tr
-                className={`group cursor-pointer transition-colors hover:bg-surface-bright ${
-                  student.id === selectedStudentId ? "bg-surface-container-low" : ""
+                className={`group ${
+                  student.id === selectedStudentId ? "selected" : ""
                 }`}
                 key={student.id}
                 onClick={() => {
@@ -37,12 +54,17 @@ export default function StudentTable({
                   setActivePage("studentDetail");
                 }}
               >
-                <td className="py-4 px-6 text-secondary">{student.id}</td>
-                <td className="py-4 px-6 font-medium">
-                  {student.first_name} {student.last_name}
+                <td className="font-mono-sm text-mono-sm text-secondary">#{student.id}</td>
+                <td>
+                  <div className="student-roster-name">
+                    <span className={`avatar-circle h-7 w-7 text-[11px] ${avatarToneFor(student.id)}`}>
+                      {initialsOf(student.first_name, student.last_name)}
+                    </span>
+                    <span>{student.first_name} {student.last_name}</span>
+                  </div>
                 </td>
-                <td className="py-4 px-6 text-secondary">{student.parent_full_name || "-"}</td>
-                <td className="py-4 px-6">
+                <td className="text-secondary">{student.parent_full_name || "Veli eklenmemiş"}</td>
+                <td>
                   <span
                     className={`badge ${
                       student.enrollment_status === "reported" ? "badge-warning" : "badge-success"
@@ -51,41 +73,36 @@ export default function StudentTable({
                     {enrollmentStatusLabels[student.enrollment_status] || "Aktif"}
                   </span>
                 </td>
-                <td className="py-4 px-6 text-right">
+                <td className="text-right">
                   {canManage ? (
-                    <div className="row-actions">
+                    <div className="student-row-menu">
                       <button
-                        aria-label={`${student.first_name} ${student.last_name} öğrencisini düzenle`}
-                        className="icon-action"
+                        aria-expanded={openMenuId === student.id}
+                        aria-label={`${student.first_name} ${student.last_name} işlemleri`}
+                        className="student-row-menu-button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          setEditingStudent(student);
-                          setStudentEditForm({
-                            first_name: student.first_name,
-                            last_name: student.last_name,
-                            parent_full_name: student.parent_full_name || "",
-                            parent_phone: student.parent_phone || "",
-                            parent_email: student.parent_email || "",
-                            home_address: student.home_address || "",
-                            observation_notes: student.observation_notes || "",
-                          });
-                          setActiveModal("editStudent");
+                          setOpenMenuId((current) => (current === student.id ? null : student.id));
                         }}
                         type="button"
                       >
-                        <Icon name="edit" />
+                        •••
                       </button>
-                      <button
-                        aria-label={`${student.first_name} ${student.last_name} öğrencisini sil`}
-                        className="icon-action danger-action"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDeleteStudent(student.id);
-                        }}
-                        type="button"
-                      >
-                        <Icon name="delete" />
-                      </button>
+                      {openMenuId === student.id && (
+                        <div className="student-row-menu-popover" onClick={(event) => event.stopPropagation()}>
+                          <button onClick={() => openEditModal(student)} type="button">Düzenle</button>
+                          <button
+                            className="danger"
+                            onClick={() => {
+                              handleDeleteStudent(student.id);
+                              setOpenMenuId(null);
+                            }}
+                            type="button"
+                          >
+                            Sil
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <span className="font-body-md text-body-md text-secondary">—</span>

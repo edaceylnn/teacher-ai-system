@@ -32,6 +32,8 @@ export default function GradebookPage({
 }) {
   const [lessonFilter, setLessonFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [openAssessmentMenuId, setOpenAssessmentMenuId] = useState(null);
+  const [openLessonMenuId, setOpenLessonMenuId] = useState(null);
 
   // Madde 6: bu sınıfta atanmış olduğun dersler dışındakiler burada da
   // görünmemeli.
@@ -65,17 +67,35 @@ export default function GradebookPage({
 
   const activeAssessment = assessments.find((assessment) => assessment.id === activeAssessmentId);
 
+  function openEditAssessment(assessment) {
+    setEditingAssessment(assessment);
+    setAssessmentEditForm({
+      title: assessment.title,
+      description: assessment.description || "",
+      date: assessment.date,
+    });
+    setActiveModal("editAssessment");
+    setOpenAssessmentMenuId(null);
+  }
+
+  function openEditLesson(lesson) {
+    setEditingLesson(lesson);
+    setLessonEditForm({ name: lesson.name });
+    setActiveModal("editLesson");
+    setOpenLessonMenuId(null);
+  }
+
   return (
-    <div className="wide-page">
-      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <div className="wide-page gradebook-page">
+      <section className="gradebook-header">
         <div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">Not Defteri</h1>
           <p className="mt-1 font-body-md text-body-md text-secondary">
-            Sınıf ve ders seçip değerlendirme oluştur, sınıftaki tüm öğrencilere tek seferde sonuç gir.
+            Değerlendirme oluştur, sınav/quiz/performans/ödev sonuçlarını tek yerden işle.
           </p>
         </div>
         <button
-          className="primary-button"
+          className="primary-button compact"
           disabled={!selectedClassroomId}
           onClick={() => {
             setAssessmentForm((form) => ({
@@ -95,69 +115,73 @@ export default function GradebookPage({
         </button>
       </section>
 
-      <section className="card p-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="gradebook-classroom">
-              Sınıf
-            </label>
-            <select
-              className="filter-select"
-              id="gradebook-classroom"
-              onChange={(event) => setSelectedClassroomId(event.target.value ? Number(event.target.value) : null)}
-              value={selectedClassroomId || ""}
-            >
-              <option value="">Sınıf seç</option>
-              {classroomOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="gradebook-lesson">
-              Ders
-            </label>
-            <select
-              className="filter-select"
-              id="gradebook-lesson"
-              onChange={(event) => setLessonFilter(event.target.value)}
-              value={lessonFilter}
-            >
-              <option value="">Tüm Dersler</option>
-              {lessonOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="gradebook-type">
-              Değerlendirme Türü
-            </label>
-            <select
-              className="filter-select"
-              id="gradebook-type"
-              onChange={(event) => setTypeFilter(event.target.value)}
-              value={typeFilter}
-            >
-              {typeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <section className="gradebook-toolbar" aria-label="Not defteri filtreleri">
+        <label htmlFor="gradebook-classroom">
+          <span>Sınıf</span>
+          <select
+            className="filter-select"
+            id="gradebook-classroom"
+            onChange={(event) => {
+              setSelectedClassroomId(event.target.value ? Number(event.target.value) : null);
+              setLessonFilter("");
+              setTypeFilter("");
+            }}
+            value={selectedClassroomId || ""}
+          >
+            <option value="">Sınıf seç</option>
+            {classroomOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="gradebook-lesson">
+          <span>Ders</span>
+          <select
+            className="filter-select"
+            disabled={!selectedClassroomId}
+            id="gradebook-lesson"
+            onChange={(event) => setLessonFilter(event.target.value)}
+            value={lessonFilter}
+          >
+            <option value="">Tüm Dersler</option>
+            {lessonOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="gradebook-type">
+          <span>Tür</span>
+          <select
+            className="filter-select"
+            disabled={!selectedClassroomId}
+            id="gradebook-type"
+            onChange={(event) => setTypeFilter(event.target.value)}
+            value={typeFilter}
+          >
+            {typeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <div className="grid grid-cols-1 gap-card-gap lg:grid-cols-12">
-        <div className="flex flex-col gap-card-gap lg:col-span-8">
+        <div className="flex flex-col gap-card-gap lg:col-span-9">
           {!selectedClassroomId && (
-            <section className="card p-8">
-              <p className="empty-note">Başlamak için bir sınıf seç.</p>
+            <section className="card">
+              <div className="empty-state">
+                <span className="empty-state-icon">
+                  <Icon name="school" />
+                </span>
+                <h3>Sınıf seçimi bekleniyor</h3>
+                <p>Değerlendirmeleri ve toplu sonuç girişini görmek için bir sınıf seç.</p>
+              </div>
             </section>
           )}
 
@@ -178,59 +202,75 @@ export default function GradebookPage({
           )}
 
           {selectedClassroomId && !activeAssessment && (
-            <section className="card overflow-hidden">
-              <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
-                <h2>Değerlendirmeler</h2>
+            <section className="gradebook-list-panel">
+              <div className="gradebook-list-head">
+                <div>
+                  <h2>Değerlendirmeler</h2>
+                  <p>Sınav, quiz, performans ve ödev kayıtları.</p>
+                </div>
+                <span>{filteredAssessments.length} kayıt</span>
               </div>
-              <ul className="divide-y divide-outline-variant/50">
+              <ul className="gradebook-assessment-list">
                 {filteredAssessments.map((assessment) => (
-                  <li className="flex items-center justify-between p-4 transition-colors hover:bg-surface" key={assessment.id}>
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <li className="gradebook-assessment-row" key={assessment.id}>
+                    <div className="gradebook-assessment-main">
+                      <div className="gradebook-assessment-icon">
                         <Icon name="history_edu" />
                       </div>
-                      <div>
-                        <p className="font-body-md text-body-md font-medium text-on-surface">
-                          {lessonById.get(assessment.lesson_id)?.name || "Ders"} — {assessment.title}{" "}
-                          <span className="status-chip">{gradeCategoryLabels[assessment.assessment_type]}</span>
+                      <div className="min-w-0">
+                        <p className="gradebook-assessment-title">
+                          <span>{lessonById.get(assessment.lesson_id)?.name || "Ders"}</span>
+                          <span aria-hidden="true">—</span>
+                          <span>{assessment.title}</span>
                         </p>
-                        <p className="font-label-md text-label-md text-secondary">Tarih: {assessment.date}</p>
+                        <p className="gradebook-assessment-meta">
+                          <span>{gradeCategoryLabels[assessment.assessment_type]}</span>
+                          <span>•</span>
+                          <span>{assessment.date}</span>
+                        </p>
                       </div>
                     </div>
-                    <span className="row-actions">
+                    <div className="gradebook-row-actions">
                       <button
                         aria-label={`${assessment.title} için sonuç gir`}
-                        className="outline-button compact"
-                        onClick={() => openAssessmentForEntry(assessment)}
+                        className="primary-button compact"
+                        onClick={() => {
+                          openAssessmentForEntry(assessment);
+                          setOpenAssessmentMenuId(null);
+                        }}
                         type="button"
                       >
                         Sonuç Gir
                       </button>
-                      <button
-                        aria-label={`${assessment.title} değerlendirmesini düzenle`}
-                        className="icon-action"
-                        onClick={() => {
-                          setEditingAssessment(assessment);
-                          setAssessmentEditForm({
-                            title: assessment.title,
-                            description: assessment.description || "",
-                            date: assessment.date,
-                          });
-                          setActiveModal("editAssessment");
-                        }}
-                        type="button"
-                      >
-                        <Icon name="edit" />
-                      </button>
-                      <button
-                        aria-label={`${assessment.title} değerlendirmesini sil`}
-                        className="icon-action danger-action"
-                        onClick={() => handleDeleteAssessment(assessment.id)}
-                        type="button"
-                      >
-                        <Icon name="delete" />
-                      </button>
-                    </span>
+                      <div className="student-row-menu">
+                        <button
+                          aria-expanded={openAssessmentMenuId === assessment.id}
+                          aria-label={`${assessment.title} değerlendirme işlemleri`}
+                          className="student-row-menu-button"
+                          onClick={() =>
+                            setOpenAssessmentMenuId((current) => (current === assessment.id ? null : assessment.id))
+                          }
+                          type="button"
+                        >
+                          •••
+                        </button>
+                        {openAssessmentMenuId === assessment.id && (
+                          <div className="student-row-menu-popover">
+                            <button onClick={() => openEditAssessment(assessment)} type="button">Düzenle</button>
+                            <button
+                              className="danger"
+                              onClick={() => {
+                                handleDeleteAssessment(assessment.id);
+                                setOpenAssessmentMenuId(null);
+                              }}
+                              type="button"
+                            >
+                              Sil
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -243,47 +283,56 @@ export default function GradebookPage({
           )}
         </div>
 
-        <div className="flex flex-col gap-card-gap lg:col-span-4">
-          <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
-              <h2>Aktif Dersler</h2>
+        <div className="flex flex-col gap-card-gap lg:col-span-3">
+          <section className="gradebook-lessons-panel">
+            <div className="gradebook-lessons-head">
+              <div>
+                <h2>Aktif Dersler</h2>
+                <p>{lessons.length} ders</p>
+              </div>
               <button className="outline-button compact" onClick={() => setActiveModal("lesson")} type="button">
                 <Icon name="add" /> Ders Ekle
               </button>
             </div>
-            <div className="p-4">
-              <ul className="flex flex-col gap-3">
+            <div>
+              <ul className="gradebook-lesson-list">
                 {lessons.map((lesson) => (
                   <li
-                    className="flex items-center justify-between rounded border border-outline-variant/50 p-3"
+                    className="gradebook-lesson-row"
                     key={lesson.id}
                   >
-                    <span className="font-body-md text-body-md font-medium text-on-surface">{lesson.name}</span>
-                    <span className="row-actions">
-                      <span className="rounded bg-surface-container-low px-2 py-1 font-mono-sm text-mono-sm text-secondary">
+                    <div>
+                      <span>{lesson.name}</span>
+                      <small>
                         {assessmentCountByLesson.get(lesson.id) || 0} değerlendirme
-                      </span>
+                      </small>
+                    </div>
+                    <div className="student-row-menu">
                       <button
-                        aria-label={`${lesson.name} dersini düzenle`}
-                        className="icon-action"
-                        onClick={() => {
-                          setEditingLesson(lesson);
-                          setLessonEditForm({ name: lesson.name });
-                          setActiveModal("editLesson");
-                        }}
+                        aria-expanded={openLessonMenuId === lesson.id}
+                        aria-label={`${lesson.name} ders işlemleri`}
+                        className="student-row-menu-button"
+                        onClick={() => setOpenLessonMenuId((current) => (current === lesson.id ? null : lesson.id))}
                         type="button"
                       >
-                        <Icon name="edit" />
+                        •••
                       </button>
-                      <button
-                        aria-label={`${lesson.name} dersini sil`}
-                        className="icon-action danger-action"
-                        onClick={() => handleDeleteLesson(lesson.id)}
-                        type="button"
-                      >
-                        <Icon name="delete" />
-                      </button>
-                    </span>
+                      {openLessonMenuId === lesson.id && (
+                        <div className="student-row-menu-popover">
+                          <button onClick={() => openEditLesson(lesson)} type="button">Düzenle</button>
+                          <button
+                            className="danger"
+                            onClick={() => {
+                              handleDeleteLesson(lesson.id);
+                              setOpenLessonMenuId(null);
+                            }}
+                            type="button"
+                          >
+                            Sil
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 ))}
                 {!lessons.length && <p className="empty-note">Henüz ders yok.</p>}

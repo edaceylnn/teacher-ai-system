@@ -1,11 +1,12 @@
 import Icon from "./Icon";
 
-export default function EmptyState({ actionLabel, compact = false, icon = "inbox", onAction, text }) {
+export default function EmptyState({ actionLabel, compact = false, icon = "inbox", onAction, text, title }) {
   return (
     <div className={`empty-state ${compact ? "empty-state-compact" : ""}`}>
       <span className="empty-state-icon">
         <Icon name={icon} />
       </span>
+      {title && <h3>{title}</h3>}
       <p>{text}</p>
       {actionLabel && onAction && (
         <button className="link-button" onClick={onAction} type="button">

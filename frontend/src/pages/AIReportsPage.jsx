@@ -253,11 +253,16 @@ export default function AIReportsPage({
           />
         </div>
 
-        <div className="card flex flex-col gap-6 p-6">
-          <div className="flex flex-col gap-2">
-            <label className={fieldLabelClass}>
-              <Icon name="edit_note" className="text-primary" /> Karne Yorumu
-            </label>
+        <div className="flex flex-col gap-4">
+          <section className="card flex flex-col gap-3 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <label className={fieldLabelClass}>
+                <Icon name="edit_note" className="text-primary" /> Karne Yorumu
+              </label>
+              <span className={`status-chip ${reportComment ? "text-primary" : ""}`}>
+                {reportComment ? "AI oluşturdu" : "Bekliyor"}
+              </span>
+            </div>
             {reportComment ? (
               <div className="flex flex-col gap-3">
                 <input
@@ -288,14 +293,17 @@ export default function AIReportsPage({
             ) : (
               <p className="font-body-md text-body-md text-secondary">Henüz karne yorumu oluşturulmadı.</p>
             )}
-          </div>
+          </section>
 
-          <div className="border-t border-outline-variant" />
-
-          <div className="flex flex-col gap-2">
-            <label className={fieldLabelClass}>
-              <Icon name="troubleshoot" className="text-tertiary" /> Eksik Konu Analizi
-            </label>
+          <section className="card flex flex-col gap-3 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <label className={fieldLabelClass}>
+                <Icon name="troubleshoot" className="text-tertiary" /> Eksik Konu Analizi
+              </label>
+              <span className={`status-chip ${topicAnalysis ? "text-primary" : ""}`}>
+                {topicAnalysis ? "AI oluşturdu" : "Bekliyor"}
+              </span>
+            </div>
             {topicAnalysis ? (
               <div className="flex flex-col gap-3">
                 <input
@@ -326,14 +334,17 @@ export default function AIReportsPage({
             ) : (
               <p className="font-body-md text-body-md text-secondary">Henüz eksik konu analizi oluşturulmadı.</p>
             )}
-          </div>
+          </section>
 
-          <div className="border-t border-outline-variant" />
-
-          <div className="flex flex-col gap-2">
-            <label className={fieldLabelClass}>
-              <Icon name="mail" className="text-secondary" /> Veli Mesajı
-            </label>
+          <section className="card flex flex-col gap-3 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <label className={fieldLabelClass}>
+                <Icon name="mail" className="text-secondary" /> Veli Mesajı
+              </label>
+              <span className={`status-chip ${parentMessage ? "text-primary" : ""}`}>
+                {parentMessage ? "AI oluşturdu" : "Bekliyor"}
+              </span>
+            </div>
             {parentMessage ? (
               <div className="flex flex-col gap-3">
                 <input
@@ -358,7 +369,7 @@ export default function AIReportsPage({
             ) : (
               <p className="font-body-md text-body-md text-secondary">Henüz veli mesajı hazırlanmadı.</p>
             )}
-          </div>
+          </section>
         </div>
       </section>
 

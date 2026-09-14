@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AttendanceEntryPanel from "../components/AttendanceEntryPanel";
+import EmptyState from "../components/EmptyState";
 import Icon from "../components/Icon";
 import { assignedLessonsForClassroom } from "../utils/permissions";
 
@@ -48,77 +49,85 @@ export default function AttendancePage({
 
   const canOpen = Boolean(selectedClassroomId && lessonId && date);
 
-  function emptyStateMessage() {
-    if (!selectedClassroomId) return "Başlamak için bir sınıf seç.";
-    if (!lessonId) return "Yoklama açmak için bir ders seç.";
-    return "Tarihi seçip \"Yoklama Aç\"a tıkla.";
+  function emptyStateCopy() {
+    if (!selectedClassroomId) {
+      return {
+        icon: "school",
+        title: "Yoklama başlatmaya hazır",
+        text: "Önce bir sınıf seç; ardından ders ve tarih bilgisiyle tüm sınıfın yoklamasını tek ekranda girebilirsin.",
+      };
+    }
+    if (!lessonId) {
+      return {
+        icon: "menu_book",
+        title: "Ders seçimi bekleniyor",
+        text: "Yoklama kayıtlarını ders bazında izlemek için sınıfa atanmış bir ders seç.",
+      };
+    }
+    return {
+      icon: "fact_check",
+      title: "Yoklama açılabilir",
+      text: "Seçili tarih için yoklama oturumunu açıp öğrencilerin durumunu hızlıca kaydedebilirsin.",
+    };
   }
 
   return (
-    <div className="wide-page">
-      <section>
+    <div className="wide-page attendance-page">
+      <section className="attendance-header">
         <h1 className="font-headline-lg text-headline-lg text-on-surface">Devamsızlık</h1>
         <p className="mt-1 font-body-md text-body-md text-secondary">
           Sınıf, ders ve tarih seçip yoklama aç, sınıftaki tüm öğrencilerin durumunu tek seferde kaydet.
         </p>
       </section>
 
-      <section className="card p-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="attendance-classroom">
-              Sınıf
-            </label>
-            <select
-              className="filter-select"
-              id="attendance-classroom"
-              onChange={(event) => {
-                setSelectedClassroomId(event.target.value ? Number(event.target.value) : null);
-                setLessonId("");
-              }}
-              value={selectedClassroomId || ""}
-            >
-              <option value="">Sınıf seç</option>
-              {classroomOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="attendance-lesson">
-              Ders
-            </label>
-            <select
-              className="filter-select"
-              id="attendance-lesson"
-              onChange={(event) => setLessonId(event.target.value)}
-              value={lessonId}
-            >
-              <option value="">Ders seç</option>
-              {lessons.map((lesson) => (
-                <option key={lesson.id} value={lesson.id}>
-                  {lesson.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="attendance-date">
-              Tarih
-            </label>
-            <input
-              className="w-full"
-              id="attendance-date"
-              onChange={(event) => setDate(event.target.value)}
-              type="date"
-              value={date}
-            />
-          </div>
-        </div>
+      <section className="attendance-toolbar" aria-label="Yoklama filtreleri">
+        <label htmlFor="attendance-classroom">
+          <span>Sınıf</span>
+          <select
+            className="filter-select"
+            id="attendance-classroom"
+            onChange={(event) => {
+              setSelectedClassroomId(event.target.value ? Number(event.target.value) : null);
+              setLessonId("");
+            }}
+            value={selectedClassroomId || ""}
+          >
+            <option value="">Sınıf seç</option>
+            {classroomOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="attendance-lesson">
+          <span>Ders</span>
+          <select
+            className="filter-select"
+            disabled={!selectedClassroomId}
+            id="attendance-lesson"
+            onChange={(event) => setLessonId(event.target.value)}
+            value={lessonId}
+          >
+            <option value="">Ders seç</option>
+            {lessons.map((lesson) => (
+              <option key={lesson.id} value={lesson.id}>
+                {lesson.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="attendance-date">
+          <span>Tarih</span>
+          <input
+            id="attendance-date"
+            onChange={(event) => setDate(event.target.value)}
+            type="date"
+            value={date}
+          />
+        </label>
         <button
-          className="primary-button mt-4"
+          className="primary-button compact attendance-open-button"
           disabled={!canOpen}
           onClick={() =>
             openOrCreateAttendanceSession({
@@ -134,8 +143,8 @@ export default function AttendancePage({
       </section>
 
       {!activeAttendanceSession && (
-        <section className="card p-8">
-          <p className="empty-note">{emptyStateMessage()}</p>
+        <section className="card">
+          <EmptyState {...emptyStateCopy()} />
         </section>
       )}
 

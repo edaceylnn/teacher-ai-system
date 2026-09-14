@@ -91,12 +91,12 @@ export default function Topbar({
         >
           <Icon name="menu" />
         </button>
-        <div className="relative hidden w-80 sm:block">
+        <div className="relative hidden w-[420px] max-w-[44vw] sm:block lg:w-[520px]">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-variant">
             search
           </span>
           <input
-            className="w-full rounded-full border border-transparent bg-surface-container-low py-1.5 pl-10 pr-4 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:bg-surface focus:ring-0"
+            className="w-full rounded-full border border-outline-variant/60 bg-surface-container-lowest py-2 pl-10 pr-4 font-body-md text-body-md text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors focus:border-primary focus:bg-surface focus:ring-0"
             onBlur={() => setIsSearchFocused(false)}
             onChange={(event) => setSearchQuery(event.target.value)}
             onFocus={() => setIsSearchFocused(true)}
@@ -106,7 +106,7 @@ export default function Topbar({
             value={searchQuery}
           />
           {isDropdownOpen && (
-            <div className="absolute left-0 right-0 top-11 z-30 max-h-96 overflow-y-auto rounded-lg border border-outline-variant bg-surface-container-lowest shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05)]">
+            <div className="absolute left-0 right-0 top-12 z-30 max-h-96 overflow-y-auto rounded-xl border border-outline-variant/70 bg-surface-container-lowest shadow-[0_16px_30px_-12px_rgba(15,23,42,0.28)]">
               {!hasResults && (
                 <p className="px-4 py-3 font-body-md text-body-md text-secondary">Sonuç bulunamadı.</p>
               )}

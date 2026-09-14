@@ -43,8 +43,10 @@ export default function TeachersPage({
             <tbody>
               {teachersAdminList.map((teacher) => {
                 const [firstName = "", lastName = ""] = teacher.full_name.split(" ");
+                const visibleAssignments = teacher.assignments.slice(0, 3);
+                const hiddenAssignmentCount = teacher.assignments.length - visibleAssignments.length;
                 return (
-                  <tr className="border-b border-outline-variant/50 align-top" key={teacher.id}>
+                  <tr className="border-b border-outline-variant/50 align-top transition-colors hover:bg-surface-container-low" key={teacher.id}>
                     <td className="flex items-center gap-3 p-4">
                       <span className={`avatar-circle h-9 w-9 text-xs ${avatarToneFor(teacher.id)}`}>
                         {initialsOf(firstName, lastName)}
@@ -60,7 +62,7 @@ export default function TeachersPage({
                     <td className="p-4">
                       {teacher.assignments.length ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {teacher.assignments.map((assignment) => (
+                          {visibleAssignments.map((assignment) => (
                             <span className="badge badge-neutral gap-1.5" key={assignment.id}>
                               {assignment.classroom_name}
                               {assignment.lesson_name ? ` · ${assignment.lesson_name}` : " · Rehber"}
@@ -74,6 +76,9 @@ export default function TeachersPage({
                               </button>
                             </span>
                           ))}
+                          {hiddenAssignmentCount > 0 && (
+                            <span className="badge badge-neutral">+{hiddenAssignmentCount} atama</span>
+                          )}
                         </div>
                       ) : (
                         <span className="font-body-md text-body-md text-secondary">Atama yok</span>

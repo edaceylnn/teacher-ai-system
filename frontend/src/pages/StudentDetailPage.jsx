@@ -3,12 +3,11 @@ import { api } from "../api";
 import { attendanceLabels } from "../constants";
 import Icon from "../components/Icon";
 import Modal from "../components/Modal";
-import StatCard from "../components/StatCard";
 import { avatarToneFor, initialsOf } from "../utils/helpers";
 
 const AI_OUTPUT_LABELS = {
   report_comment: "Karne Yorumu",
-  development_suggestion: "Eksik Konu Analizi",
+  development_suggestion: "Eksik Konular",
   parent_message: "Veli Mesajı",
 };
 
@@ -18,20 +17,48 @@ const ATTENDANCE_BADGE_CLASSES = {
   excused: "badge-warning",
 };
 
-const TABS = [
-  { id: "overview", label: "Genel Bakış", icon: "dashboard" },
-  { id: "assessments", label: "Değerlendirmeler", icon: "school" },
-  { id: "attendance", label: "Devamsızlık", icon: "fact_check" },
-  { id: "homework", label: "Ödevler", icon: "assignment" },
-  { id: "ai", label: "AI Analizi", icon: "auto_awesome" },
-  { id: "parent", label: "Veli Bilgileri", icon: "family_restroom" },
-];
+const INFO_EMPTY = "Bilgi eklenmemiş";
 
 function aiOutputSummary(outputType, payload) {
   if (outputType === "report_comment") return payload.comment;
   if (outputType === "development_suggestion") return payload.summary;
   if (outputType === "parent_message") return payload.message;
   return "";
+}
+
+function gradeTrend(grades) {
+  if (grades.length < 2) return { label: "Trend için veri az", tone: "neutral" };
+  const sorted = [...grades].sort((a, b) => (a.date > b.date ? 1 : -1));
+  const previous = Number(sorted.at(-2).score);
+  const latest = Number(sorted.at(-1).score);
+  const diff = Math.round((latest - previous) * 10) / 10;
+  if (diff > 0) return { label: `+${diff} son kayıt`, tone: "success" };
+  if (diff < 0) return { label: `${diff} son kayıt`, tone: "danger" };
+  return { label: "Değişim yok", tone: "neutral" };
+}
+
+function homeworkStatus(homework) {
+  const dueDate = homework.due_date ? new Date(homework.due_date) : null;
+  const submittedAt = homework.submitted_at ? new Date(homework.submitted_at) : null;
+  if (homework.is_completed && dueDate && submittedAt && submittedAt > dueDate) {
+    return { label: "Geç Teslim", className: "badge-warning" };
+  }
+  if (homework.is_completed) return { label: "Tamamlandı", className: "badge-success" };
+  if (dueDate && dueDate < new Date()) return { label: "Eksik", className: "badge-danger" };
+  return { label: "Bekliyor", className: "badge-neutral" };
+}
+
+function EmptyPanel({ icon, title, text, action }) {
+  return (
+    <div className="student-empty-panel">
+      <span className="student-empty-icon">
+        <Icon name={icon} />
+      </span>
+      <h3>{title}</h3>
+      <p>{text}</p>
+      {action}
+    </div>
+  );
 }
 
 export default function StudentDetailPage({
@@ -104,6 +131,7 @@ export default function StudentDetailPage({
             grades.length) *
             10,
         ) / 10,
+      trend: gradeTrend(grades),
     }));
   }, [profile]);
 
@@ -159,24 +187,56 @@ export default function StudentDetailPage({
     ? Math.round((attendanceSummary.present / attendanceSummary.total) * 100)
     : null;
   const attendanceRate = attendanceRateValue === null ? "-" : `%${attendanceRateValue}`;
-  const absentRatio = attendanceSummary.total
-    ? Math.round((attendanceSummary.absent / attendanceSummary.total) * 100)
-    : 0;
-  const excusedRatio = attendanceSummary.total
-    ? Math.round((attendanceSummary.excused / attendanceSummary.total) * 100)
-    : 0;
   const completedHomeworkCount = profile.homeworks.filter((homework) => homework.is_completed).length;
-  const recentGrades = sortedGrades.slice(0, 5);
+  const homeworkCompletionRate = profile.homeworks.length
+    ? `${Math.round((completedHomeworkCount / profile.homeworks.length) * 100)}%`
+    : "-";
+  const recentGrades = sortedGrades.slice(0, 4);
+  const recentActivities = [
+    ...sortedGrades.slice(0, 3).map((grade) => ({
+      id: `grade-${grade.id}`,
+      icon: "school",
+      title: `${grade.exam_name} sonucu girildi`,
+      meta: `${grade.lesson_name} · ${grade.score} puan · ${grade.date}`,
+    })),
+    ...[...profile.attendance_records]
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 2)
+      .map((record) => ({
+        id: `attendance-${record.id}`,
+        icon: "fact_check",
+        title: `Devamsızlık: ${attendanceLabels[record.status]}`,
+        meta: `${record.lesson_name || "Genel"} · ${record.date}`,
+      })),
+  ].slice(0, 5);
+  const aiOutputByType = new Map(aiOutputs.map((output) => [output.output_type, output]));
+  const tabCounts = {
+    overview: null,
+    assessments: profile.grades.length,
+    attendance: profile.attendance_records.length,
+    homework: profile.homeworks.length,
+    ai: aiOutputs.length,
+    parent: null,
+  };
+  const tabs = [
+    { id: "overview", label: "Genel Bakış", icon: "dashboard" },
+    { id: "assessments", label: "Değerlendirmeler", icon: "school" },
+    { id: "attendance", label: "Devamsızlık", icon: "fact_check" },
+    { id: "homework", label: "Ödevler", icon: "assignment" },
+    { id: "ai", label: "AI Analizi", icon: "auto_awesome" },
+    { id: "parent", label: "Veli Bilgileri", icon: "family_restroom" },
+  ];
 
   return (
-    <div className="wide-page">
+    <div className="wide-page student-detail-page">
       <button
-        className="no-print mb-2 inline-flex w-fit items-center gap-1 font-label-md text-label-md text-secondary transition-colors hover:text-primary"
+        className="no-print student-back-link"
         onClick={() => setActivePage("students")}
         type="button"
       >
         <Icon name="arrow_back" className="text-[16px]" /> Öğrencilere dön
       </button>
+
       <div className="mb-5 hidden border-b border-outline-variant pb-4 print:flex print:items-end print:justify-between">
         <div>
           <p className="font-headline-md text-headline-md font-bold text-primary">Teacher AI</p>
@@ -192,31 +252,30 @@ export default function StudentDetailPage({
           {currentTeacher?.full_name && <p>Öğretmen: {currentTeacher.full_name}</p>}
         </div>
       </div>
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center print:break-inside-avoid">
-        <div className="flex items-center gap-5">
+
+      <header className="student-profile-header print:break-inside-avoid">
+        <div className="student-profile-main">
           <div
-            className={`avatar-circle h-20 w-20 border-2 border-surface-container-high text-2xl print:h-14 print:w-14 print:text-base ${avatarToneFor(selectedStudentId)}`}
+            className={`avatar-circle h-16 w-16 text-xl print:h-14 print:w-14 print:text-base ${avatarToneFor(selectedStudentId)}`}
           >
             {initialsOf(profile.first_name, profile.last_name)}
           </div>
           <div>
-            <h1 className="mb-1 font-headline-lg text-headline-lg tracking-tight text-on-surface">
-              {profile.first_name} {profile.last_name}
-            </h1>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="badge badge-neutral bg-secondary-container text-on-secondary-container">
-                Sınıf: {profile.classroom.name}
-              </span>
-              <span className="font-body-md text-body-md text-secondary">Öğrenci No: #{profile.id}</span>
+            <p className="student-profile-kicker">Öğrenci Profili</p>
+            <h1>{profile.first_name} {profile.last_name}</h1>
+            <div className="student-profile-meta">
+              <span>{profile.classroom.name}</span>
+              <span>Öğrenci No #{profile.id}</span>
+              <span>{selectedStudent.email || "E-posta yok"}</span>
             </div>
           </div>
         </div>
-        <div className="no-print flex flex-wrap gap-2">
-          <button className="outline-button" onClick={() => window.print()} type="button">
-            <Icon name="picture_as_pdf" /> Profili PDF Olarak İndir
+        <div className="no-print student-profile-actions">
+          <button className="outline-button compact" onClick={() => window.print()} type="button">
+            <Icon name="picture_as_pdf" /> PDF
           </button>
           <button
-            className="outline-button"
+            className="outline-button compact"
             onClick={() => {
               setEditingStudent(selectedStudent);
               setStudentEditForm({
@@ -235,7 +294,7 @@ export default function StudentDetailPage({
             <Icon name="edit" /> Düzenle
           </button>
           <button
-            className="primary-button"
+            className="primary-button compact"
             disabled={!selectedStudent.parent_email}
             onClick={() => {
               setMessageNotice("");
@@ -248,295 +307,346 @@ export default function StudentDetailPage({
             <Icon name="chat" /> Mesaj Gönder
           </button>
         </div>
-      </div>
+      </header>
 
-      <nav className="no-print flex flex-wrap gap-1 border-b border-outline-variant">
-        {TABS.map((tab) => {
+      <nav className="no-print student-tabs">
+        {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
-              className={`flex items-center gap-2 border-b-2 px-3 py-2 font-label-md text-label-md transition-colors ${
-                isActive
-                  ? "border-primary font-bold text-primary"
-                  : "border-transparent text-secondary hover:text-primary"
-              }`}
+              className={isActive ? "active" : ""}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               type="button"
             >
               <Icon name={tab.icon} className="text-[18px]" />
               {tab.label}
+              {tabCounts[tab.id] !== null && <span className="tab-count">{tabCounts[tab.id]}</span>}
             </button>
           );
         })}
       </nav>
 
       {activeTab === "overview" && (
-        <div className="flex flex-col gap-gutter">
-          <div className="grid grid-cols-1 gap-gutter md:grid-cols-3">
-            <StatCard icon="analytics" label="Genel Değerlendirme Ortalaması" trend="Kayıtlı sonuçlar" value={overallAverage} />
-            <StatCard icon="fact_check" label="Devam Oranı" trend={`${attendanceSummary.total} kayıt`} value={attendanceRate} />
-            <StatCard
-              icon="assignment_turned_in"
-              label="Ödev Tamamlama"
-              trend="Tamamlanan/Toplam"
-              value={`${completedHomeworkCount}/${profile.homeworks.length}`}
-            />
-          </div>
-
-          <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
-              <h2>Son Değerlendirmeler</h2>
-              <span className="analysis-chip">{recentGrades.length} kayıt</span>
-            </div>
-            <ul className="divide-y divide-outline-variant/50">
-              {recentGrades.map((grade) => (
-                <li className="flex items-center justify-between gap-3 p-4" key={grade.id}>
-                  <div>
-                    <p className="font-body-md text-body-md font-medium text-on-surface">
-                      {grade.exam_name} <span className="status-chip">{gradeCategoryLabels[grade.category]}</span>
-                    </p>
-                    <p className="font-label-md text-label-md text-secondary">
-                      {grade.lesson_name} · {grade.date}
-                    </p>
-                  </div>
-                  <strong className="font-mono-sm text-mono-sm text-on-surface">{grade.score}</strong>
-                </li>
-              ))}
-              {!recentGrades.length && <p className="empty-note">Bu öğrenci için henüz değerlendirme kaydı yok.</p>}
-            </ul>
+        <div className="student-tab-content">
+          <section className="student-metric-grid">
+            <article>
+              <span>Ortalama</span>
+              <strong>{overallAverage}</strong>
+              <small>{profile.grades.length} değerlendirme</small>
+            </article>
+            <article>
+              <span>Devam Oranı</span>
+              <strong>{attendanceRate}</strong>
+              <small>{attendanceSummary.total} yoklama kaydı</small>
+            </article>
+            <article>
+              <span>Ödev Tamamlama</span>
+              <strong>{homeworkCompletionRate}</strong>
+              <small>{completedHomeworkCount}/{profile.homeworks.length} tamamlandı</small>
+            </article>
           </section>
 
-          <section className="card p-5">
-            <h3 className="mb-4 flex items-center gap-2 font-headline-md text-headline-md text-on-surface">
-              <Icon name="comment" className="text-secondary" /> Öğretmen Yorumu
-            </h3>
-            <div className="relative rounded-md border border-surface-container-high bg-surface-container-low p-4">
-              <Icon name="format_quote" className="absolute right-2 top-2 text-[24px] text-surface-variant" />
-              <p className="relative z-10 font-body-md text-body-md leading-relaxed text-on-surface-variant">
+          <div className="student-two-column">
+            <section className="student-panel">
+              <div className="student-panel-head">
+                <h2>Öğretmen Yorumu</h2>
+              </div>
+              <p className="student-note">
                 {profile.observation_notes || "Henüz öğretmen yorumu girilmedi."}
               </p>
+            </section>
+
+            <section className="student-panel">
+              <div className="student-panel-head">
+                <h2>Son Aktiviteler</h2>
+                <span>{recentActivities.length} kayıt</span>
+              </div>
+              <div className="student-activity-list">
+                {recentActivities.map((activity) => (
+                  <div className="student-activity-item" key={activity.id}>
+                    <Icon name={activity.icon} />
+                    <div>
+                      <strong>{activity.title}</strong>
+                      <p>{activity.meta}</p>
+                    </div>
+                  </div>
+                ))}
+                {!recentActivities.length && (
+                  <EmptyPanel
+                    icon="history"
+                    title="Henüz aktivite yok"
+                    text="Değerlendirme, yoklama veya ödev kaydı geldikçe burada özetlenir."
+                  />
+                )}
+              </div>
+            </section>
+          </div>
+
+          <section className="student-panel">
+            <div className="student-panel-head">
+              <h2>Son Değerlendirmeler</h2>
+              <span>{recentGrades.length} kayıt</span>
+            </div>
+            <div className="student-list">
+              {recentGrades.map((grade) => (
+                <div className="student-list-row" key={grade.id}>
+                  <div>
+                    <strong>{grade.exam_name}</strong>
+                    <p>{grade.lesson_name} · {grade.date}</p>
+                  </div>
+                  <span className="status-chip">{gradeCategoryLabels[grade.category]}</span>
+                  <b>{grade.score}</b>
+                </div>
+              ))}
+              {!recentGrades.length && (
+                <EmptyPanel
+                  icon="school"
+                  title="Değerlendirme yok"
+                  text="Bu öğrenci için henüz sınav veya performans sonucu girilmedi."
+                />
+              )}
             </div>
           </section>
         </div>
       )}
 
       {activeTab === "assessments" && (
-        <section className="card overflow-hidden">
-          <div className="section-heading flex-wrap gap-3 border-b border-outline-variant bg-surface-bright p-5">
-            <h2>Değerlendirmeler</h2>
-            <div className="flex flex-wrap gap-2">
-              <select
-                className="filter-select"
-                onChange={(event) => setAssessmentLessonFilter(event.target.value)}
-                value={assessmentLessonFilter}
-              >
-                <option value="">Tüm Dersler</option>
-                {assessmentLessonOptions.map((lessonName) => (
-                  <option key={lessonName} value={lessonName}>
-                    {lessonName}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="filter-select"
-                onChange={(event) => setAssessmentTypeFilter(event.target.value)}
-                value={assessmentTypeFilter}
-              >
-                <option value="">Tüm Türler</option>
-                {Object.entries(gradeCategoryLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+        <div className="student-tab-content">
+          <section className="student-panel">
+            <div className="student-panel-head">
+              <h2>Ders Ortalamaları</h2>
+              <span>{gradesByLesson.length} ders</span>
             </div>
-          </div>
-          {gradesByLesson.length > 0 && (
-            <div className="flex flex-wrap gap-2 border-b border-outline-variant p-4">
+            <div className="lesson-average-grid">
               {gradesByLesson.map((lessonGroup) => (
-                <span className="badge badge-neutral" key={lessonGroup.lessonName}>
-                  {lessonGroup.lessonName}: {lessonGroup.average}
-                </span>
+                <article key={lessonGroup.lessonName}>
+                  <span>{lessonGroup.lessonName}</span>
+                  <strong>{lessonGroup.average}</strong>
+                  <small className={lessonGroup.trend.tone}>{lessonGroup.trend.label}</small>
+                </article>
               ))}
+              {!gradesByLesson.length && (
+                <EmptyPanel
+                  icon="analytics"
+                  title="Ders ortalaması yok"
+                  text="Ders bazlı ortalamalar değerlendirme kayıtlarından hesaplanır."
+                />
+              )}
             </div>
-          )}
-          <ul className="divide-y divide-outline-variant/50">
-            {filteredGrades.map((grade) => (
-              <li className="flex items-center justify-between gap-3 p-4" key={grade.id}>
-                <div>
-                  <p className="font-body-md text-body-md font-medium text-on-surface">
-                    {grade.exam_name} <span className="status-chip">{gradeCategoryLabels[grade.category]}</span>
-                  </p>
-                  <p className="font-label-md text-label-md text-secondary">
-                    {grade.lesson_name} · {grade.date}
-                  </p>
+          </section>
+
+          <section className="student-panel">
+            <div className="student-panel-head assessment-head">
+              <h2>Sınav ve Değerlendirme Kayıtları</h2>
+              <div className="student-filter-row">
+                <select
+                  className="filter-select"
+                  onChange={(event) => setAssessmentLessonFilter(event.target.value)}
+                  value={assessmentLessonFilter}
+                >
+                  <option value="">Tüm Dersler</option>
+                  {assessmentLessonOptions.map((lessonName) => (
+                    <option key={lessonName} value={lessonName}>{lessonName}</option>
+                  ))}
+                </select>
+                <select
+                  className="filter-select"
+                  onChange={(event) => setAssessmentTypeFilter(event.target.value)}
+                  value={assessmentTypeFilter}
+                >
+                  <option value="">Tüm Türler</option>
+                  {Object.entries(gradeCategoryLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="student-list">
+              {filteredGrades.map((grade) => (
+                <div className="student-list-row" key={grade.id}>
+                  <div>
+                    <strong>{grade.exam_name}</strong>
+                    <p>{grade.lesson_name} · {grade.date}</p>
+                  </div>
+                  <span className="status-chip">{gradeCategoryLabels[grade.category]}</span>
+                  <b>{grade.score}</b>
                 </div>
-                <strong className="font-mono-sm text-mono-sm text-on-surface">{grade.score}</strong>
-              </li>
-            ))}
-            {!filteredGrades.length && (
-              <p className="empty-note">
-                {profile.grades.length ? "Filtreyle eşleşen değerlendirme yok." : "Bu öğrenci için henüz değerlendirme kaydı yok."}
-              </p>
-            )}
-          </ul>
-        </section>
+              ))}
+              {!filteredGrades.length && (
+                <EmptyPanel
+                  icon="filter_alt"
+                  title={profile.grades.length ? "Filtreyle eşleşen kayıt yok" : "Değerlendirme yok"}
+                  text={profile.grades.length ? "Ders veya tür filtresini değiştirerek tekrar deneyin." : "Bu öğrenci için henüz değerlendirme kaydı yok."}
+                />
+              )}
+            </div>
+          </section>
+        </div>
       )}
 
       {activeTab === "attendance" && (
-        <div className="flex flex-col gap-gutter">
-          <section className="card p-5">
-            <h3 className="mb-4 flex items-center gap-2 font-headline-md text-headline-md text-on-surface">
-              <Icon name="calendar_clock" className="text-secondary" /> Devamsızlık Özeti
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border border-outline-variant/60 p-3 text-center">
-                <p className="font-headline-md text-[20px] text-on-surface">{attendanceSummary.total}</p>
-                <p className="font-label-md text-label-md text-secondary">Toplam</p>
-              </div>
-              <div className="rounded-lg border border-outline-variant/60 p-3 text-center">
-                <p className="font-headline-md text-[20px] text-on-surface">{attendanceSummary.present}</p>
-                <p className="font-label-md text-label-md text-secondary">Var</p>
-              </div>
-              <div className="rounded-lg border border-outline-variant/60 p-3 text-center">
-                <p className="font-headline-md text-[20px] text-error">{attendanceSummary.absent}</p>
-                <p className="font-label-md text-label-md text-secondary">Yok</p>
-              </div>
-              <div className="rounded-lg border border-outline-variant/60 p-3 text-center">
-                <p className="font-headline-md text-[20px] text-on-surface">{attendanceSummary.excused}</p>
-                <p className="font-label-md text-label-md text-secondary">Mazeretli</p>
-              </div>
-            </div>
-            <div className="mt-4 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-              <div className="h-full bg-amber-400" style={{ width: `${excusedRatio}%` }} />
-              <div className="h-full bg-error" style={{ width: `${absentRatio}%` }} />
-            </div>
-            <p className="mt-2 text-right font-label-md text-label-md text-secondary">Devam oranı: {attendanceRate}</p>
+        <div className="student-tab-content">
+          <section className="student-metric-grid four">
+            <article>
+              <span>Toplam</span>
+              <strong>{attendanceSummary.total}</strong>
+              <small>Yoklama kaydı</small>
+            </article>
+            <article>
+              <span>Geldi</span>
+              <strong>{attendanceSummary.present}</strong>
+              <small>{attendanceRate} devam</small>
+            </article>
+            <article>
+              <span>Gelmedi</span>
+              <strong>{attendanceSummary.absent}</strong>
+              <small>Devamsızlık</small>
+            </article>
+            <article>
+              <span>Mazeretli</span>
+              <strong>{attendanceSummary.excused}</strong>
+              <small>İzinli kayıt</small>
+            </article>
           </section>
 
-          <section className="card overflow-hidden">
-            <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+          <section className="student-panel">
+            <div className="student-panel-head">
               <h2>Devamsızlık Geçmişi</h2>
-              <span className="analysis-chip">{profile.attendance_records.length} kayıt</span>
+              <span>{profile.attendance_records.length} kayıt</span>
             </div>
-            <ul className="divide-y divide-outline-variant/50">
+            <div className="student-list">
               {[...profile.attendance_records]
                 .sort((a, b) => (a.date < b.date ? 1 : -1))
                 .map((record) => (
-                  <li className="flex items-center justify-between gap-3 p-4" key={record.id}>
+                  <div className="student-list-row" key={record.id}>
                     <div>
-                      <p className="font-body-md text-body-md font-medium text-on-surface">{record.date}</p>
-                      <p className="font-label-md text-label-md text-secondary">
-                        {record.lesson_name || "Genel"}
-                        {record.start_time ? ` · ${record.start_time.slice(0, 5)}` : ""}
-                      </p>
+                      <strong>{record.date}</strong>
+                      <p>{record.lesson_name || "Genel"}{record.start_time ? ` · ${record.start_time.slice(0, 5)}` : ""}</p>
                     </div>
                     <span className={`badge ${ATTENDANCE_BADGE_CLASSES[record.status]}`}>
                       {attendanceLabels[record.status]}
                     </span>
-                  </li>
+                  </div>
                 ))}
               {!profile.attendance_records.length && (
-                <p className="empty-note">Bu öğrenci için henüz devamsızlık kaydı yok.</p>
+                <EmptyPanel
+                  icon="fact_check"
+                  title="Devamsızlık kaydı yok"
+                  text="Yoklama kayıtları işlendiğinde burada durum badge'leriyle görünür."
+                />
               )}
-            </ul>
+            </div>
           </section>
         </div>
       )}
 
       {activeTab === "homework" && (
-        <section className="card overflow-hidden">
-          <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+        <section className="student-panel">
+          <div className="student-panel-head">
             <h2>Ödevler</h2>
-            <span className="analysis-chip">
-              {completedHomeworkCount}/{profile.homeworks.length} tamamladı
-            </span>
+            <span>{completedHomeworkCount}/{profile.homeworks.length} tamamlandı</span>
           </div>
-          <ul className="divide-y divide-outline-variant/50">
-            {profile.homeworks.map((homework) => (
-              <li className="flex items-center justify-between gap-3 p-4" key={homework.id}>
-                <div>
-                  <p className="font-body-md text-body-md font-medium text-on-surface">{homework.title}</p>
-                  <p className="font-label-md text-label-md text-secondary">
-                    {homework.lesson_name} · Teslim: {homework.due_date}
-                  </p>
+          <div className="student-list">
+            {profile.homeworks.map((homework) => {
+              const status = homeworkStatus(homework);
+              return (
+                <div className="student-list-row" key={homework.id}>
+                  <div>
+                    <strong>{homework.title}</strong>
+                    <p>{homework.lesson_name} · Teslim: {homework.due_date}</p>
+                  </div>
+                  {homework.score !== null && homework.score !== undefined && <b>{homework.score}</b>}
+                  <span className={`badge ${status.className}`}>{status.label}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  {homework.score !== null && homework.score !== undefined && (
-                    <strong className="font-mono-sm text-mono-sm text-on-surface">{homework.score}</strong>
-                  )}
-                  <span className={`badge ${homework.is_completed ? "badge-success" : "badge-neutral"}`}>
-                    {homework.is_completed ? "Yaptı" : "Yapmadı"}
-                  </span>
-                </div>
-              </li>
-            ))}
-            {!profile.homeworks.length && <p className="empty-note">Bu öğrenci için ödev kaydı yok.</p>}
-          </ul>
+              );
+            })}
+            {!profile.homeworks.length && (
+              <EmptyPanel
+                icon="assignment"
+                title="Ödev kaydı yok"
+                text="Ödevler ve teslim durumları girildiğinde bu ekranda listelenir."
+              />
+            )}
+          </div>
         </section>
       )}
 
       {activeTab === "ai" && (
-        <section className="print-section card p-5">
-          <h3 className="mb-4 flex items-center gap-2 font-headline-md text-headline-md text-on-surface">
-            <Icon name="auto_awesome" className="text-primary" /> AI Analizi
-          </h3>
-          <div className="flex flex-col gap-3">
-            {["report_comment", "development_suggestion", "parent_message"].map((outputType) => {
-              const output = aiOutputs.find((item) => item.output_type === outputType);
-              return (
-                <div className="rounded-md border border-outline-variant/60 p-3" key={outputType}>
-                  <p className="mb-1 font-label-md text-label-md uppercase tracking-wider text-secondary">
-                    {AI_OUTPUT_LABELS[outputType]}
-                  </p>
-                  <p className="font-body-md text-body-md text-on-surface-variant">
-                    {output ? aiOutputSummary(outputType, output.output_payload) : "Henüz oluşturulmadı."}
-                  </p>
-                </div>
-              );
-            })}
-            <button
-              className="no-print link-button self-start"
-              onClick={() => setActivePage("aiReports")}
-              type="button"
-            >
-              AI Raporları sayfasında düzenle
-            </button>
+        <section className="print-section student-panel">
+          <div className="student-panel-head">
+            <h2>AI Analizi</h2>
+            <span>{aiOutputs.length} çıktı</span>
           </div>
+          {aiOutputs.length === 0 ? (
+            <EmptyPanel
+              icon="auto_awesome"
+              title="Henüz AI analizi oluşturulmadı"
+              text="Karne yorumu, eksik konular ve veli mesajı için öğrencinin mevcut verilerinden taslak oluşturabilirsiniz."
+              action={
+                <button className="primary-button compact" onClick={() => setActivePage("aiReports")} type="button">
+                  <Icon name="auto_awesome" /> Analiz Oluştur
+                </button>
+              }
+            />
+          ) : (
+            <div className="ai-analysis-grid">
+              {["report_comment", "development_suggestion", "parent_message"].map((outputType) => {
+                const output = aiOutputByType.get(outputType);
+                return (
+                  <article key={outputType}>
+                    <h3>{AI_OUTPUT_LABELS[outputType]}</h3>
+                    <p>{output ? aiOutputSummary(outputType, output.output_payload) : "Henüz oluşturulmadı."}</p>
+                    {!output && (
+                      <button className="link-button" onClick={() => setActivePage("aiReports")} type="button">
+                        Analiz Oluştur
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
       {activeTab === "parent" && (
-        <section className="card p-5">
-          <h3 className="mb-4 flex items-center gap-2 font-headline-md text-headline-md text-on-surface">
-            <Icon name="family_restroom" className="text-secondary" /> Veli ve İletişim
-          </h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <p className="mb-0.5 font-label-md text-label-md text-secondary">Veli</p>
-              <p className="font-body-md text-body-md font-medium text-on-surface">
-                {profile.parent_full_name || "-"}
-              </p>
+        <div className="student-two-column">
+          <section className="student-panel">
+            <div className="student-panel-head">
+              <h2>Veli Bilgileri</h2>
             </div>
-            <div>
-              <p className="mb-0.5 font-label-md text-label-md text-secondary">Telefon</p>
-              <p className="font-body-md text-body-md text-on-surface">{profile.parent_phone || "-"}</p>
+            <dl className="student-info-list">
+              <div>
+                <dt>Veli</dt>
+                <dd>{profile.parent_full_name || INFO_EMPTY}</dd>
+              </div>
+              <div>
+                <dt>Telefon</dt>
+                <dd>{profile.parent_phone || INFO_EMPTY}</dd>
+              </div>
+              <div>
+                <dt>Veli E-posta</dt>
+                <dd>{profile.parent_email || INFO_EMPTY}</dd>
+              </div>
+            </dl>
+          </section>
+          <section className="student-panel">
+            <div className="student-panel-head">
+              <h2>Öğrenci İletişim</h2>
             </div>
-            <div>
-              <p className="mb-0.5 font-label-md text-label-md text-secondary">Veli E-posta</p>
-              <p className="font-body-md text-body-md text-on-surface">{profile.parent_email || "-"}</p>
-            </div>
-            <div>
-              <p className="mb-0.5 font-label-md text-label-md text-secondary">Öğrenci E-posta</p>
-              <p className="font-body-md text-body-md text-on-surface">{selectedStudent.email || "-"}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="mb-0.5 font-label-md text-label-md text-secondary">Adres</p>
-              <p className="font-body-md text-body-md text-on-surface">{profile.home_address || "-"}</p>
-            </div>
-          </div>
-        </section>
+            <dl className="student-info-list">
+              <div>
+                <dt>Öğrenci E-posta</dt>
+                <dd>{selectedStudent.email || INFO_EMPTY}</dd>
+              </div>
+              <div>
+                <dt>Adres</dt>
+                <dd>{profile.home_address || INFO_EMPTY}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
       )}
 
       {isMessageModalOpen && (

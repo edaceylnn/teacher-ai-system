@@ -1,6 +1,6 @@
+import { useMemo, useState } from "react";
 import Icon from "../components/Icon";
 import PaginationControls from "../components/PaginationControls";
-import StudentSearch from "../components/StudentSearch";
 import StudentTable from "../components/StudentTable";
 import { canManageRoster } from "../utils/permissions";
 
@@ -8,18 +8,14 @@ export default function ClassroomDetailPage(props) {
   const {
     classroomStudentOffset,
     classroomStudentPage,
+    classroomTodayAbsentCount,
     currentTeacher,
-    isStudentPickerOpen,
-    searchTerm,
     selectedClassroom,
-    selectedStudent,
     selectedStudentId,
     setActiveModal,
     setActivePage,
     setClassroomStudentOffset,
     setEditingStudent,
-    setIsStudentPickerOpen,
-    setSearchTerm,
     setSelectedStudentId,
     setStudentEditForm,
     setStudentForm,
@@ -27,35 +23,54 @@ export default function ClassroomDetailPage(props) {
     teacherAssignments,
     handleDeleteStudent,
   } = props;
-  const filteredClassStudents = students.filter((student) =>
-    `${student.first_name} ${student.last_name}`
-      .toLocaleLowerCase("tr")
-      .includes(searchTerm.toLocaleLowerCase("tr")),
-  );
+  const [tableSearchTerm, setTableSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("name-asc");
   const canManage = canManageRoster(currentTeacher, teacherAssignments, selectedClassroom?.id);
+  const activeStudentCount = students.filter((student) => student.enrollment_status !== "reported").length;
+  const visibleStudents = useMemo(() => {
+    const normalizedSearch = tableSearchTerm.trim().toLocaleLowerCase("tr");
+    const filtered = students.filter((student) => {
+      const fullName = `${student.first_name} ${student.last_name}`.toLocaleLowerCase("tr");
+      const matchesSearch = !normalizedSearch || fullName.includes(normalizedSearch);
+      const matchesStatus = statusFilter === "all" || student.enrollment_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    return [...filtered].sort((first, second) => {
+      if (sortMode === "number-asc") return Number(first.id) - Number(second.id);
+      if (sortMode === "status") {
+        return (first.enrollment_status || "").localeCompare(second.enrollment_status || "", "tr");
+      }
+      const firstName = `${first.first_name} ${first.last_name}`;
+      const secondName = `${second.first_name} ${second.last_name}`;
+      return sortMode === "name-desc"
+        ? secondName.localeCompare(firstName, "tr")
+        : firstName.localeCompare(secondName, "tr");
+    });
+  }, [sortMode, statusFilter, students, tableSearchTerm]);
+  const paginatedStudents = visibleStudents.slice(
+    classroomStudentOffset,
+    classroomStudentOffset + classroomStudentPage.limit,
+  );
 
   return (
-    <div className="wide-page">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-4">
-          <button
-            aria-label="Sınıflarıma dön"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-secondary transition-colors hover:bg-surface-container-low"
-            onClick={() => setActivePage("classrooms")}
-            type="button"
-          >
-            <Icon name="arrow_back" />
-          </button>
-          <h1 className="flex items-center gap-3 font-headline-lg text-headline-lg text-on-surface">
-            {selectedClassroom ? `${selectedClassroom.name}` : "Sınıf seç"}
-            <span className="rounded-full bg-secondary-container px-2.5 py-0.5 font-label-md text-label-md uppercase tracking-wider text-on-secondary-container">
-              {classroomStudentPage.total} Öğrenci
-            </span>
-          </h1>
+    <div className="wide-page classroom-detail-page">
+      <header className="classroom-detail-header">
+        <div>
+          <nav className="classroom-breadcrumb" aria-label="Sayfa konumu">
+            <button onClick={() => setActivePage("classrooms")} type="button">Sınıflarım</button>
+            <Icon name="chevron_right" className="text-[18px]" />
+            <span>{selectedClassroom?.name || "Sınıf seç"}</span>
+          </nav>
+          <div className="mt-3">
+            <h1>{selectedClassroom ? `${selectedClassroom.name} Sınıfı` : "Sınıf seç"}</h1>
+            <p>2026–2027 • {classroomStudentPage.total} öğrenci</p>
+          </div>
         </div>
         {canManage && (
           <button
-            className="primary-button"
+            className="primary-button compact"
             onClick={() => {
               setStudentForm((form) => ({
                 ...form,
@@ -68,18 +83,70 @@ export default function ClassroomDetailPage(props) {
             <Icon name="person_add" /> Öğrenci Ekle
           </button>
         )}
-      </div>
+      </header>
 
-      <StudentSearch
-        filteredStudents={filteredClassStudents}
-        isStudentPickerOpen={isStudentPickerOpen}
-        searchTerm={searchTerm}
-        selectedStudent={selectedStudent}
-        selectedStudentId={selectedStudentId}
-        setIsStudentPickerOpen={setIsStudentPickerOpen}
-        setSearchTerm={setSearchTerm}
-        setSelectedStudentId={setSelectedStudentId}
-      />
+      <section className="classroom-summary-grid" aria-label="Sınıf özeti">
+        <article>
+          <span>Toplam Öğrenci</span>
+          <strong>{classroomStudentPage.total}</strong>
+        </article>
+        <article>
+          <span>Aktif Öğrenci</span>
+          <strong>{activeStudentCount}</strong>
+        </article>
+        <article>
+          <span>Bugün Devamsız</span>
+          <strong>{classroomTodayAbsentCount}</strong>
+        </article>
+      </section>
+
+      <section className="classroom-table-panel">
+        <div className="classroom-table-toolbar">
+          <label className="classroom-filter-field classroom-filter-search">
+            <span>Öğrenci Ara</span>
+            <div>
+              <Icon name="search" />
+              <input
+                onChange={(event) => {
+                  setTableSearchTerm(event.target.value);
+                  setClassroomStudentOffset(0);
+                }}
+                placeholder="Ad soyad"
+                type="search"
+                value={tableSearchTerm}
+              />
+            </div>
+          </label>
+          <label className="classroom-filter-field">
+            <span>Durum Filtresi</span>
+            <select
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setClassroomStudentOffset(0);
+              }}
+              value={statusFilter}
+            >
+              <option value="all">Tümü</option>
+              <option value="active">Aktif</option>
+              <option value="reported">Raporlu</option>
+            </select>
+          </label>
+          <label className="classroom-filter-field">
+            <span>Sırala</span>
+            <select
+              onChange={(event) => {
+                setSortMode(event.target.value);
+                setClassroomStudentOffset(0);
+              }}
+              value={sortMode}
+            >
+              <option value="name-asc">Ad A-Z</option>
+              <option value="name-desc">Ad Z-A</option>
+              <option value="number-asc">No artan</option>
+              <option value="status">Durum</option>
+            </select>
+          </label>
+        </div>
       <StudentTable
         canManage={canManage}
         handleDeleteStudent={handleDeleteStudent}
@@ -89,14 +156,15 @@ export default function ClassroomDetailPage(props) {
         setEditingStudent={setEditingStudent}
         setSelectedStudentId={setSelectedStudentId}
         setStudentEditForm={setStudentEditForm}
-        students={classroomStudentPage.items}
+          students={paginatedStudents}
       />
       <PaginationControls
         limit={classroomStudentPage.limit}
         offset={classroomStudentOffset}
         setOffset={setClassroomStudentOffset}
-        total={classroomStudentPage.total}
+          total={visibleStudents.length}
       />
+      </section>
     </div>
   );
 }

@@ -24,6 +24,7 @@ export default function AssessmentEntryPanel({
   const scoredCount = Object.values(assessmentRecordsDraft).filter((entry) =>
     showCompletion ? entry.is_completed : entry.score !== "",
   ).length;
+  const progressPercent = students.length ? Math.round((scoredCount / students.length) * 100) : 0;
 
   function updateDraftScore(studentId, rawValue) {
     let score = rawValue;
@@ -46,17 +47,23 @@ export default function AssessmentEntryPanel({
   }
 
   return (
-    <section className="card overflow-hidden">
-      <div className="section-heading flex-wrap gap-3 border-b border-outline-variant bg-surface-bright p-5">
+    <section className="assessment-entry-panel">
+      <div className="assessment-entry-head">
         <div>
           <p className="font-label-md text-label-md uppercase tracking-wider text-secondary">{panelLabel}</p>
-          <h2>
+          <h2 className="assessment-entry-title">
             {lessonName || "Ders"} — {activeAssessment.title}{" "}
             <span className="status-chip">{gradeCategoryLabels[activeAssessment.assessment_type]}</span>
           </h2>
-          <p className="section-subtext">
-            {activeAssessment.date} · {scoredCount}/{students.length} işlendi
-          </p>
+          <div className="assessment-entry-progress" aria-label={`${scoredCount}/${students.length} işlendi`}>
+            <p>
+              <span>{activeAssessment.date}</span>
+              <span>{scoredCount}/{students.length} işlendi</span>
+            </p>
+            <div>
+              <span style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
         </div>
         <div className="row-actions">
           <button className="outline-button compact" onClick={onClose} type="button">
@@ -76,13 +83,13 @@ export default function AssessmentEntryPanel({
         <p className="empty-note">Yükleniyor…</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <thead className="bg-surface-container-low font-label-md text-label-md uppercase tracking-wider text-secondary">
+          <table className="assessment-entry-table w-full border-collapse text-left">
+            <thead>
               <tr>
-                <th className="border-b border-outline-variant p-4">Öğrenci</th>
-                <th className="border-b border-outline-variant p-4 text-right">Puan</th>
+                <th>Öğrenci</th>
+                <th className="text-right">Puan</th>
                 {showCompletion && (
-                  <th className="border-b border-outline-variant p-4 text-right">Tamamlandı</th>
+                  <th className="text-right">Ödev Durumu</th>
                 )}
               </tr>
             </thead>
@@ -90,16 +97,16 @@ export default function AssessmentEntryPanel({
               {students.map((student) => {
                 const draft = assessmentRecordsDraft[student.id] || { score: "", is_completed: false };
                 return (
-                  <tr className="border-b border-outline-variant/50" key={student.id}>
-                    <td className="flex items-center gap-2 p-4 font-body-md text-body-md font-medium text-on-surface">
+                  <tr key={student.id}>
+                    <td>
                       <span className={`avatar-circle h-6 w-6 text-xs ${avatarToneFor(student.id)}`}>
                         {initialsOf(student.first_name, student.last_name)}
                       </span>
                       {student.first_name} {student.last_name}
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="text-right">
                       <input
-                        className="w-24 text-right"
+                        className="score-input"
                         max="100"
                         min="0"
                         onChange={(event) => updateDraftScore(student.id, event.target.value)}
@@ -109,8 +116,9 @@ export default function AssessmentEntryPanel({
                       />
                     </td>
                     {showCompletion && (
-                      <td className="p-4 text-right">
-                        <div className="flex justify-end">
+                      <td className="text-right">
+                        <div className="assessment-completion-cell">
+                          <span>{draft.is_completed ? "Tamamlandı" : "Eksik"}</span>
                           <Toggle
                             checked={draft.is_completed}
                             id={`completed-${student.id}`}

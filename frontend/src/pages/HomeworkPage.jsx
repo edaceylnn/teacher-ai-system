@@ -85,7 +85,7 @@ export default function HomeworkPage({
         </button>
       </section>
 
-      <section className="card p-5">
+      <section className="rounded-xl bg-surface-container-low/70 p-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block font-label-md text-label-md text-secondary" htmlFor="homework-classroom">
@@ -127,8 +127,14 @@ export default function HomeworkPage({
       </section>
 
       {!selectedClassroomId && (
-        <section className="card p-8">
-          <p className="empty-note">Başlamak için bir sınıf seç.</p>
+        <section className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon">
+              <Icon name="school" />
+            </span>
+            <h3>Sınıf seçimi bekleniyor</h3>
+            <p>Ödev listesini ve ödev kontrolünü görmek için bir sınıf seç.</p>
+          </div>
         </section>
       )}
 
@@ -150,27 +156,28 @@ export default function HomeworkPage({
 
       {selectedClassroomId && !activeAssessment && (
         <section className="card overflow-hidden">
-          <div className="section-heading border-b border-outline-variant bg-surface-bright p-5">
+          <div className="section-heading p-5 pb-2">
             <h2>Ödevler</h2>
           </div>
           <ul className="divide-y divide-outline-variant/50">
             {filteredHomeworks.map((assessment) => (
-              <li className="flex items-center justify-between p-4 transition-colors hover:bg-surface" key={assessment.id}>
+              <li className="flex items-center justify-between p-4 transition-colors hover:bg-surface-container-low" key={assessment.id}>
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Icon name="assignment" />
                   </div>
                   <div>
                     <p className="font-body-md text-body-md font-medium text-on-surface">{assessment.title}</p>
-                    <p className="font-label-md text-label-md text-secondary">
-                      {lessonById.get(assessment.lesson_id)?.name || "-"} · Teslim: {assessment.date}
+                    <p className="mt-1 flex flex-wrap items-center gap-2 font-label-md text-label-md text-secondary">
+                      <span>{lessonById.get(assessment.lesson_id)?.name || "-"}</span>
+                      <span className="status-chip">Teslim: {assessment.date}</span>
                     </p>
                   </div>
                 </div>
                 <span className="row-actions">
                   <button
                     aria-label={`${assessment.title} için ödev kontrolü`}
-                    className="outline-button compact"
+                    className="primary-button compact"
                     onClick={() => openAssessmentForEntry(assessment)}
                     type="button"
                   >

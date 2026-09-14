@@ -159,7 +159,7 @@
     @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60;
   }
   .outline-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2.5 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-surface-container-low px-4 py-2.5 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60;
   }
   .outline-button.compact,
   .primary-button.compact {
@@ -173,7 +173,7 @@
     @apply font-label-md text-label-md text-primary transition-colors hover:underline;
   }
   .icon-action {
-    @apply flex h-8 w-8 items-center justify-center rounded-full text-secondary transition-colors hover:bg-surface-container-low hover:text-primary disabled:cursor-not-allowed disabled:opacity-40;
+    @apply flex h-8 w-8 items-center justify-center rounded-full text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40;
   }
   .icon-action.danger-action {
     @apply hover:bg-error-container hover:text-error;
@@ -184,7 +184,7 @@
 
   /* Cards & sections */
   .card {
-    @apply rounded-xl border border-outline-variant bg-surface-container-lowest;
+    @apply rounded-xl border border-transparent bg-surface-container-lowest shadow-[0_1px_2px_rgba(15,23,42,0.04)];
   }
   .hero-card {
     @apply card flex flex-col justify-between gap-4 p-container-padding sm:flex-row sm:items-center;
@@ -209,10 +209,10 @@
      page's records, e.g. Sınıflarım/Öğrencilerim). Single source of truth so
      a style change here applies to every page's filter bar at once. */
   .filter-input {
-    @apply rounded-lg border border-outline-variant bg-surface-container-lowest py-2 pl-9 pr-4 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary;
+    @apply rounded-lg border border-transparent bg-surface-container-low py-2 pl-9 pr-4 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary focus:bg-surface-container-lowest;
   }
   .filter-select {
-    @apply cursor-pointer rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary;
+    @apply cursor-pointer rounded-lg border border-transparent bg-surface-container-low px-4 py-2 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary focus:bg-surface-container-lowest;
   }
   .empty-note {
     @apply p-4 text-center font-body-md text-body-md text-secondary;
@@ -248,8 +248,11 @@
   .empty-state-icon {
     @apply flex h-12 w-12 items-center justify-center rounded-full bg-surface-container-low text-secondary;
   }
+  .empty-state h3 {
+    @apply font-body-md text-body-md font-semibold text-on-surface;
+  }
   .empty-state p {
-    @apply font-body-md text-body-md text-secondary;
+    @apply max-w-md font-body-md text-body-md text-secondary;
   }
   /* Compact variant — same icon/type styling, tighter padding so a card
    * that's just waiting on one action (e.g. AI Haftalık Özet) doesn't force
@@ -333,10 +336,10 @@
     @apply card overflow-hidden;
   }
   .table-head {
-    @apply grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant bg-surface-container-low px-4 py-3 font-label-md text-label-md uppercase tracking-wider text-secondary;
+    @apply grid grid-cols-[1fr_auto] gap-3 bg-surface-container-low px-4 py-3 font-label-md text-label-md uppercase tracking-wider text-secondary;
   }
   .student-row {
-    @apply grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 border-b border-outline-variant px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-bright;
+    @apply grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 border-b border-outline-variant/60 px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-container-low;
   }
   .student-row.active {
     @apply bg-surface-container-low;
@@ -363,9 +366,531 @@
     @apply flex items-center gap-1 font-body-md text-body-md text-amber-600 dark:text-amber-400;
   }
 
+  /* Students page: compact directory dashboard */
+  .students-page {
+    @apply gap-4;
+  }
+  .students-header {
+    @apply flex flex-col gap-1;
+  }
+  .students-toolbar {
+    @apply grid items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 sm:grid-cols-[minmax(240px,1fr)_180px_auto];
+  }
+  .students-search {
+    @apply relative min-w-0;
+  }
+  .students-search .filter-input,
+  .students-class-filter {
+    @apply h-9 border-outline-variant bg-surface px-3 py-0;
+  }
+  .students-search .filter-input {
+    @apply pl-9 pr-9;
+  }
+  .students-add-button {
+    @apply h-9 whitespace-nowrap px-3;
+  }
+  .students-table-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .students-table thead tr {
+    @apply border-b border-outline-variant bg-surface-container-low;
+  }
+  .students-table th {
+    @apply px-4 py-2.5 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant;
+  }
+  .students-table tbody {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .students-table td {
+    @apply px-4 py-2.5 align-middle;
+  }
+  .students-row {
+    @apply cursor-pointer transition-colors hover:bg-surface-container-low;
+  }
+  .students-comment {
+    @apply block max-w-[360px] truncate font-body-md text-body-md text-secondary;
+  }
+  .students-muted {
+    @apply text-on-surface-variant/60;
+  }
+  .students-muted-badge {
+    @apply bg-surface-container-low text-on-surface-variant/60;
+  }
+  .students-pagination {
+    @apply flex items-center justify-between border-t border-outline-variant px-4 py-3 font-body-md text-body-md text-secondary;
+  }
+  .students-pagination > div {
+    @apply flex items-center gap-1;
+  }
+
+  /* Attendance: fast compact roll-call workspace */
+  .attendance-page {
+    @apply gap-4;
+  }
+  .attendance-header h1 {
+    @apply leading-tight;
+  }
+  .attendance-header p {
+    @apply max-w-2xl leading-relaxed;
+  }
+  .attendance-toolbar {
+    @apply grid items-end gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 md:grid-cols-[160px_minmax(220px,1fr)_170px_auto];
+  }
+  .attendance-toolbar label {
+    @apply flex min-w-0 flex-col gap-1.5 font-label-md text-label-md text-secondary;
+  }
+  .attendance-toolbar .filter-select,
+  .attendance-toolbar input {
+    @apply h-9 min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-0 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .attendance-open-button {
+    @apply h-9 whitespace-nowrap px-3;
+  }
+  .attendance-entry-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .attendance-entry-head {
+    @apply flex flex-col justify-between gap-3 border-b border-outline-variant px-4 py-3 lg:flex-row lg:items-start;
+  }
+  .attendance-entry-head h2 {
+    @apply mt-1 font-headline-md text-headline-md text-on-surface;
+  }
+  .attendance-progress {
+    @apply mt-2 w-full max-w-sm;
+  }
+  .attendance-progress p {
+    @apply mb-1 flex items-center justify-between gap-4 font-label-md text-label-md text-secondary;
+  }
+  .attendance-progress > div {
+    @apply h-1.5 overflow-hidden rounded-full bg-surface-container-low;
+  }
+  .attendance-progress > div > span {
+    @apply block h-full rounded-full bg-primary transition-[width];
+  }
+  .attendance-actions {
+    @apply flex flex-wrap items-center justify-start gap-2 lg:justify-end;
+  }
+  .attendance-roster-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .attendance-roster-row {
+    @apply flex flex-col justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low sm:flex-row sm:items-center;
+  }
+  .attendance-student-name {
+    @apply flex min-w-0 items-center gap-2.5 font-body-md text-body-md font-medium text-on-surface;
+  }
+  .attendance-segmented-control {
+    @apply inline-flex w-full overflow-hidden rounded-lg border border-outline-variant bg-surface p-0.5 sm:w-auto;
+  }
+  .attendance-segmented-control button {
+    @apply min-w-0 flex-1 px-3 py-1.5 font-label-md text-label-md text-secondary transition-colors hover:bg-surface-container-low sm:min-w-24;
+  }
+  .attendance-segmented-control button + button {
+    @apply border-l border-outline-variant;
+  }
+  .attendance-segmented-control button.selected {
+    @apply border-l-transparent text-white shadow-[0_1px_2px_rgba(0,0,0,0.16)];
+  }
+  .attendance-segmented-control button.present.selected {
+    @apply bg-emerald-600;
+  }
+  .attendance-segmented-control button.absent.selected {
+    @apply bg-error;
+  }
+  .attendance-segmented-control button.excused.selected {
+    @apply bg-amber-600;
+  }
+
+  /* Gradebook: compact assessment workspace */
+  .gradebook-page {
+    @apply gap-4;
+  }
+  .gradebook-header {
+    @apply flex flex-col justify-between gap-3 md:flex-row md:items-end;
+  }
+  .gradebook-header h1 {
+    @apply leading-tight;
+  }
+  .gradebook-header p {
+    @apply max-w-2xl leading-relaxed;
+  }
+  .gradebook-toolbar {
+    @apply grid items-end gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 md:grid-cols-[160px_minmax(220px,1fr)_190px];
+  }
+  .gradebook-toolbar label {
+    @apply flex min-w-0 flex-col gap-1.5 font-label-md text-label-md text-secondary;
+  }
+  .gradebook-toolbar .filter-select {
+    @apply h-9 min-w-0 border-outline-variant bg-surface px-3 py-0 text-on-surface disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .gradebook-list-panel,
+  .gradebook-lessons-panel,
+  .assessment-entry-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .gradebook-list-head,
+  .gradebook-lessons-head,
+  .assessment-entry-head {
+    @apply flex flex-col justify-between gap-3 border-b border-outline-variant px-4 py-3 sm:flex-row sm:items-center;
+  }
+  .gradebook-list-head h2,
+  .gradebook-lessons-head h2,
+  .assessment-entry-title {
+    @apply font-headline-md text-headline-md text-on-surface;
+  }
+  .gradebook-list-head p,
+  .gradebook-lessons-head p {
+    @apply mt-1 font-label-md text-label-md text-secondary;
+  }
+  .gradebook-list-head > span {
+    @apply rounded-md bg-surface-container-low px-2 py-1 font-mono-sm text-mono-sm text-secondary;
+  }
+  .gradebook-assessment-list,
+  .gradebook-lesson-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .gradebook-assessment-row {
+    @apply flex flex-col justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low sm:flex-row sm:items-center;
+  }
+  .gradebook-assessment-main {
+    @apply flex min-w-0 items-center gap-3;
+  }
+  .gradebook-assessment-icon {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary;
+  }
+  .gradebook-assessment-title {
+    @apply flex min-w-0 flex-wrap items-center gap-1.5 font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .gradebook-assessment-meta {
+    @apply mt-1 flex flex-wrap items-center gap-2 font-label-md text-label-md text-secondary;
+  }
+  .gradebook-row-actions {
+    @apply flex shrink-0 items-center justify-end gap-1;
+  }
+  .gradebook-lessons-panel {
+    @apply lg:sticky lg:top-4;
+  }
+  .gradebook-lessons-head {
+    @apply items-start;
+  }
+  .gradebook-lesson-row {
+    @apply flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low;
+  }
+  .gradebook-lesson-row div:first-child {
+    @apply min-w-0;
+  }
+  .gradebook-lesson-row span {
+    @apply block truncate font-body-md text-body-md font-medium text-on-surface;
+  }
+  .gradebook-lesson-row small {
+    @apply mt-0.5 block font-mono-sm text-mono-sm text-secondary;
+  }
+  .assessment-entry-head {
+    @apply items-start;
+  }
+  .assessment-entry-progress {
+    @apply mt-2 max-w-sm;
+  }
+  .assessment-entry-progress p {
+    @apply mb-1 flex items-center justify-between gap-4 font-label-md text-label-md text-secondary;
+  }
+  .assessment-entry-progress > div {
+    @apply h-1.5 overflow-hidden rounded-full bg-surface-container-low;
+  }
+  .assessment-entry-progress > div > span {
+    @apply block h-full rounded-full bg-primary transition-[width];
+  }
+  .assessment-entry-table thead {
+    @apply bg-surface-container-low font-label-md text-label-md uppercase tracking-wider text-secondary;
+  }
+  .assessment-entry-table th,
+  .assessment-entry-table td {
+    @apply px-4 py-3;
+  }
+  .assessment-entry-table tbody tr {
+    @apply border-b border-outline-variant/50 transition-colors last:border-b-0 hover:bg-surface-container-low;
+  }
+  .assessment-entry-table tbody td:first-child {
+    @apply flex items-center gap-2 font-body-md text-body-md font-medium text-on-surface;
+  }
+  .score-input {
+    @apply h-9 w-24 rounded-lg border border-outline-variant bg-surface px-3 text-right font-mono-sm text-mono-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary;
+  }
+  .assessment-completion-cell {
+    @apply flex items-center justify-end gap-3 font-label-md text-label-md text-secondary;
+  }
+
+  /* Classroom detail: compact SaaS roster workspace */
+  .classroom-detail-page {
+    @apply gap-4;
+  }
+  .classroom-detail-header {
+    @apply flex flex-col justify-between gap-4 border-b border-outline-variant pb-5 sm:flex-row sm:items-start;
+  }
+  .classroom-detail-header h1 {
+    @apply mb-2.5 font-headline-lg text-headline-lg text-on-surface;
+  }
+  .classroom-detail-header p {
+    @apply pb-0 font-label-md text-label-md text-secondary;
+  }
+  .classroom-breadcrumb {
+    @apply flex items-center gap-1.5 font-label-md text-label-md text-secondary;
+  }
+  .classroom-breadcrumb button {
+    @apply transition-colors hover:text-primary;
+  }
+  .classroom-breadcrumb span {
+    @apply text-on-surface;
+  }
+  .classroom-summary-grid {
+    @apply grid gap-3 sm:grid-cols-3;
+  }
+  .classroom-summary-grid article {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3;
+  }
+  .classroom-summary-grid span {
+    @apply block font-label-md text-label-md text-secondary;
+  }
+  .classroom-summary-grid strong {
+    @apply mt-1 block font-headline-md text-[22px] leading-tight text-on-surface;
+  }
+  .classroom-table-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .classroom-table-toolbar {
+    @apply grid gap-3 border-b border-outline-variant p-3 md:grid-cols-[minmax(220px,1fr)_180px_160px];
+  }
+  .classroom-filter-field {
+    @apply flex flex-col gap-1.5;
+  }
+  .classroom-filter-field > span {
+    @apply font-label-md text-label-md text-secondary;
+  }
+  .classroom-filter-field > div,
+  .classroom-filter-field select {
+    @apply h-9 rounded-lg border border-outline-variant bg-surface px-3 font-label-md text-label-md text-on-surface outline-none transition-colors focus-within:border-primary focus:border-primary;
+  }
+  .classroom-filter-field > div {
+    @apply flex items-center gap-2;
+  }
+  .classroom-filter-field .material-symbols-outlined {
+    @apply text-[20px] text-outline;
+  }
+  .classroom-filter-field input {
+    @apply min-w-0 flex-1 border-none bg-transparent outline-none placeholder:text-outline;
+  }
+  .student-roster-table {
+    @apply overflow-hidden;
+  }
+  .student-roster-table thead tr {
+    @apply border-b border-outline-variant bg-surface-container-low;
+  }
+  .student-roster-table th {
+    @apply px-4 py-2.5 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant;
+  }
+  .student-roster-table tbody {
+    @apply divide-y divide-outline-variant/70 font-body-md text-body-md text-on-surface;
+  }
+  .student-roster-table tbody tr {
+    @apply cursor-pointer transition-colors hover:bg-surface-container-low;
+  }
+  .student-roster-table tbody tr.selected {
+    @apply bg-surface-container-low;
+  }
+  .student-roster-table td {
+    @apply px-4 py-3 align-middle;
+  }
+  .student-roster-name {
+    @apply flex items-center gap-2.5 font-medium;
+  }
+  .student-row-menu {
+    @apply relative inline-flex justify-end;
+  }
+  .student-row-menu-button {
+    @apply flex h-7 w-8 items-center justify-center rounded-md font-label-md text-label-md tracking-[0.08em] text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface;
+  }
+  .student-row-menu-popover {
+    @apply absolute right-0 top-8 z-20 min-w-28 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest py-1 text-left shadow-[0_8px_18px_rgba(0,0,0,0.16)];
+  }
+  .student-row-menu-popover button {
+    @apply block w-full px-3 py-2 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low;
+  }
+  .student-row-menu-popover button.danger {
+    @apply text-error hover:bg-error-container;
+  }
+
+  /* Student detail: decision-focused profile workspace */
+  .student-detail-page {
+    @apply gap-4;
+  }
+  .student-back-link {
+    @apply inline-flex w-fit items-center gap-1 font-label-md text-label-md text-secondary transition-colors hover:text-primary;
+  }
+  .student-profile-header {
+    @apply flex flex-col justify-between gap-4 rounded-lg border border-outline-variant bg-surface-container-lowest p-4 sm:flex-row sm:items-center;
+  }
+  .student-profile-main {
+    @apply flex items-center gap-4;
+  }
+  .student-profile-kicker {
+    @apply mb-1 font-label-md text-label-md uppercase tracking-wider text-secondary;
+  }
+  .student-profile-header h1 {
+    @apply font-headline-lg text-headline-lg text-on-surface;
+  }
+  .student-profile-meta {
+    @apply mt-2 flex flex-wrap items-center gap-2 font-label-md text-label-md text-secondary;
+  }
+  .student-profile-meta span {
+    @apply rounded-md bg-surface-container-low px-2 py-1;
+  }
+  .student-profile-actions {
+    @apply flex flex-wrap gap-2;
+  }
+  .student-tabs {
+    @apply flex flex-wrap gap-1 border-b border-outline-variant;
+  }
+  .student-tabs button {
+    @apply inline-flex items-center gap-2 border-b-2 border-transparent px-3 py-2 font-label-md text-label-md text-secondary transition-colors hover:text-primary;
+  }
+  .student-tabs button.active {
+    @apply border-primary text-primary;
+  }
+  .student-tabs button .tab-count {
+    @apply rounded-full bg-surface-container-high px-1.5 py-0.5 font-mono-sm text-[10px] leading-none text-on-surface-variant;
+  }
+  .student-tab-content {
+    @apply flex flex-col gap-4;
+  }
+  .student-metric-grid {
+    @apply grid gap-3 md:grid-cols-3;
+  }
+  .student-metric-grid.four {
+    @apply md:grid-cols-4;
+  }
+  .student-metric-grid article {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3;
+  }
+  .student-metric-grid span {
+    @apply block font-label-md text-label-md text-secondary;
+  }
+  .student-metric-grid strong {
+    @apply mt-1 block font-headline-md text-[24px] leading-tight text-on-surface;
+  }
+  .student-metric-grid small {
+    @apply mt-1 block font-label-md text-label-md text-on-surface-variant;
+  }
+  .student-two-column {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+  .student-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .student-panel-head {
+    @apply flex flex-col justify-between gap-3 border-b border-outline-variant px-4 py-3 sm:flex-row sm:items-center;
+  }
+  .student-panel-head h2 {
+    @apply font-headline-md text-headline-md text-on-surface;
+  }
+  .student-panel-head > span {
+    @apply font-label-md text-label-md text-secondary;
+  }
+  .student-note {
+    @apply p-4 font-body-md text-body-md leading-relaxed text-on-surface-variant;
+  }
+  .student-activity-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .student-activity-item {
+    @apply flex items-start gap-3 px-4 py-3;
+  }
+  .student-activity-item > .material-symbols-outlined {
+    @apply mt-0.5 text-[20px] text-secondary;
+  }
+  .student-activity-item strong,
+  .student-list-row strong {
+    @apply font-body-md text-body-md font-medium text-on-surface;
+  }
+  .student-activity-item p,
+  .student-list-row p {
+    @apply mt-0.5 font-label-md text-label-md text-secondary;
+  }
+  .student-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .student-list-row {
+    @apply grid items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low sm:grid-cols-[minmax(0,1fr)_auto_auto];
+  }
+  .student-list-row b {
+    @apply font-mono-sm text-mono-sm text-on-surface;
+  }
+  .lesson-average-grid {
+    @apply grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+  .lesson-average-grid article {
+    @apply rounded-lg bg-surface-container-low px-3 py-3;
+  }
+  .lesson-average-grid span {
+    @apply block font-label-md text-label-md text-secondary;
+  }
+  .lesson-average-grid strong {
+    @apply mt-1 block font-headline-md text-[22px] leading-tight text-on-surface;
+  }
+  .lesson-average-grid small {
+    @apply mt-1 block font-label-md text-label-md text-secondary;
+  }
+  .lesson-average-grid small.success {
+    @apply text-primary;
+  }
+  .lesson-average-grid small.danger {
+    @apply text-error;
+  }
+  .assessment-head {
+    @apply items-start;
+  }
+  .student-filter-row {
+    @apply flex flex-wrap gap-2;
+  }
+  .student-empty-panel {
+    @apply flex flex-col items-center justify-center gap-2 px-4 py-8 text-center;
+  }
+  .student-empty-icon {
+    @apply flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container-low text-secondary;
+  }
+  .student-empty-panel h3 {
+    @apply font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .student-empty-panel p {
+    @apply max-w-md font-body-md text-body-md text-secondary;
+  }
+  .ai-analysis-grid {
+    @apply grid gap-3 p-4 lg:grid-cols-3;
+  }
+  .ai-analysis-grid article {
+    @apply rounded-lg bg-surface-container-low p-4;
+  }
+  .ai-analysis-grid h3 {
+    @apply mb-2 font-label-md text-label-md uppercase tracking-wider text-secondary;
+  }
+  .ai-analysis-grid p {
+    @apply font-body-md text-body-md leading-relaxed text-on-surface-variant;
+  }
+  .student-info-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .student-info-list div {
+    @apply px-4 py-3;
+  }
+  .student-info-list dt {
+    @apply font-label-md text-label-md text-secondary;
+  }
+  .student-info-list dd {
+    @apply mt-1 font-body-md text-body-md text-on-surface;
+  }
+
   /* Dashboard "Bugünkü Dersler" timeline item */
   .schedule-item {
-    @apply flex items-start gap-3 rounded-lg border border-outline-variant bg-surface-container-low p-3;
+    @apply flex items-start gap-3 rounded-lg bg-surface-container-low p-3;
   }
   .schedule-item strong {
     @apply w-12 shrink-0 font-mono-sm text-mono-sm text-secondary;
@@ -389,14 +914,26 @@
     @apply relative flex flex-col gap-1.5;
   }
   .searchable-select label {
-    @apply font-label-md text-label-md uppercase tracking-wider text-on-surface;
+    @apply font-label-md text-[10px] uppercase tracking-wider text-secondary/80;
   }
   .searchable-select-control,
   .student-combobox {
-    @apply flex items-center gap-2 rounded-lg border border-outline-variant bg-surface px-3 py-2 transition-colors focus-within:border-primary;
+    @apply flex items-center gap-2 rounded-lg border border-outline-variant/70 bg-surface px-3 py-2 transition-colors focus-within:border-primary/80 focus-within:ring-1 focus-within:ring-primary/30;
+  }
+  .form-panel-body .searchable-select-control {
+    @apply h-11 py-0;
   }
   .student-search {
     @apply flex-row items-center rounded-lg border border-outline-variant bg-surface px-3 py-2 focus-within:border-primary;
+  }
+  .student-search.student-search-compact {
+    @apply w-full max-w-sm px-3 py-1.5;
+  }
+  .student-search.student-search-compact .material-symbols-outlined {
+    @apply text-[20px];
+  }
+  .student-search.student-search-compact input {
+    @apply font-label-md text-label-md;
   }
   .student-search > .material-symbols-outlined {
     @apply text-outline;
@@ -437,25 +974,58 @@
 
   /* Form panel (modals) */
   .form-panel {
-    @apply flex flex-col gap-4;
+    @apply flex max-h-[calc(100vh-5rem)] flex-col;
+  }
+  .form-panel-header {
+    @apply shrink-0 pr-9;
   }
   .form-panel h2 {
-    @apply font-headline-md text-headline-md text-on-surface;
+    @apply font-headline-md text-headline-md leading-tight text-on-surface;
   }
-  .form-panel > input:not([type="hidden"]),
-  .form-panel > textarea,
-  .form-panel > select {
-    @apply w-full rounded-lg border border-outline-variant bg-surface px-3 py-2.5 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary;
+  .form-panel-header p {
+    @apply mt-1 max-w-md font-body-md text-body-md leading-relaxed text-secondary;
   }
-  .form-panel > textarea {
-    @apply min-h-24 resize-y;
+  .form-panel-body {
+    @apply mt-5 flex min-h-0 flex-col gap-6 overflow-y-auto pr-1;
   }
-  .form-panel > label {
-    @apply flex flex-col gap-1.5 font-label-md text-label-md uppercase tracking-wider text-on-surface;
+  .modal-form-section {
+    @apply flex flex-col gap-3;
   }
-  .form-panel > label > input:not([type="hidden"]),
-  .form-panel > label > textarea {
-    @apply w-full rounded-lg border border-outline-variant bg-surface px-3 py-2.5 font-body-md text-body-md normal-case tracking-normal text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary;
+  .modal-form-section + .modal-form-section {
+    @apply pt-1;
+  }
+  .modal-form-section h3 {
+    @apply font-mono-sm text-[10px] uppercase tracking-[0.14em] text-secondary/70;
+  }
+  .form-field-grid {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+  .form-field {
+    @apply flex min-w-0 flex-col gap-1.5;
+  }
+  .form-field > span {
+    @apply font-label-md text-label-md text-on-surface-variant;
+  }
+  .form-field input:not([type="hidden"]),
+  .form-field textarea,
+  .form-panel-body > input:not([type="hidden"]),
+  .form-panel-body > textarea,
+  .form-panel-body > select {
+    @apply h-11 w-full rounded-lg border border-outline-variant/70 bg-surface px-3 font-body-md text-body-md text-on-surface outline-none transition-colors placeholder:text-outline/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/30;
+  }
+  .form-field textarea,
+  .form-panel-body > textarea {
+    @apply min-h-20 py-2.5 resize-y;
+  }
+  .form-panel-footer {
+    @apply sticky -bottom-container-padding -mx-container-padding mt-5 flex shrink-0 justify-end gap-2 bg-surface-container-lowest px-container-padding pb-1 pt-2;
+  }
+  .form-panel-footer .outline-button,
+  .form-panel-footer .primary-button {
+    @apply h-10 min-w-28 px-4;
+  }
+  .form-panel-footer .outline-button {
+    @apply bg-transparent text-secondary hover:bg-surface-container-low hover:text-on-surface;
   }
   .form-error {
     @apply font-body-md text-body-md text-error;
