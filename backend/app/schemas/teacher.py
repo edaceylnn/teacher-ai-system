@@ -16,8 +16,8 @@ class TeacherBase(BaseModel):
 
 
 class TeacherCreate(TeacherBase):
+    role: TeacherRole = TeacherRole.teacher
     password: str | None = Field(default=None, min_length=8, max_length=128)
-    password_hash: str | None = Field(default=None, min_length=1, max_length=255)
 
     @field_validator("password")
     @classmethod
@@ -30,7 +30,12 @@ class TeacherUpdate(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=255)
     title: str | None = Field(default=None, max_length=120)
     branch: str | None = Field(default=None, max_length=120)
-    password_hash: str | None = Field(default=None, min_length=1, max_length=255)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def check_password_strength(cls, value: str | None) -> str | None:
+        return validate_password_strength(value) if value is not None else value
 
 
 class TeacherRoleUpdate(BaseModel):
@@ -62,3 +67,11 @@ class TeacherAdminResponse(TeacherResponse):
     admins (see GET /teachers), never to a teacher's own /me lookup."""
 
     assignments: list[TeacherAssignmentSummary] = []
+
+
+class TeacherCreateResponse(TeacherResponse):
+    """Returned only from admin teacher creation. invitation_url is included
+    when the admin leaves password empty, so local/no-SMTP installs can still
+    copy the one-time setup link manually."""
+
+    invitation_url: str | None = None

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { attendanceLabels } from "../constants";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 import Modal from "../components/Modal";
 import { avatarToneFor, initialsOf } from "../utils/helpers";
@@ -159,9 +160,9 @@ export default function StudentDetailPage({
             Detayları görmek için Öğrencilerim listesinden bir öğrenci seç.
           </p>
         </div>
-        <button className="outline-button" onClick={() => setActivePage("students")} type="button">
+        <Button onClick={() => setActivePage("students")} size="md" variant="secondary">
           <Icon name="arrow_back" /> Öğrencilere Dön
-        </button>
+        </Button>
       </section>
     );
   }
@@ -271,11 +272,10 @@ export default function StudentDetailPage({
           </div>
         </div>
         <div className="no-print student-profile-actions">
-          <button className="outline-button compact" onClick={() => window.print()} type="button">
+          <Button onClick={() => window.print()} size="sm" variant="secondary">
             <Icon name="picture_as_pdf" /> PDF
-          </button>
-          <button
-            className="outline-button compact"
+          </Button>
+          <Button
             onClick={() => {
               setEditingStudent(selectedStudent);
               setStudentEditForm({
@@ -289,23 +289,24 @@ export default function StudentDetailPage({
               });
               setActiveModal("editStudent");
             }}
-            type="button"
+            size="sm"
+            variant="secondary"
           >
             <Icon name="edit" /> Düzenle
-          </button>
-          <button
-            className="primary-button compact"
+          </Button>
+          <Button
             disabled={!selectedStudent.parent_email}
             onClick={() => {
               setMessageNotice("");
               setMessageError("");
               setIsMessageModalOpen(true);
             }}
+            size="sm"
             title={selectedStudent.parent_email ? "" : "Bu öğrenci için veli e-postası yok"}
-            type="button"
+            variant="primary"
           >
             <Icon name="chat" /> Mesaj Gönder
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -584,9 +585,9 @@ export default function StudentDetailPage({
               title="Henüz AI analizi oluşturulmadı"
               text="Karne yorumu, eksik konular ve veli mesajı için öğrencinin mevcut verilerinden taslak oluşturabilirsiniz."
               action={
-                <button className="primary-button compact" onClick={() => setActivePage("aiReports")} type="button">
+                <Button onClick={() => setActivePage("aiReports")} size="sm" variant="primary">
                   <Icon name="auto_awesome" /> Analiz Oluştur
-                </button>
+                </Button>
               }
             />
           ) : (
@@ -598,9 +599,9 @@ export default function StudentDetailPage({
                     <h3>{AI_OUTPUT_LABELS[outputType]}</h3>
                     <p>{output ? aiOutputSummary(outputType, output.output_payload) : "Henüz oluşturulmadı."}</p>
                     {!output && (
-                      <button className="link-button" onClick={() => setActivePage("aiReports")} type="button">
+                      <Button onClick={() => setActivePage("aiReports")} size="sm" tone="primary" variant="ghost">
                         Analiz Oluştur
-                      </button>
+                      </Button>
                     )}
                   </article>
                 );
@@ -674,9 +675,9 @@ export default function StudentDetailPage({
             />
             {messageError && <p className="form-error">{messageError}</p>}
             {messageNotice && <p className="empty-note success-note">{messageNotice}</p>}
-            <button className="primary-button" disabled={isSendingMessage} type="submit">
+            <Button disabled={isSendingMessage} size="md" type="submit" variant="primary">
               <Icon name="send" /> {isSendingMessage ? "Gönderiliyor..." : "Gönder"}
-            </button>
+            </Button>
           </form>
         </Modal>
       )}

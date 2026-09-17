@@ -25,7 +25,7 @@ class InMemoryRateLimiter:
             if len(hits) >= self.max_requests:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many requests. Please try again later.",
+                    detail="Çok fazla deneme yaptınız. Lütfen biraz sonra tekrar deneyin.",
                 )
             hits.append(now)
 

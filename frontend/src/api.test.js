@@ -49,7 +49,7 @@ describe("api request handling", () => {
     vi.unstubAllGlobals();
   });
 
-  it("formats a FastAPI validation error array into a readable message", async () => {
+  it("formats and localizes a FastAPI validation error array into a readable message", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: [{ msg: "Value error, Password must contain at least one digit" }] }), {
         status: 422,
@@ -58,7 +58,7 @@ describe("api request handling", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(api.requestPasswordReset("eda@example.com")).rejects.toThrow(
-      "Value error, Password must contain at least one digit",
+      "Parola en az bir rakam içermeli.",
     );
 
     vi.unstubAllGlobals();

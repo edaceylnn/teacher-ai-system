@@ -50,9 +50,9 @@ export function initialsOf(firstName, lastName) {
 }
 
 const AVATAR_TONES = [
-  "bg-primary-container text-on-primary",
-  "bg-tertiary-container text-on-tertiary",
-  "bg-secondary-container text-on-secondary-container",
+  "avatar-tone-primary",
+  "avatar-tone-success",
+  "avatar-tone-navy",
 ];
 
 export function avatarToneFor(id) {

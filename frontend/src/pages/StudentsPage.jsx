@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import Icon from "../components/Icon";
+import { useCloseOnOutsideClick } from "../hooks/useCloseOnOutsideClick";
 import {
   averageOfScores,
   avatarToneFor,
@@ -20,7 +22,6 @@ export default function StudentsPage({
   setActiveModal,
   setActivePage,
   setEditingStudent,
-  setGradeForm,
   setSearchTerm,
   setSelectedStudentId,
   setStudentDirectoryClassroomId,
@@ -32,8 +33,11 @@ export default function StudentsPage({
   studentDirectoryPage,
   teacherAssignments,
   handleDeleteStudent,
+  handleDeleteStudents,
 }) {
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  useCloseOnOutsideClick(openMenuId !== null, () => setOpenMenuId(null));
   const classroomById = useMemo(
     () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
     [classrooms],
@@ -43,10 +47,27 @@ export default function StudentsPage({
     isAdmin(currentTeacher) || homeroomClassroomIds(teacherAssignments).size > 0;
   const canGoBack = studentDirectoryOffset > 0;
   const canGoForward = studentDirectoryOffset + studentDirectoryPage.limit < studentDirectoryPage.total;
+  const manageableStudentIds = useMemo(
+    () =>
+      studentDirectoryPage.items
+        .filter((student) => canManageRoster(currentTeacher, teacherAssignments, student.classroom_id))
+        .map((student) => student.id),
+    [currentTeacher, studentDirectoryPage.items, teacherAssignments],
+  );
+  const selectedVisibleIds = selectedStudentIds.filter((studentId) =>
+    manageableStudentIds.includes(studentId),
+  );
+  const isAllVisibleSelected =
+    manageableStudentIds.length > 0 &&
+    manageableStudentIds.every((studentId) => selectedStudentIds.includes(studentId));
+
+  useEffect(() => {
+    const visibleIds = new Set(studentDirectoryPage.items.map((student) => student.id));
+    setSelectedStudentIds((current) => current.filter((studentId) => visibleIds.has(studentId)));
+  }, [studentDirectoryPage.items]);
 
   function openStudentDetail(student) {
     setSelectedStudentId(student.id);
-    setGradeForm((form) => ({ ...form, student_id: String(student.id) }));
     setActivePage("studentDetail");
     setOpenMenuId(null);
   }
@@ -119,24 +140,36 @@ export default function StudentsPage({
           ))}
         </select>
         {canAddStudent && (
-          <button
-            className="primary-button compact students-add-button"
+          <Button
             onClick={() => {
               setStudentForm((form) => ({ ...form, classroom_id: studentDirectoryClassroomId || "" }));
               setActiveModal("student");
             }}
-            type="button"
+            size="md"
+            variant="primary"
           >
             <Icon name="person_add" /> Öğrenci Ekle
-          </button>
+          </Button>
         )}
       </div>
 
       <section className="students-table-panel">
         <div className="overflow-x-auto">
-          <table className="students-table w-full border-collapse text-left">
+          <table className="students-table w-full text-left">
             <thead>
               <tr>
+                <th className="w-12">
+                  {manageableStudentIds.length > 0 && (
+                    <input
+                      aria-label="Görünen yönetilebilir öğrencileri seç"
+                      checked={isAllVisibleSelected}
+                      onChange={(event) => {
+                        setSelectedStudentIds(event.target.checked ? manageableStudentIds : []);
+                      }}
+                      type="checkbox"
+                    />
+                  )}
+                </th>
                 <th>Öğrenci</th>
                 <th>Sınıf</th>
                 <th>
@@ -151,7 +184,23 @@ export default function StudentsPage({
                 <th className="hidden sm:table-cell">
                   Son Yorum
                 </th>
-                <th className="text-right">İşlem</th>
+                <th className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    {selectedVisibleIds.length > 0 && (
+                      <Button
+                        onClick={async () => {
+                          await handleDeleteStudents(selectedVisibleIds);
+                          setSelectedStudentIds([]);
+                        }}
+                        size="sm"
+                        variant="danger"
+                      >
+                        <Icon name="delete" /> Seçili Sil ({selectedVisibleIds.length})
+                      </Button>
+                    )}
+                    <span>İşlem</span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -167,6 +216,22 @@ export default function StudentsPage({
                     key={student.id}
                     onClick={() => openStudentDetail(student)}
                   >
+                    <td onClick={(event) => event.stopPropagation()}>
+                      {canManage && (
+                        <input
+                          aria-label={`${student.first_name} ${student.last_name} seç`}
+                          checked={selectedStudentIds.includes(student.id)}
+                          onChange={(event) => {
+                            setSelectedStudentIds((current) =>
+                              event.target.checked
+                                ? [...current, student.id]
+                                : current.filter((studentId) => studentId !== student.id),
+                            );
+                          }}
+                          type="checkbox"
+                        />
+                      )}
+                    </td>
                     <td>
                       <div className="flex items-center gap-3">
                         <div className={`avatar-circle h-8 w-8 shrink-0 text-[11px] ${avatarToneFor(student.id)}`}>
@@ -254,24 +319,24 @@ export default function StudentsPage({
           <div className="students-pagination">
             <span>{studentDirectoryPage.total} öğrenci</span>
             <div>
-              <button
+              <Button
                 aria-label="Önceki sayfa"
-                className="icon-action"
                 disabled={!canGoBack}
                 onClick={() => setStudentDirectoryOffset(Math.max(studentDirectoryOffset - studentDirectoryPage.limit, 0))}
-                type="button"
+                size="sm"
+                variant="icon"
               >
                 <Icon name="chevron_left" />
-              </button>
-              <button
+              </Button>
+              <Button
                 aria-label="Sonraki sayfa"
-                className="icon-action"
                 disabled={!canGoForward}
                 onClick={() => setStudentDirectoryOffset(studentDirectoryOffset + studentDirectoryPage.limit)}
-                type="button"
+                size="sm"
+                variant="icon"
               >
                 <Icon name="chevron_right" />
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import get_current_teacher
 from app.api.routes.auth import login_rate_limiter
 from app.api.routes.teachers import registration_rate_limiter
+from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -58,8 +59,10 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def _register_and_login(client: TestClient, email: str) -> tuple[dict, dict]:
-    client.post("/teachers", json={"full_name": "Teacher", "email": email, "password": "demo12345"})
+def _create_and_login(client: TestClient, db_session: Session, email: str) -> tuple[dict, dict]:
+    teacher = Teacher(full_name="Teacher", email=email, password_hash=hash_password("demo12345"))
+    db_session.add(teacher)
+    db_session.commit()
     login = client.post("/auth/login", json={"email": email, "password": "demo12345"})
     token = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -69,7 +72,7 @@ def _register_and_login(client: TestClient, email: str) -> tuple[dict, dict]:
 
 @pytest.fixture()
 def admin(client: TestClient, db_session: Session) -> tuple[dict, dict]:
-    admin, headers = _register_and_login(client, "admin@example.com")
+    admin, headers = _create_and_login(client, db_session, "admin@example.com")
     teacher = db_session.get(Teacher, admin["id"])
     teacher.role = TeacherRole.admin
     db_session.commit()
@@ -77,8 +80,8 @@ def admin(client: TestClient, db_session: Session) -> tuple[dict, dict]:
 
 
 @pytest.fixture()
-def branch_teacher(client: TestClient) -> tuple[dict, dict]:
-    return _register_and_login(client, "ahmet@example.com")
+def branch_teacher(client: TestClient, db_session: Session) -> tuple[dict, dict]:
+    return _create_and_login(client, db_session, "ahmet@example.com")
 
 
 @pytest.fixture()
@@ -206,7 +209,7 @@ def test_subject_assignment_does_not_grant_other_subjects(
 
 
 def test_homeroom_view_does_not_grant_other_subject_write(
-    client: TestClient, classroom_and_lessons: dict, admin: tuple[dict, dict]
+    client: TestClient, db_session: Session, classroom_and_lessons: dict, admin: tuple[dict, dict]
 ) -> None:
     # Deliberately NOT the admin fixture here — admins have blanket access
     # (madde 12), so this needs a plain, non-admin rehber to isolate the
@@ -217,7 +220,7 @@ def test_homeroom_view_does_not_grant_other_subject_write(
     turkish = classroom_and_lessons["turkish"]
     student = classroom_and_lessons["student"]
 
-    homeroom_teacher, homeroom_headers = _register_and_login(client, "rehber@example.com")
+    homeroom_teacher, homeroom_headers = _create_and_login(client, db_session, "rehber@example.com")
     assign = client.post(
         "/teacher-assignments",
         json={"teacher_id": homeroom_teacher["id"], "classroom_id": classroom["id"], "lesson_id": None},

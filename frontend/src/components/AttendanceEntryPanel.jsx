@@ -1,3 +1,4 @@
+import Button from "./Button";
 import Icon from "./Icon";
 import { attendanceLabels } from "../constants";
 import { avatarToneFor, initialsOf } from "../utils/helpers";
@@ -64,23 +65,18 @@ export default function AttendanceEntryPanel({
           </div>
         </div>
         <div className="attendance-actions">
-          <button className="outline-button compact" onClick={onMarkAllPresent} type="button">
+          <Button onClick={onMarkAllPresent} size="sm" variant="secondary">
             <Icon name="done_all" /> Tümünü Var İşaretle
-          </button>
-          <button className="outline-button compact" onClick={clearDraft} type="button">
+          </Button>
+          <Button onClick={clearDraft} size="sm" variant="secondary">
             <Icon name="backspace" /> Temizle
-          </button>
-          <button className="outline-button compact" onClick={onClose} type="button">
+          </Button>
+          <Button onClick={onClose} size="sm" variant="secondary">
             Vazgeç
-          </button>
-          <button
-            className="primary-button compact"
-            disabled={isSavingAttendanceRecords}
-            onClick={onSave}
-            type="button"
-          >
+          </Button>
+          <Button disabled={isSavingAttendanceRecords} onClick={onSave} size="sm" variant="primary">
             <Icon name="save" /> {isSavingAttendanceRecords ? "Kaydediliyor…" : "Kaydet"}
-          </button>
+          </Button>
         </div>
       </div>
       {isLoadingAttendanceRecords ? (

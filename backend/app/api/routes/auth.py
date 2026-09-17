@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,6 +29,7 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger("app.auth")
 login_rate_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
 refresh_rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
 password_reset_request_rate_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
@@ -57,7 +60,7 @@ def _issue_tokens(teacher: Teacher, response: Response) -> TokenResponse:
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
     teacher = db.scalar(select(Teacher).where(Teacher.email == str(payload.email)))
     if teacher is None or not verify_password(payload.password, teacher.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-posta veya parola hatalı.")
     return _issue_tokens(teacher, response)
 
 
@@ -68,7 +71,7 @@ def refresh_access_token(
     refresh_token: str | None = Cookie(default=None),
 ) -> TokenResponse:
     invalid_token_error = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token"
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Oturum yenileme bilgisi geçersiz veya süresi dolmuş."
     )
     if refresh_token is None:
         raise invalid_token_error
@@ -114,6 +117,9 @@ def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(
         token = create_password_reset_token(teacher.id, teacher.password_hash)
         reset_link = f"{settings.frontend_base_url}/reset-password?token={token}"
         send_password_reset_email(teacher.email, reset_link)
+        logger.info("Password reset email requested for teacher_id=%s email=%s", teacher.id, teacher.email)
+    else:
+        logger.info("Password reset requested for unknown email=%s", payload.email)
     # Always 202, whether or not the email exists, so callers can't enumerate accounts.
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
@@ -125,7 +131,10 @@ def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(
 )
 def confirm_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)) -> Response:
     token_payload = decode_password_reset_token(payload.token)
-    invalid_token_error = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+    invalid_token_error = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
+    )
     if token_payload is None:
         raise invalid_token_error
 

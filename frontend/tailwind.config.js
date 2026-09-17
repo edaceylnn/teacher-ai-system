@@ -12,6 +12,14 @@ export default {
       // per-component changes.
       colors: {
         "on-primary": "rgb(var(--color-on-primary) / <alpha-value>)",
+        "primary-hover": "rgb(var(--app-primary-hover) / <alpha-value>)",
+        "primary-soft": "rgb(var(--app-primary-soft) / <alpha-value>)",
+        sidebar: "rgb(var(--app-sidebar) / <alpha-value>)",
+        "border-default": "rgb(var(--app-border) / <alpha-value>)",
+        "surface-2": "rgb(var(--app-surface-2) / <alpha-value>)",
+        "app-text-primary": "rgb(var(--app-text-primary) / <alpha-value>)",
+        "app-text-secondary": "rgb(var(--app-text-secondary) / <alpha-value>)",
+        "app-text-muted": "rgb(var(--app-text-muted) / <alpha-value>)",
         tertiary: "rgb(var(--color-tertiary) / <alpha-value>)",
         surface: "rgb(var(--color-surface) / <alpha-value>)",
         "surface-tint": "rgb(var(--color-surface-tint) / <alpha-value>)",

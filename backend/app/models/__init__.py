@@ -4,6 +4,7 @@ from app.models.assessment import Assessment, AssessmentRecord, AssessmentType
 from app.models.attendance_session import AttendanceRecord, AttendanceSession, AttendanceStatus
 from app.models.audit_log import AuditLog
 from app.models.classroom import Classroom
+from app.models.curriculum import CurriculumOutcome
 from app.models.lesson import Lesson
 from app.models.schedule import ScheduleEntry
 from app.models.student import Student, StudentEnrollmentStatus
@@ -23,6 +24,7 @@ __all__ = [
     "AttendanceStatus",
     "AuditLog",
     "Classroom",
+    "CurriculumOutcome",
     "Lesson",
     "ScheduleEntry",
     "Student",

@@ -12,111 +12,144 @@
  * intentionally left out of the .dark block and fall through to :root. */
 :root {
   color-scheme: light;
-  --color-on-primary: 255 255 255;
-  --color-tertiary: 58 73 95;
-  /* Sidebar/header/input "chrome" surface — pure white, same tier as cards
-   * (surface-container-lowest). What separates it from the page canvas is
-   * the background/border delta below, not a different white. */
-  --color-surface: 255 255 255;
-  --color-surface-tint: 77 68 227;
-  --color-inverse-primary: 195 192 255;
+  /* Core product palette. Keep these as the single source of truth for
+   * theme-level color decisions; Tailwind reads the mapped --color-* roles. */
+  --app-primary: 255 138 52; /* #FF8A34 */
+  --app-primary-hover: 245 122 31; /* #F57A1F */
+  --app-primary-soft: 255 241 231; /* #FFF1E7 */
+  --app-primary-soft-opacity: 1;
+  --app-success: 46 159 117; /* #2E9F75 */
+  --app-success-soft: 231 247 240;
+  --app-success-soft-opacity: 1;
+  --app-warning: 244 183 64; /* #F4B740 */
+  --app-warning-soft: 255 247 225;
+  --app-warning-soft-opacity: 1;
+  --app-background: 246 248 252; /* #F6F8FC */
+  --app-surface: 255 255 255; /* #FFFFFF */
+  --app-surface-2: 241 244 249; /* #F1F4F9 */
+  --app-sidebar: 35 63 115; /* #233F73 */
+  --app-border: 225 231 240; /* #E1E7F0 */
+  --app-text-primary: 23 32 51; /* #172033 */
+  --app-text-secondary: 72 86 110; /* #48566E */
+  --app-text-muted: 112 127 150; /* #707F96 */
+
+  --color-on-primary: 31 20 12;
+  --color-tertiary: var(--app-primary);
+  --color-surface: var(--app-surface);
+  --color-surface-tint: var(--app-primary);
+  --color-inverse-primary: var(--app-primary-hover);
   --color-on-error: 255 255 255;
-  --color-primary: 53 37 205;
+  --color-primary: var(--app-primary);
   --color-on-secondary: 255 255 255;
-  --color-surface-container-lowest: 255 255 255;
-  --color-primary-container: 79 70 229;
+  --color-surface-container-lowest: var(--app-surface);
+  --color-primary-container: var(--app-primary-hover);
   --color-inverse-surface: 46 49 50;
-  --color-secondary-fixed: 218 226 253;
-  --color-tertiary-fixed: 211 228 254;
-  --color-primary-fixed-dim: 195 192 255;
-  --color-surface-variant: 225 227 228;
-  --color-error: 186 26 26;
-  --color-on-tertiary-fixed-variant: 56 72 93;
-  --color-primary-fixed: 226 223 255;
-  /* De-purpled from the M3-generated default (which leaned lavender) to a
-   * neutral cool gray — strong enough for icon strokes/placeholder text,
-   * without reading as a tinted brand color. */
-  --color-outline: 148 152 165;
-  --color-secondary-fixed-dim: 190 198 224;
-  --color-surface-container-low: 240 241 246;
-  /* Card/table/input borders — soft and neutral, not the previous lavender
-   * tint the purple accent shouldn't leak into every edge. */
-  --color-outline-variant: 225 227 234;
-  --color-on-primary-fixed: 15 0 105;
+  --color-secondary-fixed: var(--app-surface-2);
+  --color-tertiary-fixed: var(--app-primary-soft);
+  --color-primary-fixed-dim: var(--app-primary-soft);
+  --color-surface-variant: var(--app-surface-2);
+  --color-error: 181 80 72;
+  --color-on-tertiary-fixed-variant: 133 65 17;
+  --color-primary-fixed: var(--app-primary-soft);
+  --color-outline: var(--app-text-muted);
+  --color-secondary-fixed-dim: var(--app-surface-2);
+  --color-surface-container-low: var(--app-surface-2);
+  --color-outline-variant: var(--app-border);
+  --color-on-primary-fixed: 112 52 10;
   --color-inverse-on-surface: 240 241 242;
-  --color-tertiary-container: 81 97 119;
-  --color-error-container: 255 218 214;
-  --color-on-tertiary-fixed: 11 28 48;
-  --color-on-secondary-container: 92 100 122;
+  --color-tertiary-container: var(--app-primary);
+  --color-error-container: 255 225 220;
+  --color-on-tertiary-fixed: 112 52 10;
+  --color-on-secondary-container: var(--app-sidebar);
   --color-surface-dim: 217 218 219;
-  --color-on-secondary-fixed-variant: 63 70 92;
-  --color-secondary: 86 94 116;
-  --color-on-primary-container: 218 215 255;
-  /* Page canvas — a soft, slightly cool off-white so white cards/sidebar
-   * visibly float above it instead of blending in. */
-  --color-background: 244 245 249;
-  --color-surface-container-high: 231 232 233;
-  --color-secondary-container: 218 226 253;
-  --color-surface-bright: 244 245 249;
-  --color-surface-container-highest: 225 227 228;
+  --color-on-secondary-fixed-variant: var(--app-sidebar);
+  --color-secondary: var(--app-text-secondary);
+  --color-on-primary-container: 31 20 12;
+  --color-background: var(--app-background);
+  --color-surface-container-high: 236 240 247;
+  --color-secondary-container: var(--app-surface-2);
+  --color-surface-bright: var(--app-surface);
+  --color-surface-container-highest: 232 237 245;
   --color-on-tertiary: 255 255 255;
-  --color-on-background: 25 28 29;
-  --color-on-tertiary-container: 204 220 247;
-  --color-on-error-container: 147 0 10;
-  --color-tertiary-fixed-dim: 183 200 225;
-  --color-on-surface: 25 28 29;
-  --color-on-primary-fixed-variant: 51 35 204;
-  /* Muted text tier — deliberately lighter than --color-secondary so the
-   * primary/secondary/muted ladder has three distinct, ordered contrast
-   * steps instead of muted (on-surface-variant) outranking secondary. */
-  --color-on-surface-variant: 138 145 161;
-  --color-surface-container: 237 238 239;
-  --color-on-secondary-fixed: 19 27 46;
+  --color-on-background: var(--app-text-primary);
+  --color-on-tertiary-container: 31 20 12;
+  --color-on-error-container: 113 34 34;
+  --color-tertiary-fixed-dim: var(--app-primary-soft);
+  --color-on-surface: var(--app-text-primary);
+  --color-on-primary-fixed-variant: 112 52 10;
+  --color-on-surface-variant: var(--app-text-muted);
+  --color-surface-container: var(--app-surface-2);
+  --color-on-secondary-fixed: var(--app-text-primary);
 }
 
 .dark {
   color-scheme: dark;
-  --color-primary: 195 192 255;
-  --color-on-primary: 15 0 105;
-  --color-primary-container: 51 35 204;
-  --color-on-primary-container: 226 223 255;
-  --color-secondary: 190 198 224;
-  --color-on-secondary: 19 27 46;
-  --color-secondary-container: 63 70 92;
-  --color-on-secondary-container: 218 226 253;
-  --color-tertiary: 183 200 225;
-  --color-on-tertiary: 11 28 48;
-  --color-tertiary-container: 56 72 93;
-  --color-on-tertiary-container: 211 228 254;
-  --color-error: 255 180 171;
-  --color-on-error: 105 0 5;
-  --color-error-container: 147 0 10;
-  --color-on-error-container: 255 218 214;
-  /* Neutral surface ramp — deliberately NOT the M3-standard "elevation gets
-   * darker" direction. Elevation reads as lighter here (background < chrome
-   * < card < hover), same visual logic light mode already uses (card=white
-   * sits lighter than page=off-white), so cards/tables never look darker
-   * than the page behind them. Each step is a small, deliberate nudge (~5-12
-   * RGB units) — enough to separate layers, not enough to read as "boxes". */
-  --color-background: 17 18 22; /* page */
-  --color-on-background: 240 241 245;
-  --color-surface: 22 23 28; /* sidebar / header chrome — barely off background */
-  --color-on-surface: 240 241 245;
-  --color-surface-variant: 55 58 70;
-  --color-on-surface-variant: 150 154 172; /* muted text tier */
-  --color-outline: 128 132 150; /* muted icon/placeholder strokes */
-  --color-outline-variant: 52 55 65; /* borders/dividers */
-  --color-surface-dim: 17 18 22;
-  --color-surface-bright: 65 68 82; /* brightest — row hover */
-  --color-surface-container-lowest: 27 29 36; /* card / table / modal base */
-  --color-surface-container-low: 34 36 44; /* hover / selected fill, table header */
-  --color-surface-container: 40 43 52;
-  --color-surface-container-high: 47 50 60; /* badge-neutral, avatar bg */
-  --color-surface-container-highest: 55 58 70;
+  --app-primary: 255 138 52; /* #FF8A34 */
+  --app-primary-hover: 255 157 85; /* #FF9D55 */
+  --app-primary-soft: 255 138 52;
+  --app-primary-soft-opacity: 0.14;
+  --app-success: 72 190 143;
+  --app-success-soft: 46 159 117;
+  --app-success-soft-opacity: 0.16;
+  --app-warning: 244 183 64;
+  --app-warning-soft: 244 183 64;
+  --app-warning-soft-opacity: 0.16;
+  --app-background: 7 13 24; /* #070D18 */
+  --app-surface: 13 27 46; /* #0D1B2E */
+  --app-surface-2: 17 35 58; /* #11233A */
+  --app-sidebar: 8 14 25; /* #080E19 */
+  --app-border: 33 54 82; /* #213652 */
+  --app-text-primary: 244 247 252; /* #F4F7FC */
+  --app-text-secondary: 191 203 222; /* #BFCBDE */
+  --app-text-muted: 151 166 190; /* #97A6BE */
+
+  --color-primary: var(--app-primary);
+  --color-on-primary: 31 20 12;
+  --color-primary-container: var(--app-primary-hover);
+  --color-on-primary-container: 51 29 12;
+  --color-primary-fixed: var(--app-surface-2);
+  --color-primary-fixed-dim: var(--app-surface-2);
+  --color-on-primary-fixed: var(--app-text-primary);
+  --color-on-primary-fixed-variant: var(--app-text-secondary);
+  --color-secondary: var(--app-text-secondary);
+  --color-on-secondary: 14 25 46;
+  --color-secondary-container: var(--app-surface-2);
+  --color-on-secondary-container: var(--app-text-primary);
+  --color-secondary-fixed: var(--app-surface-2);
+  --color-secondary-fixed-dim: var(--app-surface-2);
+  --color-on-secondary-fixed: var(--app-text-primary);
+  --color-on-secondary-fixed-variant: var(--app-text-secondary);
+  --color-tertiary: var(--app-primary);
+  --color-on-tertiary: 14 25 46;
+  --color-tertiary-container: var(--app-primary);
+  --color-on-tertiary-container: 31 20 12;
+  --color-tertiary-fixed: var(--app-surface-2);
+  --color-tertiary-fixed-dim: var(--app-surface-2);
+  --color-on-tertiary-fixed: var(--app-text-primary);
+  --color-on-tertiary-fixed-variant: var(--app-primary-hover);
+  --color-error: 255 183 176;
+  --color-on-error: 95 24 24;
+  --color-error-container: 123 39 39;
+  --color-on-error-container: 255 225 220;
+  --color-background: var(--app-background);
+  --color-on-background: var(--app-text-primary);
+  --color-surface: var(--app-surface);
+  --color-on-surface: var(--app-text-primary);
+  --color-surface-variant: var(--app-surface-2);
+  --color-on-surface-variant: var(--app-text-muted);
+  --color-outline: var(--app-text-muted);
+  --color-outline-variant: var(--app-border);
+  --color-surface-dim: var(--app-background);
+  --color-surface-bright: 24 45 72;
+  --color-surface-container-lowest: var(--app-surface);
+  --color-surface-container-low: var(--app-surface-2);
+  --color-surface-container: var(--app-surface-2);
+  --color-surface-container-high: 24 45 72;
+  --color-surface-container-highest: 29 52 82;
   --color-inverse-surface: 227 226 230;
   --color-inverse-on-surface: 47 48 51;
-  --color-inverse-primary: 53 37 205;
-  --color-surface-tint: 195 192 255;
+  --color-inverse-primary: var(--app-primary);
+  --color-surface-tint: var(--app-primary);
 }
 
 @layer base {
@@ -128,6 +161,12 @@
 
   body {
     @apply bg-background text-on-background font-body-md text-body-md antialiased transition-colors duration-150;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--app-text-muted));
+    opacity: 1;
   }
 
   /* Native <select> dropdown arrow, defined once so every select in the
@@ -149,42 +188,164 @@
     padding-right: 2.75rem !important;
   }
   .dark select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%23808496' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%23BFCBDE' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
   }
 }
 
 @layer components {
-  /* Buttons */
-  .primary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-label-md text-label-md text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60;
+  .sidenav {
+    background: rgb(var(--app-sidebar)) !important;
+    border-color: rgb(var(--app-border) / 0.2) !important;
+    color: rgb(244 247 252) !important;
   }
-  .outline-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-surface-container-low px-4 py-2.5 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60;
+  .sidebar-logo-mark {
+    background: rgb(var(--app-primary));
+    color: rgb(var(--color-on-primary));
   }
-  .outline-button.compact,
-  .primary-button.compact {
-    @apply px-3 py-1.5 text-xs;
+  .sidebar-brand-title {
+    color: rgb(255 255 255);
   }
-  .outline-button.full,
-  .primary-button.full {
+  .sidebar-brand-subtitle {
+    color: rgb(244 247 252 / 0.84);
+  }
+  .sidebar-footer {
+    border-color: rgb(244 247 252 / 0.16);
+  }
+  .sidebar-nav-item {
+    color: rgb(244 247 252 / 0.84);
+  }
+  .sidebar-nav-item .material-symbols-outlined {
+    color: currentColor;
+  }
+  .sidebar-nav-item:hover {
+    background: rgb(255 255 255 / 0.08);
+    color: rgb(255 255 255);
+  }
+  .sidebar-nav-item.active {
+    background: rgb(var(--app-primary) / 0.18);
+    color: rgb(255 255 255);
+  }
+  .dark .sidenav {
+    background: rgb(var(--app-sidebar)) !important;
+    border-color: rgb(var(--app-border) / 0.7) !important;
+  }
+  .dark .topbar {
+    background: rgb(var(--app-sidebar)) !important;
+    border-color: rgb(var(--app-border) / 0.7) !important;
+  }
+  .dark .sidebar-logo-mark {
+    background: rgb(var(--app-primary));
+    color: rgb(var(--color-on-primary));
+  }
+  .dark .sidebar-nav-item.active {
+    background: rgb(var(--app-primary) / 0.16);
+  }
+
+  /* ============================================================
+   * Button design system — every action button in the app renders
+   * through components/Button.jsx, which composes exactly one class
+   * from each group below: .btn (base) + .btn-{variant} + .btn-{size},
+   * plus optional .btn-tone-{tone} and .btn-full modifiers.
+   *
+   * size controls height / horizontal padding / icon gap / icon glyph
+   * size — identical across every variant. variant controls color and
+   * the hover/active/focus-visible/disabled states — identical across
+   * every size. This is the single source of truth for both; do not
+   * hand-roll button styles elsewhere.
+   * ============================================================ */
+  .btn {
+    @apply inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg font-label-md text-label-md font-medium transition-colors duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface;
+  }
+
+  /* Sizes — height, horizontal padding, icon gap, icon glyph size.
+   * sm matches the app's established toolbar-control height (h-9, same
+   * as .filter-input/.filter-select) so small buttons always line up
+   * with the inputs/selects they sit next to. */
+  .btn-sm {
+    @apply h-9 gap-1.5 px-3;
+  }
+  .btn-sm .material-symbols-outlined {
+    font-size: 16px;
+  }
+  .btn-md {
+    @apply h-10 gap-2 px-4;
+  }
+  .btn-md .material-symbols-outlined {
+    font-size: 18px;
+  }
+  .btn-lg {
+    @apply h-12 gap-2 px-6 text-body-md font-semibold;
+  }
+  .btn-lg .material-symbols-outlined {
+    font-size: 20px;
+  }
+  .btn-full {
     @apply w-full;
   }
-  .link-button {
-    @apply font-label-md text-label-md text-primary transition-colors hover:underline;
+
+  /* Variants — color + hover/active states. Disabled and focus-visible
+   * are shared on .btn above so every variant gets them identically. */
+  .btn-primary {
+    @apply bg-primary text-on-primary;
+    box-shadow: 0 8px 18px rgb(var(--app-primary) / 0.18);
   }
-  .icon-action {
-    @apply flex h-8 w-8 items-center justify-center rounded-full text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40;
+  .btn-primary:hover,
+  .btn-primary:active {
+    background-color: rgb(var(--app-primary-hover));
   }
-  .icon-action.danger-action {
+  .btn-secondary {
+    @apply bg-surface-container-low text-on-surface hover:bg-surface-container-high active:bg-surface-container-high;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-secondary hover:bg-surface-container-low hover:text-on-surface active:bg-surface-container-low;
+  }
+  .btn-danger {
+    @apply bg-transparent text-error hover:bg-error-container active:bg-error-container;
+  }
+  /* icon: icon-only actions — circular, square footprint per size, no
+   * label so no horizontal padding/gap. Kept last so its .p-0 wins over
+   * .btn-sm/.btn-md/.btn-lg's horizontal padding at equal specificity. */
+  .btn-icon {
+    @apply rounded-full p-0 text-secondary hover:bg-surface-container-low hover:text-on-surface active:bg-surface-container-low;
+  }
+  .dark .btn-icon {
+    color: rgb(var(--app-text-secondary));
+  }
+  .dark .btn-icon:hover {
+    color: rgb(var(--app-text-primary));
+  }
+  .btn-icon.btn-sm {
+    @apply w-9;
+  }
+  .btn-icon.btn-md {
+    @apply w-10;
+  }
+  .btn-icon.btn-lg {
+    @apply w-12;
+  }
+
+  /* Tones — optional color override layered on top of a variant, for the
+   * handful of buttons that need emphasis their variant alone doesn't
+   * carry (a colored "link" style ghost button, a danger-toned icon
+   * button like a delete action). */
+  .btn-tone-primary {
+    @apply text-primary hover:bg-transparent hover:underline active:bg-transparent;
+  }
+  .btn-tone-primary:hover {
+    color: rgb(var(--app-primary-hover));
+  }
+  .btn-tone-danger.btn-icon {
     @apply hover:bg-error-container hover:text-error;
   }
+
   .row-actions {
     @apply flex items-center justify-end gap-1;
   }
 
   /* Cards & sections */
   .card {
-    @apply rounded-xl border border-transparent bg-surface-container-lowest shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+    @apply rounded-xl border border-outline-variant/70 bg-surface-container-lowest;
+    box-shadow: 0 1px 2px rgb(var(--app-text-primary) / 0.04);
   }
   .hero-card {
     @apply card flex flex-col justify-between gap-4 p-container-padding sm:flex-row sm:items-center;
@@ -225,6 +386,22 @@
   .stat-card {
     @apply card flex flex-col justify-between gap-4 p-5;
   }
+  .stat-card:nth-of-type(4n + 1) {
+    background: rgb(var(--color-surface-container-lowest));
+    border-color: rgb(var(--color-outline-variant));
+  }
+  .stat-card:nth-of-type(4n + 2) {
+    background: rgb(var(--color-surface-container-lowest));
+    border-color: rgb(var(--color-outline-variant));
+  }
+  .stat-card:nth-of-type(4n + 3) {
+    background: rgb(var(--color-surface-container-lowest));
+    border-color: rgb(var(--color-outline-variant));
+  }
+  .stat-card:nth-of-type(4n + 4) {
+    background: rgb(var(--color-surface-container-lowest));
+    border-color: rgb(var(--color-outline-variant));
+  }
   .stat-card-head {
     @apply flex items-start justify-between font-label-md text-label-md uppercase tracking-wider text-secondary;
   }
@@ -235,7 +412,8 @@
     @apply flex items-center gap-1 font-label-md text-label-md text-secondary;
   }
   .stat-trend {
-    @apply flex items-center text-primary;
+    @apply flex items-center;
+    color: rgb(var(--app-success));
   }
   .stat-trend.down {
     @apply text-error;
@@ -272,16 +450,18 @@
     @apply font-body-md text-body-md text-secondary;
   }
   .insight.success {
-    @apply border-primary/20 bg-primary-container/10;
+    @apply border-primary/20;
+    background-color: rgb(var(--app-primary-soft) / var(--app-primary-soft-opacity));
   }
   .insight.success .material-symbols-outlined {
     @apply text-primary;
   }
   .insight.warning {
-    @apply border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950;
+    border-color: rgb(var(--app-warning) / 0.28);
+    background-color: rgb(var(--app-warning-soft) / var(--app-warning-soft-opacity));
   }
   .insight.warning .material-symbols-outlined {
-    @apply text-amber-600 dark:text-amber-400;
+    color: rgb(var(--app-warning));
   }
 
   /* Pagination */
@@ -297,7 +477,8 @@
     @apply fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 font-label-md text-label-md text-on-surface shadow-[0_10px_15px_-3px_rgba(0,0,0,0.15)];
   }
   .status-line .success {
-    @apply flex items-center gap-1 text-primary;
+    @apply flex items-center gap-1;
+    color: rgb(var(--app-success));
   }
   .status-line .danger {
     @apply flex items-center gap-1 text-error;
@@ -311,13 +492,17 @@
     @apply inline-flex items-center rounded-full px-2.5 py-1 font-label-md text-label-md;
   }
   .badge-success {
-    @apply border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400;
+    border: 1px solid rgb(var(--app-success) / 0.24);
+    background-color: rgb(var(--app-success-soft) / var(--app-success-soft-opacity));
+    color: rgb(var(--app-success));
   }
   .badge-warning {
-    @apply border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400;
+    border: 1px solid rgb(var(--app-warning) / 0.28);
+    background-color: rgb(var(--app-warning-soft) / var(--app-warning-soft-opacity));
+    color: rgb(var(--app-warning));
   }
   .badge-danger {
-    @apply bg-error/10 text-error;
+    @apply bg-error-container text-error;
   }
   .badge-neutral {
     @apply bg-surface-container-high text-on-surface-variant;
@@ -329,6 +514,18 @@
   /* Avatars */
   .avatar-circle {
     @apply flex shrink-0 items-center justify-center rounded-full font-label-md text-label-md;
+  }
+  .avatar-tone-primary {
+    background-color: rgb(var(--app-primary-soft) / var(--app-primary-soft-opacity));
+    color: rgb(var(--app-primary));
+  }
+  .avatar-tone-success {
+    background-color: rgb(var(--app-success-soft) / var(--app-success-soft-opacity));
+    color: rgb(var(--app-success));
+  }
+  .avatar-tone-navy {
+    background-color: rgb(var(--color-secondary-container));
+    color: rgb(var(--color-on-secondary-container));
   }
 
   /* Student directory table (StudentTable.jsx) */
@@ -363,7 +560,28 @@
     @apply flex items-center gap-1 text-secondary hover:text-primary;
   }
   .parent-info-missing {
-    @apply flex items-center gap-1 font-body-md text-body-md text-amber-600 dark:text-amber-400;
+    @apply flex items-center gap-1 font-body-md text-body-md;
+    color: rgb(var(--app-warning));
+  }
+
+  /* Teachers table: assignment chips + overflow popover */
+  .teacher-assignment-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-2.5 py-1 font-label-md text-label-md text-on-surface-variant;
+  }
+  .teacher-assignment-chip button {
+    @apply flex items-center text-secondary transition-colors hover:text-error;
+  }
+  .teacher-assignment-more {
+    @apply inline-flex items-center gap-1 rounded-full border border-outline-variant px-2.5 py-1 font-label-md text-label-md text-secondary transition-colors hover:border-primary/40 hover:text-primary;
+  }
+  .teacher-assignment-popover {
+    @apply absolute right-0 top-8 z-20 min-w-56 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-[0_8px_18px_rgba(0,0,0,0.16)];
+  }
+  .teacher-assignment-popover-row {
+    @apply flex items-center justify-between gap-2 px-3 py-2 font-body-md text-body-md text-on-surface transition-colors hover:bg-surface-container-low;
+  }
+  .teacher-assignment-popover-row button {
+    @apply flex shrink-0 items-center text-secondary transition-colors hover:text-error;
   }
 
   /* Students page: compact directory dashboard */
@@ -386,11 +604,11 @@
   .students-search .filter-input {
     @apply pl-9 pr-9;
   }
-  .students-add-button {
-    @apply h-9 whitespace-nowrap px-3;
-  }
   .students-table-panel {
-    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+    @apply overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .students-table {
+    @apply border-separate border-spacing-0;
   }
   .students-table thead tr {
     @apply border-b border-outline-variant bg-surface-container-low;
@@ -443,9 +661,6 @@
   .attendance-toolbar input {
     @apply h-9 min-w-0 rounded-lg border border-outline-variant bg-surface px-3 py-0 font-label-md text-label-md text-on-surface outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
-  .attendance-open-button {
-    @apply h-9 whitespace-nowrap px-3;
-  }
   .attendance-entry-panel {
     @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
   }
@@ -492,13 +707,186 @@
     @apply border-l-transparent text-white shadow-[0_1px_2px_rgba(0,0,0,0.16)];
   }
   .attendance-segmented-control button.present.selected {
-    @apply bg-emerald-600;
+    background-color: rgb(var(--app-success));
+    color: rgb(255 255 255);
   }
   .attendance-segmented-control button.absent.selected {
     @apply bg-error;
   }
   .attendance-segmented-control button.excused.selected {
-    @apply bg-amber-600;
+    background-color: rgb(var(--app-warning));
+    color: rgb(31 20 12);
+  }
+
+  /* Homework: compact assignment tracking */
+  .homework-page {
+    @apply gap-4;
+  }
+  .homework-header {
+    @apply flex flex-col justify-between gap-4 md:flex-row md:items-end;
+  }
+  .homework-header p {
+    @apply max-w-3xl leading-relaxed;
+  }
+  .homework-toolbar {
+    @apply grid items-end gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 md:grid-cols-[160px_minmax(220px,1fr)];
+  }
+  .homework-toolbar label {
+    @apply flex min-w-0 flex-col gap-1.5 font-label-md text-label-md text-secondary;
+  }
+  .homework-toolbar .filter-select {
+    @apply h-9 min-w-0 border-outline-variant bg-surface px-3 py-0 text-on-surface disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .homework-list-panel {
+    @apply rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .homework-list-head {
+    @apply flex flex-col justify-between gap-3 border-b border-outline-variant px-4 py-3 sm:flex-row sm:items-center;
+  }
+  .homework-list-head h2 {
+    @apply font-headline-md text-headline-md text-on-surface;
+  }
+  .homework-list-head p {
+    @apply mt-1 font-label-md text-label-md text-secondary;
+  }
+  .homework-list-head > span {
+    @apply rounded-md bg-surface-container-low px-2 py-1 font-mono-sm text-mono-sm text-secondary;
+  }
+  .homework-list {
+    @apply divide-y divide-outline-variant/70;
+  }
+  .homework-row {
+    @apply grid items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-container-low lg:grid-cols-[minmax(220px,1fr)_auto_auto];
+  }
+  .homework-main {
+    @apply flex min-w-0 items-center gap-3;
+  }
+  .homework-icon {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-primary;
+    background-color: rgb(var(--app-primary-soft) / var(--app-primary-soft-opacity));
+  }
+  .homework-title {
+    @apply truncate font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .homework-meta {
+    @apply mt-1 flex flex-wrap items-center gap-2 font-label-md text-label-md text-secondary;
+  }
+  .homework-stats {
+    @apply grid grid-cols-2 gap-2 font-label-md text-label-md text-secondary sm:flex sm:items-center;
+  }
+  .homework-stats > span:not(.badge) {
+    @apply rounded-md bg-surface-container-low px-2 py-1;
+  }
+  .homework-stats b {
+    @apply font-mono-sm text-mono-sm text-on-surface;
+  }
+  .homework-actions {
+    @apply flex items-center justify-end gap-1;
+  }
+
+  /* Schedule: compact weekly calendar */
+  .schedule-page {
+    @apply gap-4;
+  }
+  .schedule-header {
+    @apply flex flex-col justify-between gap-4 md:flex-row md:items-end;
+  }
+  .schedule-header p {
+    @apply max-w-3xl leading-relaxed;
+  }
+  .schedule-header-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .schedule-week-nav {
+    @apply inline-flex h-8 items-center overflow-hidden rounded-lg border border-outline-variant/70 bg-surface-container-lowest;
+  }
+  .schedule-week-nav button {
+    @apply flex h-8 w-8 items-center justify-center text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface;
+  }
+  .schedule-week-nav .schedule-week-range {
+    @apply min-w-32 border-x border-outline-variant/60 px-3 text-center font-label-md text-label-md text-on-surface;
+  }
+  .schedule-calendar-panel {
+    @apply flex flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest;
+  }
+  .schedule-calendar-head {
+    @apply border-b border-outline-variant/60 bg-surface-container-lowest;
+  }
+  .schedule-timezone {
+    @apply flex items-end justify-end px-2 py-2 font-mono-sm text-[10px] text-secondary;
+  }
+  .schedule-day-head {
+    @apply flex flex-col items-center justify-center border-l border-outline-variant/40 px-2 py-2;
+  }
+  .schedule-day-head span {
+    @apply font-label-md text-label-md uppercase text-on-surface-variant;
+  }
+  .schedule-day-head small {
+    @apply mt-0.5 font-mono-sm text-[10px] text-secondary;
+  }
+  .schedule-scroll {
+    @apply relative overflow-y-auto bg-surface-container-lowest;
+  }
+  .schedule-time-gutter {
+    @apply absolute bottom-0 left-0 top-0 bg-surface-container-lowest;
+  }
+  .schedule-grid-line {
+    @apply absolute right-0 border-t border-outline-variant/20;
+  }
+  .schedule-grid-line.lesson-boundary {
+    @apply border-outline-variant/45;
+  }
+  .schedule-time-label {
+    @apply absolute left-0 pr-2 text-right font-mono-sm text-[10px] text-secondary;
+  }
+  .schedule-break-band {
+    @apply absolute right-0 flex items-center justify-center bg-surface-container-low/45 font-mono-sm text-[10px] uppercase tracking-[0.18em] text-secondary;
+  }
+  .schedule-day-column {
+    @apply relative border-l border-outline-variant/35 transition-colors;
+  }
+  .schedule-day-column.drag-over {
+    @apply bg-primary/5;
+  }
+  .schedule-event-card {
+    @apply absolute left-1 right-1 flex cursor-grab flex-col justify-center gap-0.5 overflow-hidden rounded-md border px-2 py-1.5 shadow-sm transition-all hover:-translate-y-px hover:shadow-md active:cursor-grabbing;
+  }
+  .schedule-event-card.tone-primary {
+    @apply border-primary/30 bg-primary/10 text-on-surface;
+  }
+  .schedule-event-card.tone-secondary {
+    @apply text-on-surface;
+    background: rgb(var(--color-secondary-fixed-dim) / 0.35);
+    border-color: rgb(var(--color-secondary-fixed-dim) / 0.95);
+  }
+  .schedule-event-card.warning {
+    @apply text-on-surface;
+    border-color: rgb(var(--app-warning) / 0.8);
+    background-color: rgb(var(--app-warning-soft) / var(--app-warning-soft-opacity));
+    box-shadow: 0 0 0 1px rgb(var(--app-warning) / 0.28);
+  }
+  .schedule-event-action {
+    @apply absolute top-1 flex items-center rounded bg-black/10 p-0.5 text-current opacity-0 transition-opacity hover:bg-black/15 group-hover:opacity-100;
+  }
+  .schedule-event-action.quick {
+    @apply right-6 hover:text-primary;
+  }
+  .schedule-event-action.delete {
+    @apply right-1 hover:text-error;
+  }
+  .schedule-event-title {
+    @apply truncate pr-10 font-label-md text-label-md font-semibold leading-snug text-on-surface;
+  }
+  .schedule-event-classroom {
+    @apply truncate font-mono-sm text-mono-sm leading-tight text-on-surface-variant;
+  }
+  .schedule-event-location {
+    @apply flex items-center gap-1 truncate font-mono-sm text-mono-sm leading-tight text-secondary;
+  }
+  .schedule-event-warning {
+    @apply mt-0.5 w-fit rounded px-1.5 py-0.5 font-mono-sm text-[10px] uppercase tracking-wider;
+    background-color: rgb(var(--app-warning-soft) / var(--app-warning-soft-opacity));
+    color: rgb(var(--app-warning));
   }
 
   /* Gradebook: compact assessment workspace */
@@ -556,7 +944,8 @@
     @apply flex min-w-0 items-center gap-3;
   }
   .gradebook-assessment-icon {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-primary;
+    background-color: rgb(var(--app-primary-soft) / var(--app-primary-soft-opacity));
   }
   .gradebook-assessment-title {
     @apply flex min-w-0 flex-wrap items-center gap-1.5 font-body-md text-body-md font-semibold text-on-surface;
@@ -875,6 +1264,128 @@
   .ai-analysis-grid p {
     @apply font-body-md text-body-md leading-relaxed text-on-surface-variant;
   }
+
+  /* Settings: Ders Saatleri — compact fields, secondary lunch panel,
+     tightened preview table, sticky save bar. */
+  .settings-summary-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .settings-summary-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-secondary;
+  }
+  .settings-summary-chip strong {
+    @apply font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .settings-compact-field {
+    @apply flex flex-col gap-1.5;
+  }
+  .settings-compact-field > span {
+    @apply font-label-md text-label-md text-on-surface;
+  }
+  .settings-compact-field.is-disabled > span {
+    @apply text-secondary;
+  }
+  .settings-number-box {
+    @apply inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border border-outline-variant bg-surface px-3 transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30;
+  }
+  .settings-number-box.is-disabled {
+    @apply opacity-50;
+  }
+  .settings-number-input {
+    @apply w-10 border-none bg-transparent p-0 text-right font-body-md text-body-md text-on-surface outline-none;
+  }
+  .settings-number-suffix {
+    @apply shrink-0 font-label-md text-label-md text-secondary;
+  }
+  .settings-time-input {
+    @apply h-10 w-32 rounded-lg border border-outline-variant bg-surface px-3 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/30;
+  }
+  .settings-select {
+    @apply h-10 cursor-pointer rounded-lg border border-outline-variant bg-surface py-0 pl-3 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .settings-lunch-panel {
+    @apply rounded-lg bg-surface-container-low p-5;
+  }
+  .settings-preview-table th {
+    @apply px-3 py-2 font-label-md text-label-md uppercase text-secondary;
+  }
+  .settings-preview-table td {
+    @apply px-3 py-1.5;
+  }
+  .settings-preview-table tr.is-lunch-row {
+    @apply bg-primary/5;
+  }
+  .settings-lunch-chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-mono-sm text-[11px] text-primary;
+  }
+  .settings-save-bar {
+    @apply sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-[0_10px_25px_-10px_rgba(0,0,0,0.35)] sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  /* AI Raporları: compact student summary + unified output-card hierarchy */
+  .ai-student-summary {
+    @apply flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3;
+  }
+  .ai-student-summary-stat {
+    @apply flex shrink-0 flex-col items-end;
+  }
+  .ai-student-summary-stat span {
+    @apply font-label-md text-label-md text-secondary;
+  }
+  .ai-student-summary-stat strong {
+    @apply block font-headline-md text-[20px] leading-tight text-on-surface;
+  }
+  .ai-student-summary-status {
+    @apply shrink-0;
+  }
+  .ai-output-card {
+    @apply card flex flex-col gap-4 p-5;
+  }
+  .ai-output-card-head {
+    @apply flex items-center gap-3;
+  }
+  .ai-output-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary;
+  }
+  .ai-output-icon.tone-tertiary {
+    @apply bg-tertiary/10 text-tertiary;
+  }
+  .ai-output-icon.tone-secondary {
+    @apply bg-secondary/10 text-secondary;
+  }
+  .ai-output-card-title {
+    @apply font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .ai-output-card-subtitle {
+    @apply font-label-md text-label-md text-secondary;
+  }
+  .ai-output-card-actions {
+    @apply flex shrink-0 items-center gap-1;
+  }
+  .ai-output-empty {
+    @apply flex flex-col items-start gap-3;
+  }
+  .ai-report-title {
+    @apply font-body-md text-body-md font-semibold text-on-surface;
+  }
+  .ai-report-paragraph {
+    @apply font-body-md text-body-md leading-relaxed text-on-surface-variant;
+  }
+  .ai-report-section {
+    @apply flex flex-col gap-2;
+  }
+  .ai-report-heading {
+    @apply font-label-md text-label-md uppercase tracking-wider text-secondary;
+  }
+  .ai-report-list {
+    @apply flex flex-col gap-1.5;
+  }
+  .ai-report-list li {
+    @apply flex items-start gap-2 font-body-md text-body-md text-on-surface;
+  }
+  .ai-report-list li .material-symbols-outlined {
+    @apply mt-0.5 text-[16px] text-primary;
+  }
   .student-info-list {
     @apply divide-y divide-outline-variant/70;
   }
@@ -914,7 +1425,7 @@
     @apply relative flex flex-col gap-1.5;
   }
   .searchable-select label {
-    @apply font-label-md text-[10px] uppercase tracking-wider text-secondary/80;
+    @apply font-label-md text-[10px] uppercase tracking-wider text-secondary;
   }
   .searchable-select-control,
   .student-combobox {
@@ -947,6 +1458,11 @@
   }
   .searchable-select-control > .material-symbols-outlined {
     @apply text-outline;
+  }
+  .dark .student-search > .material-symbols-outlined,
+  .dark .searchable-select-control > .material-symbols-outlined,
+  .dark .classroom-filter-field .material-symbols-outlined {
+    color: rgb(var(--app-text-secondary));
   }
   .clear-search-button {
     @apply flex items-center text-secondary hover:text-error;
@@ -995,7 +1511,7 @@
     @apply pt-1;
   }
   .modal-form-section h3 {
-    @apply font-mono-sm text-[10px] uppercase tracking-[0.14em] text-secondary/70;
+    @apply font-mono-sm text-[10px] uppercase tracking-[0.14em] text-secondary;
   }
   .form-field-grid {
     @apply grid gap-3 sm:grid-cols-2;
@@ -1004,14 +1520,14 @@
     @apply flex min-w-0 flex-col gap-1.5;
   }
   .form-field > span {
-    @apply font-label-md text-label-md text-on-surface-variant;
+    @apply font-label-md text-label-md text-secondary;
   }
   .form-field input:not([type="hidden"]),
   .form-field textarea,
   .form-panel-body > input:not([type="hidden"]),
   .form-panel-body > textarea,
   .form-panel-body > select {
-    @apply h-11 w-full rounded-lg border border-outline-variant/70 bg-surface px-3 font-body-md text-body-md text-on-surface outline-none transition-colors placeholder:text-outline/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/30;
+    @apply h-11 w-full rounded-lg border border-outline-variant/70 bg-surface px-3 font-body-md text-body-md text-on-surface outline-none transition-colors placeholder:text-outline focus:border-primary/80 focus:ring-1 focus:ring-primary/30;
   }
   .form-field textarea,
   .form-panel-body > textarea {
@@ -1020,12 +1536,8 @@
   .form-panel-footer {
     @apply sticky -bottom-container-padding -mx-container-padding mt-5 flex shrink-0 justify-end gap-2 bg-surface-container-lowest px-container-padding pb-1 pt-2;
   }
-  .form-panel-footer .outline-button,
-  .form-panel-footer .primary-button {
-    @apply h-10 min-w-28 px-4;
-  }
-  .form-panel-footer .outline-button {
-    @apply bg-transparent text-secondary hover:bg-surface-container-low hover:text-on-surface;
+  .form-panel-footer .btn {
+    @apply min-w-28;
   }
   .form-error {
     @apply font-body-md text-body-md text-error;
@@ -1037,6 +1549,7 @@
 
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  color: currentColor;
   vertical-align: middle;
 }
 

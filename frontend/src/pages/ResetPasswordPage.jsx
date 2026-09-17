@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 import { api } from "../api";
 import logo from "../assets/teacher-ai-logo.png";
@@ -15,6 +16,14 @@ export default function ResetPasswordPage({ token, onDone }) {
     setError("");
     if (password !== confirmPassword) {
       setError("Parolalar eşleşmiyor.");
+      return;
+    }
+    if (!/\p{L}/u.test(password)) {
+      setError("Parola en az bir harf içermeli.");
+      return;
+    }
+    if (!/\d/.test(password)) {
+      setError("Parola en az bir rakam içermeli.");
       return;
     }
     setIsSubmitting(true);
@@ -47,9 +56,9 @@ export default function ResetPasswordPage({ token, onDone }) {
         </div>
         <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-container-padding shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05)]">
           {isDone ? (
-            <button className="primary-button full" onClick={onDone} type="button">
+            <Button fullWidth onClick={onDone} size="lg" variant="primary">
               <Icon name="login" /> Giriş sayfasına dön
-            </button>
+            </Button>
           ) : (
             <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
               <div className="flex flex-col gap-1.5">
@@ -90,10 +99,10 @@ export default function ResetPasswordPage({ token, onDone }) {
                 />
               </div>
               {error && <p className="form-error">{error}</p>}
-              <button className="primary-button" disabled={isSubmitting} type="submit">
+              <Button disabled={isSubmitting} fullWidth size="lg" type="submit" variant="primary">
                 <Icon name="login" />
                 {isSubmitting ? "Kaydediliyor..." : "Parolayı Güncelle"}
-              </button>
+              </Button>
             </form>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 import { api } from "../api";
 import logo from "../assets/teacher-ai-logo.png";
@@ -88,21 +89,22 @@ export default function LoginPage({ error, onLogin, setError }) {
               </div>
               {error && <p className="form-error">{error}</p>}
               {resetNotice && <p className="login-copy font-body-md text-body-md text-primary">{resetNotice}</p>}
-              <button className="primary-button" disabled={isSendingReset} type="submit">
+              <Button disabled={isSendingReset} fullWidth size="lg" type="submit" variant="primary">
                 <Icon name="mail" />
                 {isSendingReset ? "Gönderiliyor..." : "Sıfırlama Bağlantısı Gönder"}
-              </button>
-              <button
-                className="outline-button full"
+              </Button>
+              <Button
+                fullWidth
                 onClick={() => {
                   setIsForgotPasswordMode(false);
                   setError("");
                   setResetNotice("");
                 }}
-                type="button"
+                size="lg"
+                variant="secondary"
               >
                 Girişe dön
-              </button>
+              </Button>
             </form>
           </div>
         </div>
@@ -165,17 +167,18 @@ export default function LoginPage({ error, onLogin, setError }) {
                 >
                   Parola
                 </label>
-                <button
-                  className="font-label-md text-label-md text-primary transition-colors hover:underline"
+                <Button
                   onClick={() => {
                     setIsForgotPasswordMode(true);
                     setError("");
                     setResetEmail(form.email);
                   }}
-                  type="button"
+                  size="sm"
+                  tone="primary"
+                  variant="ghost"
                 >
                   Parolamı unuttum
-                </button>
+                </Button>
               </div>
               <div className="relative">
                 <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-outline">
@@ -199,10 +202,10 @@ export default function LoginPage({ error, onLogin, setError }) {
               </div>
             </div>
             {error && <p className="form-error">{error}</p>}
-            <button className="primary-button" disabled={isSubmitting} type="submit">
+            <Button disabled={isSubmitting} fullWidth size="lg" type="submit" variant="primary">
               <Icon name="login" />
               {isSubmitting ? "Giriş yapılıyor..." : "Giriş Yap"}
-            </button>
+            </Button>
           </form>
         </div>
         <div className="mt-8 text-center">

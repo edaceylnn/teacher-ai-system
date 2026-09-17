@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Button from "./Button";
+import Icon from "./Icon";
+import { useCloseOnOutsideClick } from "../hooks/useCloseOnOutsideClick";
 import { avatarToneFor, enrollmentStatusLabels, initialsOf } from "../utils/helpers";
 
 export default function StudentTable({
   canManage,
   handleDeleteStudent,
+  handleDeleteStudents,
   selectedStudentId,
   setActiveModal,
   setActivePage,
@@ -13,6 +17,19 @@ export default function StudentTable({
   students,
 }) {
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  useCloseOnOutsideClick(openMenuId !== null, () => setOpenMenuId(null));
+  const visibleStudentIds = useMemo(() => students.map((student) => student.id), [students]);
+  const selectedVisibleIds = selectedStudentIds.filter((studentId) => visibleStudentIds.includes(studentId));
+  const isAllVisibleSelected =
+    canManage &&
+    visibleStudentIds.length > 0 &&
+    visibleStudentIds.every((studentId) => selectedStudentIds.includes(studentId));
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleStudentIds);
+    setSelectedStudentIds((current) => current.filter((studentId) => visibleIds.has(studentId)));
+  }, [visibleStudentIds]);
 
   function openEditModal(student) {
     setEditingStudent(student);
@@ -32,14 +49,44 @@ export default function StudentTable({
   return (
     <section className="student-roster-table">
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left">
+        <table className="w-full border-separate border-spacing-0 text-left">
           <thead>
             <tr>
+              {canManage && (
+                <th className="w-12">
+                  {visibleStudentIds.length > 0 && (
+                    <input
+                      aria-label="Görünen öğrencileri seç"
+                      checked={isAllVisibleSelected}
+                      onChange={(event) => {
+                        setSelectedStudentIds(event.target.checked ? visibleStudentIds : []);
+                      }}
+                      type="checkbox"
+                    />
+                  )}
+                </th>
+              )}
               <th className="w-20">No</th>
               <th>Ad Soyad</th>
               <th>Veli</th>
               <th>Durum</th>
-              <th className="w-16 text-right">İşlemler</th>
+              <th className="text-right">
+                <div className="flex items-center justify-end gap-2">
+                  {selectedVisibleIds.length > 0 && (
+                    <Button
+                      onClick={async () => {
+                        await handleDeleteStudents(selectedVisibleIds);
+                        setSelectedStudentIds([]);
+                      }}
+                      size="sm"
+                      variant="danger"
+                    >
+                      <Icon name="delete" /> Seçili Sil ({selectedVisibleIds.length})
+                    </Button>
+                  )}
+                  <span>İşlemler</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -54,6 +101,22 @@ export default function StudentTable({
                   setActivePage("studentDetail");
                 }}
               >
+                {canManage && (
+                  <td onClick={(event) => event.stopPropagation()}>
+                    <input
+                      aria-label={`${student.first_name} ${student.last_name} seç`}
+                      checked={selectedStudentIds.includes(student.id)}
+                      onChange={(event) => {
+                        setSelectedStudentIds((current) =>
+                          event.target.checked
+                            ? [...current, student.id]
+                            : current.filter((studentId) => studentId !== student.id),
+                        );
+                      }}
+                      type="checkbox"
+                    />
+                  </td>
+                )}
                 <td className="font-mono-sm text-mono-sm text-secondary">#{student.id}</td>
                 <td>
                   <div className="student-roster-name">

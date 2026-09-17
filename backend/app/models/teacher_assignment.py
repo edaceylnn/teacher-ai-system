@@ -28,7 +28,7 @@ class TeacherAssignment(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     teacher: Mapped["Teacher"] = relationship()
-    classroom: Mapped["Classroom"] = relationship()
-    lesson: Mapped["Lesson | None"] = relationship()
+    classroom: Mapped["Classroom"] = relationship(back_populates="teacher_assignments")
+    lesson: Mapped["Lesson | None"] = relationship(back_populates="teacher_assignments")
     academic_year: Mapped["AcademicYear"] = relationship()
     term: Mapped["Term | None"] = relationship()

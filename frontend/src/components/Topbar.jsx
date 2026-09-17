@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import Button from "./Button";
 import Icon from "./Icon";
 import { initialsOf } from "../utils/helpers";
 
@@ -188,15 +189,15 @@ export default function Topbar({
         </div>
       </div>
       <div className="relative flex items-center gap-4">
-        <button
+        <Button
           aria-label={theme === "dark" ? "Açık moda geç" : "Koyu moda geç"}
-          className="icon-action"
           onClick={onToggleTheme}
+          size="sm"
           title={theme === "dark" ? "Açık moda geç" : "Koyu moda geç"}
-          type="button"
+          variant="icon"
         >
           <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} />
-        </button>
+        </Button>
         <button
           className="flex items-center gap-2"
           onClick={() => setIsUserMenuOpen((current) => !current)}

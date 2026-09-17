@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 import PaginationControls from "../components/PaginationControls";
 import StudentTable from "../components/StudentTable";
@@ -22,6 +23,7 @@ export default function ClassroomDetailPage(props) {
     students,
     teacherAssignments,
     handleDeleteStudent,
+    handleDeleteStudents,
   } = props;
   const [tableSearchTerm, setTableSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -69,8 +71,7 @@ export default function ClassroomDetailPage(props) {
           </div>
         </div>
         {canManage && (
-          <button
-            className="primary-button compact"
+          <Button
             onClick={() => {
               setStudentForm((form) => ({
                 ...form,
@@ -78,10 +79,11 @@ export default function ClassroomDetailPage(props) {
               }));
               setActiveModal("student");
             }}
-            type="button"
+            size="md"
+            variant="primary"
           >
             <Icon name="person_add" /> Öğrenci Ekle
-          </button>
+          </Button>
         )}
       </header>
 
@@ -150,6 +152,7 @@ export default function ClassroomDetailPage(props) {
       <StudentTable
         canManage={canManage}
         handleDeleteStudent={handleDeleteStudent}
+        handleDeleteStudents={handleDeleteStudents}
         selectedStudentId={selectedStudentId}
         setActiveModal={setActiveModal}
         setActivePage={setActivePage}

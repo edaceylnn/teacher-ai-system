@@ -28,6 +28,11 @@ class Assessment(TimestampMixin, Base):
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), nullable=False, index=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"), nullable=False, index=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), nullable=False, index=True)
+    curriculum_outcome_id: Mapped[int | None] = mapped_column(
+        ForeignKey("curriculum_outcomes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     assessment_type: Mapped[AssessmentType] = mapped_column(
         Enum(AssessmentType, name="assessment_type"),
         nullable=False,
@@ -37,9 +42,10 @@ class Assessment(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     date: Mapped[date_] = mapped_column(Date, nullable=False, index=True)
 
-    classroom: Mapped["Classroom"] = relationship()
-    lesson: Mapped["Lesson"] = relationship()
+    classroom: Mapped["Classroom"] = relationship(back_populates="assessments")
+    lesson: Mapped["Lesson"] = relationship(back_populates="assessments")
     teacher: Mapped["Teacher"] = relationship()
+    curriculum_outcome: Mapped["CurriculumOutcome | None"] = relationship(back_populates="assessments")
     records: Mapped[list["AssessmentRecord"]] = relationship(
         back_populates="assessment",
         cascade="all, delete-orphan",

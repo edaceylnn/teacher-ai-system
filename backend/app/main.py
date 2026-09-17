@@ -11,6 +11,7 @@ from app.api.routes import (
     ai,
     attendance,
     classrooms,
+    curriculum,
     grades,
     health,
     homework,
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(teachers.router)
     app.include_router(teacher_assignments.router)
+    app.include_router(curriculum.router)
     app.include_router(classrooms.router)
     app.include_router(students.router)
     app.include_router(lessons.router)

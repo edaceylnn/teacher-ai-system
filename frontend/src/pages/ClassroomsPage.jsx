@@ -1,4 +1,5 @@
 import { classroomToForm } from "../utils/helpers";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 
 export default function ClassroomsPage(props) {
@@ -108,30 +109,31 @@ export default function ClassroomsPage(props) {
                 <Icon name="school" className="text-[28px]" />
               </div>
               <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <button
+                <Button
                   aria-label={`${classroom.name} sınıfını düzenle`}
-                  className="icon-action"
                   onClick={(event) => {
                     event.stopPropagation();
                     setEditingClassroom(classroom);
                     setClassroomEditForm(classroomToForm(classroom));
                     setActiveModal("editClassroom");
                   }}
-                  type="button"
+                  size="sm"
+                  variant="icon"
                 >
                   <Icon name="edit" />
-                </button>
-                <button
+                </Button>
+                <Button
                   aria-label={`${classroom.name} sınıfını sil`}
-                  className="icon-action danger-action"
                   onClick={(event) => {
                     event.stopPropagation();
                     handleDeleteClassroom(classroom.id);
                   }}
-                  type="button"
+                  size="sm"
+                  tone="danger"
+                  variant="icon"
                 >
                   <Icon name="delete" />
-                </button>
+                </Button>
               </div>
             </div>
             <h3 className="font-headline-md text-headline-md text-on-surface">{classroom.name} Sınıfı</h3>

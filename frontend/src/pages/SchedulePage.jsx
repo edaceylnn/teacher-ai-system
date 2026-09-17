@@ -2,22 +2,17 @@ import { useMemo, useState } from "react";
 import { schoolWeekDays } from "../constants";
 import { buildScheduleTimeBounds, minutesToTime, timeToMinutes } from "../utils/helpers";
 import { canAccessClassSubject, isAdmin } from "../utils/permissions";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 
-// 120px/hour (2px/min) so a standard 40-minute lesson renders ~76px tall —
-// enough for the 3-line card (name/classroom/location) to breathe. At the
-// old 80px/hour a 40-minute block was only ~49px, too short for that text.
-const PX_PER_HOUR = 120;
+const PX_PER_HOUR = 96;
 const PX_PER_MINUTE = PX_PER_HOUR / 60;
-// Keep in sync with the `w-[80px]`/`left-[80px]` Tailwind arbitrary values
-// below — those are static classes (Tailwind can't read a JS constant), this
-// is the same width used in inline styles (grid columns, min-width).
-const GUTTER_WIDTH = 80;
-const DAY_COLUMN_MIN_WIDTH = 140;
+const GUTTER_WIDTH = 64;
+const DAY_COLUMN_MIN_WIDTH = 132;
 const GRID_MIN_WIDTH = GUTTER_WIDTH + schoolWeekDays.length * DAY_COLUMN_MIN_WIDTH;
 const EVENT_TONES = [
-  "border-primary-fixed-dim bg-primary-fixed text-on-primary-fixed",
-  "border-secondary-fixed-dim bg-secondary-fixed text-on-secondary-fixed",
+  "tone-primary",
+  "tone-secondary",
 ];
 
 function nearestPeriodAt(periods, clickedMinute) {
@@ -26,6 +21,37 @@ function nearestPeriodAt(periods, clickedMinute) {
     const closestDistance = Math.abs(timeToMinutes(closest.start) - clickedMinute);
     return distance < closestDistance ? slot : closest;
   }, periods[0]);
+}
+
+function startOfWeek(date) {
+  const day = (date.getDay() + 6) % 7;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() - day);
+  weekStart.setHours(0, 0, 0, 0);
+  return weekStart;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(date.getDate() + days);
+  return next;
+}
+
+function formatDayNumber(date) {
+  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "short" }).format(date);
+}
+
+function formatWeekRange(weekStart) {
+  const weekEnd = addDays(weekStart, 4);
+  return `${formatDayNumber(weekStart)} - ${formatDayNumber(weekEnd)}`;
+}
+
+function entriesOverlap(first, second) {
+  const firstStart = timeToMinutes(first.start_time.slice(0, 5));
+  const firstEnd = timeToMinutes(first.end_time.slice(0, 5));
+  const secondStart = timeToMinutes(second.start_time.slice(0, 5));
+  const secondEnd = timeToMinutes(second.end_time.slice(0, 5));
+  return firstStart < secondEnd && secondStart < firstEnd;
 }
 
 export default function SchedulePage({
@@ -44,6 +70,7 @@ export default function SchedulePage({
 }) {
   const [draggingEntryId, setDraggingEntryId] = useState(null);
   const [dragOverWeekday, setDragOverWeekday] = useState(null);
+  const [weekOffset, setWeekOffset] = useState(0);
   const classroomById = useMemo(
     () => new Map(classrooms.map((classroom) => [classroom.id, classroom])),
     [classrooms],
@@ -87,6 +114,25 @@ export default function SchedulePage({
     });
     return grouped;
   }, [scheduleEntries]);
+  const conflictEntryIds = useMemo(() => {
+    const conflicts = new Set();
+    entriesByWeekday.forEach((entries) => {
+      entries.forEach((entry, index) => {
+        entries.slice(index + 1).forEach((otherEntry) => {
+          if (entriesOverlap(entry, otherEntry)) {
+            conflicts.add(entry.id);
+            conflicts.add(otherEntry.id);
+          }
+        });
+      });
+    });
+    return conflicts;
+  }, [entriesByWeekday]);
+  const currentWeekStart = useMemo(() => {
+    const weekStart = startOfWeek(new Date());
+    weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+    return weekStart;
+  }, [weekOffset]);
 
   // Madde 9/11: bir sınıfın programını görebilmek (rehber olarak) o dersin
   // branşına yazma yetkisi vermez — hızlı işlem menüsü sadece gerçekten o
@@ -149,8 +195,8 @@ export default function SchedulePage({
   }
 
   return (
-    <div className="wide-page">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <div className="wide-page schedule-page">
+      <div className="schedule-header">
         <div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">Ders Programı</h1>
           <p className="mt-1 font-body-md text-body-md text-secondary">
@@ -158,50 +204,65 @@ export default function SchedulePage({
             gün/saate taşımak için sürükleyip bırakabilirsin.
           </p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setScheduleForm({
-              classroom_id: "",
-              lesson_id: "",
-              weekday: "0",
-              start_time: "",
-              end_time: "",
-              location: "",
-            });
-            setActiveModal("schedule");
-          }}
-          type="button"
-        >
-          <Icon name="add" /> Ders Ekle
-        </button>
+        <div className="schedule-header-actions">
+          <div className="schedule-week-nav" aria-label="Hafta navigasyonu">
+            <button aria-label="Önceki hafta" onClick={() => setWeekOffset((current) => current - 1)} type="button">
+              <Icon name="chevron_left" />
+            </button>
+            <span className="schedule-week-range">{formatWeekRange(currentWeekStart)}</span>
+            <button aria-label="Sonraki hafta" onClick={() => setWeekOffset((current) => current + 1)} type="button">
+              <Icon name="chevron_right" />
+            </button>
+          </div>
+          <Button onClick={() => setWeekOffset(0)} size="sm" variant="secondary">
+            Bugün
+          </Button>
+          <Button
+            onClick={() => {
+              setScheduleForm({
+                classroom_id: "",
+                lesson_id: "",
+                weekday: "0",
+                start_time: "",
+                end_time: "",
+                location: "",
+              });
+              setActiveModal("schedule");
+            }}
+            size="md"
+            variant="primary"
+          >
+            <Icon name="add" /> Ders Ekle
+          </Button>
+        </div>
       </div>
 
-      <section className="card flex flex-col overflow-hidden">
+      <section className="schedule-calendar-panel">
         {/* Horizontal scroll wrapper: below GRID_MIN_WIDTH the grid keeps its
             per-day minimum instead of squeezing columns/cards illegible. */}
         <div className="overflow-x-auto">
           <div style={{ minWidth: GRID_MIN_WIDTH }}>
             <div
-              className="grid border-b border-outline-variant/70 bg-surface-container-lowest"
+              className="schedule-calendar-head grid"
               style={{ gridTemplateColumns: `${GUTTER_WIDTH}px repeat(${schoolWeekDays.length}, 1fr)` }}
             >
-              <div className="flex items-end justify-end p-3 font-mono-sm text-mono-sm text-secondary">GMT+3</div>
-              {schoolWeekDays.map((day) => (
-                <div className="flex flex-col items-center justify-center border-l border-outline-variant/60 p-3" key={day}>
-                  <span className="font-label-md text-label-md uppercase text-secondary">{day}</span>
+              <div className="schedule-timezone">GMT+3</div>
+              {schoolWeekDays.map((day, index) => (
+                <div className="schedule-day-head" key={day}>
+                  <span>{day}</span>
+                  <small>{formatDayNumber(addDays(currentWeekStart, index))}</small>
                 </div>
               ))}
             </div>
 
-            <div className="relative overflow-y-auto bg-surface-container-lowest" style={{ height: Math.min(totalHeight, 560) }}>
+            <div className="schedule-scroll" style={{ height: Math.min(totalHeight, 520) }}>
               <div className="relative" style={{ height: totalHeight }}>
                 {/* Time gutter — its own layer, fully separate from the grid
                     lines. Labels never sit on top of a line: the line only
                     spans the day columns (left-[80px] onward), the gutter
                     background covers 0..80px and nothing else is drawn there. */}
                 <div className="pointer-events-none absolute inset-0 z-0">
-                  <div className="absolute bottom-0 left-0 top-0 w-[80px] bg-surface-container-low/60" />
+                  <div className="schedule-time-gutter" style={{ width: GUTTER_WIDTH }} />
                   {timeMarks.map((minute) => {
                     const isLessonBoundary = lessonStartMinutes.has(minute);
                     const top = (minute - startMinutes) * PX_PER_MINUTE;
@@ -218,12 +279,12 @@ export default function SchedulePage({
                     return (
                       <div key={minute}>
                         <div
-                          className={`absolute left-[80px] right-0 border-t ${isLessonBoundary ? "border-outline-variant/70" : "border-outline-variant/30"}`}
-                          style={{ top }}
+                          className={`schedule-grid-line ${isLessonBoundary ? "lesson-boundary" : ""}`}
+                          style={{ left: GUTTER_WIDTH, top }}
                         />
                         <span
-                          className={`absolute left-0 w-[80px] ${labelAlignClass} pr-2 text-right font-mono-sm text-mono-sm text-secondary`}
-                          style={{ top }}
+                          className={`schedule-time-label ${labelAlignClass}`}
+                          style={{ top, width: GUTTER_WIDTH }}
                         >
                           {minutesToTime(minute)}
                         </span>
@@ -241,9 +302,9 @@ export default function SchedulePage({
                     const height = (timeToMinutes(slot.end) - timeToMinutes(slot.start)) * PX_PER_MINUTE;
                     return (
                       <div
-                        className="absolute left-[80px] right-0 flex items-center justify-center bg-surface-variant/50 font-label-md text-label-md uppercase tracking-widest text-secondary"
+                        className="schedule-break-band"
                         key={slot.start}
-                        style={{ top, height }}
+                        style={{ left: GUTTER_WIDTH, top, height }}
                       >
                         {slot.period}
                       </div>
@@ -259,9 +320,7 @@ export default function SchedulePage({
                   <div />
                   {schoolWeekDays.map((day, weekday) => (
                     <div
-                      className={`relative border-l border-outline-variant/60 transition-colors ${
-                        dragOverWeekday === weekday ? "bg-primary/5" : ""
-                      }`}
+                      className={`schedule-day-column ${dragOverWeekday === weekday ? "drag-over" : ""}`}
                   key={day}
                   onClick={(event) => {
                     if (event.target !== event.currentTarget) return;
@@ -278,9 +337,10 @@ export default function SchedulePage({
                   {(entriesByWeekday.get(weekday) || []).map((entry, index) => {
                     const entryStart = timeToMinutes(entry.start_time.slice(0, 5));
                     const entryEnd = timeToMinutes(entry.end_time.slice(0, 5));
+                    const hasConflict = conflictEntryIds.has(entry.id);
                     return (
                       <div
-                        className={`group absolute left-1 right-1 flex cursor-grab flex-col justify-center gap-1 overflow-hidden rounded-md border px-2.5 py-1.5 shadow-sm transition-colors active:cursor-grabbing ${EVENT_TONES[index % EVENT_TONES.length]} ${
+                        className={`schedule-event-card group ${EVENT_TONES[index % EVENT_TONES.length]} ${hasConflict ? "warning" : ""} ${
                           draggingEntryId === entry.id ? "opacity-40" : ""
                         }`}
                         draggable
@@ -303,7 +363,7 @@ export default function SchedulePage({
                         {canActOnEntry(entry) && (
                           <button
                             aria-label="Hızlı işlemler"
-                            className="absolute right-6 top-1 flex items-center rounded bg-black/10 p-0.5 text-current hover:text-primary"
+                            className="schedule-event-action quick"
                             onClick={(clickEvent) => {
                               clickEvent.stopPropagation();
                               setQuickActionEntry(entry);
@@ -316,7 +376,7 @@ export default function SchedulePage({
                         )}
                         <button
                           aria-label="Ders programı kaydını sil"
-                          className="absolute right-1 top-1 hidden items-center rounded bg-black/10 p-0.5 text-current hover:text-error group-hover:flex"
+                          className="schedule-event-action delete"
                           onClick={(clickEvent) => {
                             clickEvent.stopPropagation();
                             handleDeleteScheduleEntry(entry.id);
@@ -325,15 +385,16 @@ export default function SchedulePage({
                         >
                           <Icon name="delete" className="text-[13px]" />
                         </button>
-                        <span className="truncate pr-4 font-label-md text-label-md font-bold leading-snug">
+                        <span className="schedule-event-title">
                           {lessonById.get(entry.lesson_id)?.name || "Ders"}
                         </span>
-                        <span className="truncate font-mono-sm text-mono-sm leading-snug opacity-80">
+                        <span className="schedule-event-classroom">
                           {classroomById.get(entry.classroom_id)?.name || "Sınıf"}
                         </span>
-                        <span className="flex items-center gap-1 truncate font-mono-sm text-mono-sm leading-snug opacity-80">
+                        <span className="schedule-event-location">
                           <Icon name="room" className="shrink-0 text-[12px]" /> {entry.location || "Derslik yok"}
                         </span>
+                        {hasConflict && <span className="schedule-event-warning">Çakışma</span>}
                       </div>
                     );
                   })}

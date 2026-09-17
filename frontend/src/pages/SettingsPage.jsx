@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
 import Toggle from "../components/Toggle";
 import { timeToMinutes } from "../utils/helpers";
@@ -13,8 +14,26 @@ const SETTINGS_SECTIONS = [
   { id: "privacy", icon: "privacy_tip", label: "Gizlilik ve Veri" },
 ];
 
-const inputClass =
-  "w-full rounded border border-surface-variant bg-surface-container-lowest px-4 py-2.5 font-body-md text-body-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50";
+function NumberField({ disabled, id, label, max, min, onChange, suffix, value }) {
+  return (
+    <div className={`settings-compact-field ${disabled ? "is-disabled" : ""}`}>
+      <span>{label}</span>
+      <div className={`settings-number-box ${disabled ? "is-disabled" : ""}`}>
+        <input
+          className="settings-number-input"
+          disabled={disabled}
+          id={id}
+          max={max}
+          min={min}
+          onChange={onChange}
+          type="number"
+          value={value}
+        />
+        <span className="settings-number-suffix">{suffix}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage({ handleUpdateScheduleSettings, scheduleSettings }) {
   const [activeSection, setActiveSection] = useState("lessonHours");
@@ -116,6 +135,8 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
     [previewSlots],
   );
 
+  const dayEnd = isValid ? previewSlots.at(-1)?.end : null;
+
   function updateField(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
   }
@@ -133,22 +154,37 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
     onSave(draft);
   }
 
+  function handleCancel() {
+    setDraft(scheduleSettings);
+  }
+
   return (
-    <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
-      <section className="card p-8 shadow-sm">
-        <h3 className="mb-1 font-headline-md text-headline-md text-on-background">Ders Saatleri</h3>
-        <p className="mb-6 font-body-md text-body-md text-secondary">
+    <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+      <section className="card p-6 shadow-sm">
+        <h3 className="font-headline-md text-headline-md text-on-background">Ders Saatleri</h3>
+        <p className="mt-1 font-body-md text-body-md text-secondary">
           Okulunuzun günlük ders, teneffüs ve öğle arası düzenini belirleyin. Buradaki değişiklikler ders
           programına otomatik olarak uygulanır.
         </p>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label className="mb-2 block font-label-md text-label-md text-on-surface" htmlFor="settings-day-start">
-              Gün başlangıcı
-            </label>
+        <div className="settings-summary-row mt-4">
+          <span className="settings-summary-chip">
+            <Icon className="text-[16px]" name="wb_twilight" /> Başlangıç <strong>{draft.dayStartTime}</strong>
+          </span>
+          <span className="settings-summary-chip">
+            <Icon className="text-[16px]" name="bedtime" /> Bitiş <strong>{dayEnd || "—"}</strong>
+          </span>
+          <span className="settings-summary-chip">
+            <Icon className="text-[16px]" name="format_list_numbered" /> Toplam{" "}
+            <strong>{draft.lessonCount} ders</strong>
+          </span>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-end gap-5">
+          <div className="settings-compact-field">
+            <span>Gün başlangıcı</span>
             <input
-              className={inputClass}
+              className="settings-time-input"
               id="settings-day-start"
               onChange={(event) => updateField("dayStartTime", event.target.value)}
               type="time"
@@ -156,148 +192,132 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
             />
           </div>
 
-          <div>
-            <label
-              className="mb-2 block font-label-md text-label-md text-on-surface"
-              htmlFor="settings-lesson-duration"
-            >
-              Standart ders süresi (dakika)
-            </label>
-            <input
-              className={inputClass}
-              id="settings-lesson-duration"
-              max={SCHEDULE_SETTINGS_LIMITS.lessonDuration.max}
-              min={SCHEDULE_SETTINGS_LIMITS.lessonDuration.min}
-              onChange={(event) => updateField("lessonDuration", Number(event.target.value))}
-              type="number"
-              value={draft.lessonDuration}
-            />
-          </div>
+          <NumberField
+            id="settings-lesson-duration"
+            label="Ders süresi"
+            max={SCHEDULE_SETTINGS_LIMITS.lessonDuration.max}
+            min={SCHEDULE_SETTINGS_LIMITS.lessonDuration.min}
+            onChange={(event) => updateField("lessonDuration", Number(event.target.value))}
+            suffix="dakika"
+            value={draft.lessonDuration}
+          />
 
-          <div>
-            <label
-              className="mb-2 block font-label-md text-label-md text-on-surface"
-              htmlFor="settings-break-duration"
-            >
-              Standart teneffüs süresi (dakika)
-            </label>
-            <input
-              className={inputClass}
-              id="settings-break-duration"
-              max={SCHEDULE_SETTINGS_LIMITS.breakDuration.max}
-              min={SCHEDULE_SETTINGS_LIMITS.breakDuration.min}
-              onChange={(event) => updateField("breakDuration", Number(event.target.value))}
-              type="number"
-              value={draft.breakDuration}
-            />
-          </div>
+          <NumberField
+            id="settings-break-duration"
+            label="Teneffüs süresi"
+            max={SCHEDULE_SETTINGS_LIMITS.breakDuration.max}
+            min={SCHEDULE_SETTINGS_LIMITS.breakDuration.min}
+            onChange={(event) => updateField("breakDuration", Number(event.target.value))}
+            suffix="dakika"
+            value={draft.breakDuration}
+          />
 
-          <div>
-            <label className="mb-2 block font-label-md text-label-md text-on-surface" htmlFor="settings-lesson-count">
-              Günlük ders sayısı
-            </label>
-            <input
-              className={inputClass}
-              id="settings-lesson-count"
-              max={SCHEDULE_SETTINGS_LIMITS.lessonCount.max}
-              min={SCHEDULE_SETTINGS_LIMITS.lessonCount.min}
-              onChange={(event) => updateField("lessonCount", Number(event.target.value))}
-              type="number"
-              value={draft.lessonCount}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-8 shadow-sm">
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h3 className="font-headline-md text-headline-md text-on-background">Öğle Arası</h3>
-            <p className="mt-1 font-body-md text-body-md text-secondary">
-              Öğle arasını gün ortasında ayrı, daha uzun bir mola olarak planla.
-            </p>
-          </div>
-          <Toggle
-            checked={draft.lunchBreak.enabled}
-            id="settings-lunch-enabled"
-            label="Öğle arası kullanılsın"
-            onChange={(checked) => updateLunch("enabled", checked)}
+          <NumberField
+            id="settings-lesson-count"
+            label="Günlük ders sayısı"
+            max={SCHEDULE_SETTINGS_LIMITS.lessonCount.max}
+            min={SCHEDULE_SETTINGS_LIMITS.lessonCount.min}
+            onChange={(event) => updateField("lessonCount", Number(event.target.value))}
+            suffix="ders"
+            value={draft.lessonCount}
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label
-              className={`mb-2 block font-label-md text-label-md ${draft.lunchBreak.enabled ? "text-on-surface" : "text-secondary"}`}
-              htmlFor="settings-lunch-after"
-            >
-              Kaçıncı dersten sonra
-            </label>
-            <input
-              className={inputClass}
-              disabled={!draft.lunchBreak.enabled}
-              id="settings-lunch-after"
-              max={draft.lessonCount}
-              min="1"
-              onChange={(event) => updateLunch("afterLesson", Number(event.target.value))}
-              type="number"
-              value={draft.lunchBreak.afterLesson}
+        <div className="settings-lunch-panel mt-5">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <p className="font-body-md text-body-md font-semibold text-on-surface">Öğle Arası</p>
+              <p className="mt-0.5 font-label-md text-label-md text-secondary">
+                Gün ortasında ayrı, daha uzun bir mola planla.
+              </p>
+            </div>
+            <Toggle
+              checked={draft.lunchBreak.enabled}
+              id="settings-lunch-enabled"
+              label="Öğle arası kullanılsın"
+              onChange={(checked) => updateLunch("enabled", checked)}
             />
           </div>
 
-          <div>
-            <label
-              className={`mb-2 block font-label-md text-label-md ${draft.lunchBreak.enabled ? "text-on-surface" : "text-secondary"}`}
-              htmlFor="settings-lunch-duration"
-            >
-              Öğle arası süresi (dakika)
-            </label>
-            <input
-              className={inputClass}
+          <div className="mt-4 flex flex-wrap items-end gap-5">
+            <div className={`settings-compact-field ${draft.lunchBreak.enabled ? "" : "is-disabled"}`}>
+              <span>Hangi dersten sonra başlasın</span>
+              <select
+                className="settings-select"
+                disabled={!draft.lunchBreak.enabled}
+                id="settings-lunch-after"
+                onChange={(event) => updateLunch("afterLesson", Number(event.target.value))}
+                value={draft.lunchBreak.afterLesson}
+              >
+                {Array.from({ length: draft.lessonCount }, (_, index) => index + 1).map((lessonNumber) => (
+                  <option key={lessonNumber} value={lessonNumber}>
+                    {lessonNumber}. ders
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <NumberField
               disabled={!draft.lunchBreak.enabled}
               id="settings-lunch-duration"
+              label="Öğle arası süresi"
               max={SCHEDULE_SETTINGS_LIMITS.lunchDuration.max}
               min={SCHEDULE_SETTINGS_LIMITS.lunchDuration.min}
               onChange={(event) => updateLunch("duration", Number(event.target.value))}
-              type="number"
+              suffix="dakika"
               value={draft.lunchBreak.duration}
             />
           </div>
         </div>
       </section>
 
-      <section className="card p-8 shadow-sm">
-        <h3 className="mb-1 font-headline-md text-headline-md text-on-background">Program Önizlemesi</h3>
-        <p className="mb-6 font-body-md text-body-md text-secondary">
+      <section className="card p-6 shadow-sm">
+        <h3 className="font-headline-md text-headline-md text-on-background">Program Önizlemesi</h3>
+        <p className="mt-1 font-body-md text-body-md text-secondary">
           Kaydetmeden önce yeni zaman çizelgesi burada.
         </p>
 
         {!isValid ? (
-          <p className="form-error">Önizleme için önce yukarıdaki ayarları geçerli değerlerle doldur.</p>
+          <p className="form-error mt-4">Önizleme için önce yukarıdaki ayarları geçerli değerlerle doldur.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-outline-variant">
-            <table className="w-full min-w-[480px] text-left">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-outline-variant">
+            <table className="settings-preview-table w-full min-w-[480px] text-left">
               <thead>
                 <tr className="border-b border-outline-variant bg-surface-container-low">
-                  <th className="p-3 font-label-md text-label-md uppercase text-secondary">Ders</th>
-                  <th className="p-3 font-label-md text-label-md uppercase text-secondary">Başlangıç</th>
-                  <th className="p-3 font-label-md text-label-md uppercase text-secondary">Bitiş</th>
-                  <th className="p-3 font-label-md text-label-md uppercase text-secondary">Sonrası</th>
+                  <th>Ders</th>
+                  <th>Başlangıç</th>
+                  <th>Bitiş</th>
+                  <th>Sonrası</th>
                 </tr>
               </thead>
               <tbody>
-                {previewRows.map(({ next, slot }) => (
-                  <tr className="border-b border-outline-variant last:border-b-0" key={slot.period}>
-                    <td className="p-3 font-body-md text-body-md font-bold text-on-surface">{slot.period}</td>
-                    <td className="p-3 font-mono-sm text-mono-sm text-on-surface">{slot.start}</td>
-                    <td className="p-3 font-mono-sm text-mono-sm text-on-surface">{slot.end}</td>
-                    <td className="p-3 font-mono-sm text-mono-sm text-secondary">
-                      {next?.part === "break"
-                        ? `${timeToMinutes(next.end) - timeToMinutes(next.start)} dk ${next.period}`
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {previewRows.map(({ next, slot }) => {
+                  const isLunchNext = next?.period === "Öğle Arası";
+                  return (
+                    <tr
+                      className={`border-b border-outline-variant last:border-b-0 ${isLunchNext ? "is-lunch-row" : ""}`}
+                      key={slot.period}
+                    >
+                      <td className="font-body-md text-body-md font-bold text-on-surface">{slot.period}</td>
+                      <td className="font-mono-sm text-mono-sm text-on-surface">{slot.start}</td>
+                      <td className="font-mono-sm text-mono-sm text-on-surface">{slot.end}</td>
+                      <td className="font-mono-sm text-mono-sm text-secondary">
+                        {next?.part === "break" ? (
+                          isLunchNext ? (
+                            <span className="settings-lunch-chip">
+                              <Icon className="text-[13px]" name="restaurant" />
+                              {timeToMinutes(next.end) - timeToMinutes(next.start)} dk öğle arası
+                            </span>
+                          ) : (
+                            `${timeToMinutes(next.end) - timeToMinutes(next.start)} dk teneffüs`
+                          )
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -317,11 +337,21 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
         </section>
       )}
 
-      <div className="flex justify-end">
-        <button className="primary-button" disabled={!isValid || !isDirty} type="submit">
-          <Icon name="save" /> Değişiklikleri Kaydet
-        </button>
-      </div>
+      {isDirty && (
+        <div className="settings-save-bar">
+          <p className="flex items-center gap-2 font-label-md text-label-md text-secondary">
+            <Icon className="text-primary" name="info" /> Kaydedilmemiş değişiklikler var.
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={handleCancel} size="md" variant="ghost">
+              İptal
+            </Button>
+            <Button disabled={!isValid} size="md" type="submit" variant="primary">
+              <Icon name="save" /> Değişiklikleri Kaydet
+            </Button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

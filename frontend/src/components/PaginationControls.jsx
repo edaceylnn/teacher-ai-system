@@ -1,3 +1,4 @@
+import Button from "./Button";
 import Icon from "./Icon";
 
 export default function PaginationControls({ limit, offset, setOffset, total }) {
@@ -14,24 +15,24 @@ export default function PaginationControls({ limit, offset, setOffset, total }) 
         {start}-{end} / {total}
       </span>
       <div>
-        <button
+        <Button
           aria-label="Önceki sayfa"
-          className="icon-action"
           disabled={!canGoBack}
           onClick={() => setOffset(Math.max(offset - limit, 0))}
-          type="button"
+          size="sm"
+          variant="icon"
         >
           <Icon name="chevron_left" />
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label="Sonraki sayfa"
-          className="icon-action"
           disabled={!canGoForward}
           onClick={() => setOffset(offset + limit)}
-          type="button"
+          size="sm"
+          variant="icon"
         >
           <Icon name="chevron_right" />
-        </button>
+        </Button>
       </div>
     </div>
   );

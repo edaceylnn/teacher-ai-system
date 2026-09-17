@@ -1,3 +1,5 @@
+import Button from "./Button";
+
 export default function FormPanel({
   cancelLabel = "İptal",
   children,
@@ -17,13 +19,13 @@ export default function FormPanel({
       {submitLabel && (
         <div className="form-panel-footer">
           {onCancel && (
-            <button className="outline-button" onClick={onCancel} type="button">
+            <Button onClick={onCancel} size="md" variant="ghost">
               {cancelLabel}
-            </button>
+            </Button>
           )}
-          <button className="primary-button" type="submit">
+          <Button size="md" type="submit" variant="primary">
             {submitLabel}
-          </button>
+          </Button>
         </div>
       )}
     </form>

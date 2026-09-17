@@ -14,16 +14,49 @@ export function setAuthToken(token) {
   accessToken = token;
 }
 
+const ERROR_TRANSLATIONS = {
+  "Authentication required": "Oturum açmanız gerekiyor.",
+  "Invalid email or password": "E-posta veya parola hatalı.",
+  "Invalid or expired refresh token": "Oturum yenileme bilgisi geçersiz veya süresi dolmuş.",
+  "Invalid or expired reset token": "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
+  "Invalid or expired token": "Oturum süresi dolmuş veya geçersiz.",
+  "AI output not found": "AI çıktısı bulunamadı.",
+  "Assessment not found": "Değerlendirme bulunamadı.",
+  "Assignment not found": "Atama bulunamadı.",
+  "Attendance record not found": "Devamsızlık kaydı bulunamadı.",
+  "Attendance session not found": "Devamsızlık oturumu bulunamadı.",
+  "Classroom not found": "Sınıf bulunamadı.",
+  "Curriculum outcome not found": "Kazanım bulunamadı.",
+  "Grade not found": "Not kaydı bulunamadı.",
+  "Homework not found": "Ödev bulunamadı.",
+  "Lesson not found": "Ders bulunamadı.",
+  "Password must contain at least one digit": "Parola en az bir rakam içermeli.",
+  "Password must contain at least one letter": "Parola en az bir harf içermeli.",
+  "Schedule entry not found": "Ders programı kaydı bulunamadı.",
+  "Student not found": "Öğrenci bulunamadı.",
+  "Student not found in this classroom": "Öğrenci bu sınıfta bulunamadı.",
+  "Teacher email already exists": "Bu e-posta ile kayıtlı bir öğretmen zaten var.",
+  "Teacher not found": "Öğretmen bulunamadı.",
+  "Too many requests. Please try again later.": "Çok fazla deneme yaptınız. Lütfen biraz sonra tekrar deneyin.",
+  "Kazanım seçilen dersle eşleşmiyor.": "Kazanım seçilen dersle eşleşmiyor.",
+};
+
+function translateErrorMessage(message) {
+  if (!message) return "";
+  const normalized = String(message).replace(/^Value error,\s*/i, "");
+  return ERROR_TRANSLATIONS[normalized] || normalized;
+}
+
 // FastAPI validation errors (422) send `detail` as a list of {msg, loc, ...}
-// objects rather than a string — flatten those into one readable sentence.
+// objects rather than a string; flatten and localize them for the UI.
 function formatErrorDetail(detail) {
   if (Array.isArray(detail)) {
     return detail
-      .map((item) => (typeof item === "string" ? item : item.msg))
+      .map((item) => translateErrorMessage(typeof item === "string" ? item : item.msg))
       .filter(Boolean)
       .join(" ");
   }
-  return detail;
+  return translateErrorMessage(detail);
 }
 
 async function performRequest(path, options) {
@@ -74,7 +107,7 @@ async function request(path, options = {}, isRetry = false) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(formatErrorDetail(errorBody.detail) || "API istegi basarisiz oldu.");
+    throw new Error(formatErrorDetail(errorBody.detail) || "API isteği başarısız oldu.");
   }
 
   if (response.status === 204 || response.status === 202) {
@@ -170,8 +203,6 @@ export const api = {
     ).then((page) =>
       normalizePage(page, pagination.limit, pagination.offset),
     ),
-  listStudents: async (classroomId, pagination = { limit: 500, offset: 0 }) =>
-    pageItems(await api.listStudentsPage(classroomId, pagination)),
   createStudent: (payload) =>
     request("/students", {
       method: "POST",
@@ -217,11 +248,6 @@ export const api = {
   deleteLesson: (lessonId) =>
     request(`/lessons/${lessonId}`, {
       method: "DELETE",
-    }),
-  createGrade: (payload) =>
-    request("/grades", {
-      method: "POST",
-      body: JSON.stringify(payload),
     }),
   listGradesPage: (pagination = {}) =>
     request(
@@ -285,6 +311,48 @@ export const api = {
     request(`/assessments/${assessmentId}/records`, {
       method: "PUT",
       body: JSON.stringify({ records }),
+    }),
+  listCurriculumOutcomesPage: (pagination = {}) =>
+    request(
+      `/curriculum-outcomes${buildQuery({
+        lesson_id: pagination.lessonId,
+        grade_level: pagination.gradeLevel,
+        search: pagination.search,
+        active_only: pagination.activeOnly,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      })}`,
+    ).then((page) => normalizePage(page, pagination.limit, pagination.offset)),
+  listCurriculumOutcomes: async (pagination = { limit: 500, offset: 0, activeOnly: false }) => {
+    const limit = pagination.limit || 500;
+    let offset = pagination.offset || 0;
+    let items = [];
+    for (;;) {
+      const page = await api.listCurriculumOutcomesPage({ ...pagination, limit, offset });
+      items = items.concat(page.items);
+      if (items.length >= page.total || !page.items.length) break;
+      offset += limit;
+    }
+    return items;
+  },
+  createCurriculumOutcome: (payload) =>
+    request("/curriculum-outcomes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  bulkCreateCurriculumOutcomes: (outcomes) =>
+    request("/curriculum-outcomes/bulk", {
+      method: "POST",
+      body: JSON.stringify({ outcomes }),
+    }),
+  updateCurriculumOutcome: (outcomeId, payload) =>
+    request(`/curriculum-outcomes/${outcomeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteCurriculumOutcome: (outcomeId) =>
+    request(`/curriculum-outcomes/${outcomeId}`, {
+      method: "DELETE",
     }),
   listAttendanceSessionsPage: (pagination = {}) =>
     request(
@@ -371,6 +439,15 @@ export const api = {
   // Admin sees every teacher + their assignment summary; a regular teacher
   // gets back just themselves (see GET /teachers on the backend).
   listTeachers: () => request("/teachers"),
+  createTeacher: (payload) =>
+    request("/teachers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteTeacher: (teacherId) =>
+    request(`/teachers/${teacherId}`, {
+      method: "DELETE",
+    }),
   listTeacherAssignmentsPage: (teacherId, pagination = {}) =>
     request(
       `/teacher-assignments${buildQuery({

@@ -94,55 +94,56 @@ def upgrade() -> None:
     # access they have today after this migration. Nothing here is optional
     # demo data — every environment needs a current academic year to hang
     # future assignments off of.
-    connection = op.get_bind()
+    op.execute(
+        """
+        INSERT INTO academic_years (label, start_date, end_date, is_current, created_at, updated_at)
+        VALUES ('2026-2027', '2026-09-01', '2027-06-30', true, now(), now())
+        """
+    )
 
-    academic_year_id = connection.execute(
-        sa.text(
-            "INSERT INTO academic_years (label, start_date, end_date, is_current, created_at, updated_at) "
-            "VALUES (:label, :start_date, :end_date, true, now(), now()) RETURNING id"
-        ),
-        {"label": "2026-2027", "start_date": "2026-09-01", "end_date": "2027-06-30"},
-    ).scalar_one()
-
-    term_id = connection.execute(
-        sa.text(
-            "INSERT INTO terms (academic_year_id, name, start_date, end_date, created_at, updated_at) "
-            "VALUES (:academic_year_id, :name, :start_date, :end_date, now(), now()) RETURNING id"
-        ),
-        {"academic_year_id": academic_year_id, "name": "1. Dönem", "start_date": "2026-09-01", "end_date": "2027-01-31"},
-    ).scalar_one()
+    op.execute(
+        """
+        INSERT INTO terms (academic_year_id, name, start_date, end_date, created_at, updated_at)
+        SELECT id, '1. Dönem', '2026-09-01', '2027-01-31', now(), now()
+        FROM academic_years
+        WHERE label = '2026-2027'
+        """
+    )
 
     # Homeroom ("rehber") assignment for every existing classroom, from its
     # current owning teacher.
-    connection.execute(
-        sa.text(
-            "INSERT INTO teacher_assignments "
-            "(teacher_id, classroom_id, lesson_id, academic_year_id, term_id, is_active, created_at, updated_at) "
-            "SELECT teacher_id, id, NULL, :academic_year_id, :term_id, true, now(), now() FROM classrooms"
-        ),
-        {"academic_year_id": academic_year_id, "term_id": term_id},
+    op.execute(
+        """
+        INSERT INTO teacher_assignments
+        (teacher_id, classroom_id, lesson_id, academic_year_id, term_id, is_active, created_at, updated_at)
+        SELECT c.teacher_id, c.id, NULL, ay.id, t.id, true, now(), now()
+        FROM classrooms c
+        CROSS JOIN academic_years ay
+        JOIN terms t ON t.academic_year_id = ay.id AND t.name = '1. Dönem'
+        WHERE ay.label = '2026-2027'
+        """
     )
 
     # Subject ("branş") assignment for every (classroom, lesson) pair that
     # today's single-owner model implied: a lesson's creator teaching it in
     # every classroom they themselves own.
-    connection.execute(
-        sa.text(
-            "INSERT INTO teacher_assignments "
-            "(teacher_id, classroom_id, lesson_id, academic_year_id, term_id, is_active, created_at, updated_at) "
-            "SELECT l.teacher_id, c.id, l.id, :academic_year_id, :term_id, true, now(), now() "
-            "FROM lessons l JOIN classrooms c ON c.teacher_id = l.teacher_id "
-            "WHERE l.teacher_id IS NOT NULL"
-        ),
-        {"academic_year_id": academic_year_id, "term_id": term_id},
+    op.execute(
+        """
+        INSERT INTO teacher_assignments
+        (teacher_id, classroom_id, lesson_id, academic_year_id, term_id, is_active, created_at, updated_at)
+        SELECT l.teacher_id, c.id, l.id, ay.id, t.id, true, now(), now()
+        FROM lessons l
+        JOIN classrooms c ON c.teacher_id = l.teacher_id
+        CROSS JOIN academic_years ay
+        JOIN terms t ON t.academic_year_id = ay.id AND t.name = '1. Dönem'
+        WHERE l.teacher_id IS NOT NULL
+          AND ay.label = '2026-2027'
+        """
     )
 
     # Demo account becomes an admin so the new "Öğretmenler"/assignment
     # screens are reachable without a separate manual promotion step.
-    connection.execute(
-        sa.text("UPDATE teachers SET role = 'admin' WHERE email = :email"),
-        {"email": "eda@example.com"},
-    )
+    op.execute("UPDATE teachers SET role = 'admin' WHERE email = 'eda@example.com'")
 
 
 def downgrade() -> None:

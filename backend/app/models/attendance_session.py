@@ -34,8 +34,8 @@ class AttendanceSession(TimestampMixin, Base):
     date: Mapped[date_] = mapped_column(Date, nullable=False, index=True)
     start_time: Mapped[time_ | None] = mapped_column(Time, nullable=True)
 
-    classroom: Mapped["Classroom"] = relationship()
-    lesson: Mapped["Lesson"] = relationship()
+    classroom: Mapped["Classroom"] = relationship(back_populates="attendance_sessions")
+    lesson: Mapped["Lesson"] = relationship(back_populates="attendance_sessions")
     teacher: Mapped["Teacher"] = relationship()
     schedule_entry: Mapped["ScheduleEntry"] = relationship()
     records: Mapped[list["AttendanceRecord"]] = relationship(

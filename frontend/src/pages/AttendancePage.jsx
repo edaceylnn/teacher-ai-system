@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AttendanceEntryPanel from "../components/AttendanceEntryPanel";
+import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import Icon from "../components/Icon";
 import { assignedLessonsForClassroom } from "../utils/permissions";
@@ -126,8 +127,7 @@ export default function AttendancePage({
             value={date}
           />
         </label>
-        <button
-          className="primary-button compact attendance-open-button"
+        <Button
           disabled={!canOpen}
           onClick={() =>
             openOrCreateAttendanceSession({
@@ -136,10 +136,11 @@ export default function AttendancePage({
               date,
             })
           }
-          type="button"
+          size="sm"
+          variant="primary"
         >
           <Icon name="fact_check" /> Yoklama Aç
-        </button>
+        </Button>
       </section>
 
       {!activeAttendanceSession && (

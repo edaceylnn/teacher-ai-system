@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import AssessmentEntryPanel from "../components/AssessmentEntryPanel";
+import Button from "../components/Button";
 import Icon from "../components/Icon";
+import { useCloseOnOutsideClick } from "../hooks/useCloseOnOutsideClick";
 import { assignedLessonsForClassroom } from "../utils/permissions";
 
 export default function GradebookPage({
@@ -9,6 +11,7 @@ export default function GradebookPage({
   assessments,
   classroomOptions,
   closeAssessmentEntry,
+  curriculumOutcomes,
   gradeCategoryLabels,
   gradeCategoryOptions,
   handleDeleteAssessment,
@@ -34,6 +37,8 @@ export default function GradebookPage({
   const [typeFilter, setTypeFilter] = useState("");
   const [openAssessmentMenuId, setOpenAssessmentMenuId] = useState(null);
   const [openLessonMenuId, setOpenLessonMenuId] = useState(null);
+  useCloseOnOutsideClick(openAssessmentMenuId !== null, () => setOpenAssessmentMenuId(null));
+  useCloseOnOutsideClick(openLessonMenuId !== null, () => setOpenLessonMenuId(null));
 
   // Madde 6: bu sınıfta atanmış olduğun dersler dışındakiler burada da
   // görünmemeli.
@@ -42,6 +47,10 @@ export default function GradebookPage({
     [teacherAssignments, selectedClassroomId, allVisibleLessons],
   );
   const lessonById = useMemo(() => new Map(lessons.map((lesson) => [lesson.id, lesson])), [lessons]);
+  const outcomeById = useMemo(
+    () => new Map(curriculumOutcomes.map((outcome) => [outcome.id, outcome])),
+    [curriculumOutcomes],
+  );
   const lessonOptions = useMemo(
     () => lessons.map((lesson) => ({ label: lesson.name, value: String(lesson.id) })),
     [lessons],
@@ -73,6 +82,7 @@ export default function GradebookPage({
       title: assessment.title,
       description: assessment.description || "",
       date: assessment.date,
+      curriculum_outcome_id: assessment.curriculum_outcome_id ? String(assessment.curriculum_outcome_id) : "",
     });
     setActiveModal("editAssessment");
     setOpenAssessmentMenuId(null);
@@ -94,14 +104,14 @@ export default function GradebookPage({
             Değerlendirme oluştur, sınav/quiz/performans/ödev sonuçlarını tek yerden işle.
           </p>
         </div>
-        <button
-          className="primary-button compact"
+        <Button
           disabled={!selectedClassroomId}
           onClick={() => {
             setAssessmentForm((form) => ({
               ...form,
               classroom_id: selectedClassroomId ? String(selectedClassroomId) : "",
               lesson_id: "",
+              curriculum_outcome_id: "",
               assessment_type: "sinav",
               title: "",
               description: "",
@@ -109,10 +119,11 @@ export default function GradebookPage({
             }));
             setActiveModal("newAssessment");
           }}
-          type="button"
+          size="md"
+          variant="primary"
         >
           <Icon name="add_box" /> Yeni Değerlendirme
-        </button>
+        </Button>
       </section>
 
       <section className="gradebook-toolbar" aria-label="Not defteri filtreleri">
@@ -211,7 +222,9 @@ export default function GradebookPage({
                 <span>{filteredAssessments.length} kayıt</span>
               </div>
               <ul className="gradebook-assessment-list">
-                {filteredAssessments.map((assessment) => (
+                {filteredAssessments.map((assessment) => {
+                  const outcome = outcomeById.get(assessment.curriculum_outcome_id);
+                  return (
                   <li className="gradebook-assessment-row" key={assessment.id}>
                     <div className="gradebook-assessment-main">
                       <div className="gradebook-assessment-icon">
@@ -227,21 +240,27 @@ export default function GradebookPage({
                           <span>{gradeCategoryLabels[assessment.assessment_type]}</span>
                           <span>•</span>
                           <span>{assessment.date}</span>
+                          {outcome && (
+                            <>
+                              <span>•</span>
+                              <span>{outcome.code || "Kazanım"} · {outcome.outcome_text}</span>
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
                     <div className="gradebook-row-actions">
-                      <button
+                      <Button
                         aria-label={`${assessment.title} için sonuç gir`}
-                        className="primary-button compact"
                         onClick={() => {
                           openAssessmentForEntry(assessment);
                           setOpenAssessmentMenuId(null);
                         }}
-                        type="button"
+                        size="sm"
+                        variant="primary"
                       >
                         Sonuç Gir
-                      </button>
+                      </Button>
                       <div className="student-row-menu">
                         <button
                           aria-expanded={openAssessmentMenuId === assessment.id}
@@ -272,7 +291,8 @@ export default function GradebookPage({
                       </div>
                     </div>
                   </li>
-                ))}
+                );
+                })}
               </ul>
               {!filteredAssessments.length && (
                 <p className="empty-note">
@@ -290,9 +310,9 @@ export default function GradebookPage({
                 <h2>Aktif Dersler</h2>
                 <p>{lessons.length} ders</p>
               </div>
-              <button className="outline-button compact" onClick={() => setActiveModal("lesson")} type="button">
+              <Button onClick={() => setActiveModal("lesson")} size="sm" variant="secondary">
                 <Icon name="add" /> Ders Ekle
-              </button>
+              </Button>
             </div>
             <div>
               <ul className="gradebook-lesson-list">

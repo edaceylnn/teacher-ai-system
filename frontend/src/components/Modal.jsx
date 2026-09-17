@@ -1,3 +1,4 @@
+import Button from "./Button";
 import Icon from "./Icon";
 
 const sizeClasses = {
@@ -16,14 +17,15 @@ export default function Modal({ children, onClose, size = "compact" }) {
         className={`relative max-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-container-padding shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05)] ${sizeClasses[size] || sizeClasses.compact}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button
+        <Button
           aria-label="Kapat"
-          className="absolute right-4 top-4 text-secondary hover:text-primary"
+          className="absolute right-4 top-4"
           onClick={onClose}
-          type="button"
+          size="sm"
+          variant="icon"
         >
           <Icon name="close" />
-        </button>
+        </Button>
         {children}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import Button from "./Button";
 import Icon from "./Icon";
 
 export default function EmptyState({ actionLabel, compact = false, icon = "inbox", onAction, text, title }) {
@@ -9,9 +10,9 @@ export default function EmptyState({ actionLabel, compact = false, icon = "inbox
       {title && <h3>{title}</h3>}
       <p>{text}</p>
       {actionLabel && onAction && (
-        <button className="link-button" onClick={onAction} type="button">
+        <Button onClick={onAction} size="sm" tone="primary" variant="ghost">
           {actionLabel}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Icon from "./Icon";
 
-export default function SearchableSelect({ label, onChange, options, placeholder, value }) {
+export default function SearchableSelect({ label, onChange, options, placeholder, required = true, value }) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -103,7 +103,7 @@ export default function SearchableSelect({ label, onChange, options, placeholder
           <Icon name="expand_more" />
         )}
       </div>
-      <input readOnly required type="hidden" value={value} />
+      <input readOnly required={required} type="hidden" value={value} />
       {isOpen && (
         <div className="searchable-select-options" role="listbox">
           {filteredOptions.length ? (

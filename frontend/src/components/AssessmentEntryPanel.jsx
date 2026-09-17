@@ -1,3 +1,4 @@
+import Button from "./Button";
 import Icon from "./Icon";
 import Toggle from "./Toggle";
 import { avatarToneFor, initialsOf } from "../utils/helpers";
@@ -66,17 +67,12 @@ export default function AssessmentEntryPanel({
           </div>
         </div>
         <div className="row-actions">
-          <button className="outline-button compact" onClick={onClose} type="button">
+          <Button onClick={onClose} size="sm" variant="secondary">
             Listeye Dön
-          </button>
-          <button
-            className="primary-button compact"
-            disabled={isSavingAssessmentRecords}
-            onClick={onSave}
-            type="button"
-          >
+          </Button>
+          <Button disabled={isSavingAssessmentRecords} onClick={onSave} size="sm" variant="primary">
             <Icon name="save" /> {isSavingAssessmentRecords ? "Kaydediliyor…" : "Kaydet"}
-          </button>
+          </Button>
         </div>
       </div>
       {isLoadingAssessmentRecords ? (

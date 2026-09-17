@@ -18,4 +18,26 @@ class Lesson(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     teacher: Mapped["Teacher | None"] = relationship(back_populates="lessons")
-
+    # Same reasoning as Classroom's cascades — deleting a lesson from the
+    # catalog deletes every assignment/record/timetable slot that used it,
+    # instead of crashing with an unhandled FK-violation 500.
+    teacher_assignments: Mapped[list["TeacherAssignment"]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+    )
+    assessments: Mapped[list["Assessment"]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+    )
+    curriculum_outcomes: Mapped[list["CurriculumOutcome"]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+    )
+    attendance_sessions: Mapped[list["AttendanceSession"]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+    )
+    schedule_entries: Mapped[list["ScheduleEntry"]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+    )

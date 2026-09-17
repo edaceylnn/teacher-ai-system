@@ -8,7 +8,9 @@ import AIReportsPage from "./pages/AIReportsPage";
 import AttendancePage from "./pages/AttendancePage";
 import ClassroomDetailPage from "./pages/ClassroomDetailPage";
 import ClassroomsPage from "./pages/ClassroomsPage";
+import CurriculumPage from "./pages/CurriculumPage";
 import DashboardPage from "./pages/DashboardPage";
+import ConfirmDialog from "./components/ConfirmDialog";
 import FormPanel from "./components/FormPanel";
 import GradebookPage from "./pages/GradebookPage";
 import Icon from "./components/Icon";
@@ -99,6 +101,15 @@ export default function App() {
   const [quickActionEntry, setQuickActionEntry] = useState(null);
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [teachersAdminList, setTeachersAdminList] = useState([]);
+  const [teacherForm, setTeacherForm] = useState({
+    full_name: "",
+    email: "",
+    title: "",
+    branch: "",
+    role: "teacher",
+    password: "",
+  });
+  const [latestTeacherInviteLink, setLatestTeacherInviteLink] = useState("");
   const [assignmentForm, setAssignmentForm] = useState({
     teacher_id: "",
     classroom_id: "",
@@ -111,6 +122,7 @@ export default function App() {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [profile, setProfile] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,17 +143,25 @@ export default function App() {
   const [lessonForm, setLessonForm] = useState({ name: "" });
   const [lessonEditForm, setLessonEditForm] = useState({ name: "" });
   const [editingLesson, setEditingLesson] = useState(null);
-  const [gradeForm, setGradeForm] = useState({
-    student_id: "",
-    lesson_id: "",
-    exam_name: "",
-    score: "",
-    category: "sinav",
-  });
   const [assessments, setAssessments] = useState([]);
+  const [curriculumOutcomes, setCurriculumOutcomes] = useState([]);
+  const [curriculumForm, setCurriculumForm] = useState({
+    lesson_id: "",
+    grade_level: "",
+    unit_title: "",
+    code: "",
+    outcome_text: "",
+    source_name: "",
+    source_url: "",
+    version_label: "",
+    is_active: true,
+  });
+  const [curriculumImportText, setCurriculumImportText] = useState("");
+  const [editingCurriculumOutcome, setEditingCurriculumOutcome] = useState(null);
   const [assessmentForm, setAssessmentForm] = useState({
     classroom_id: "",
     lesson_id: "",
+    curriculum_outcome_id: "",
     assessment_type: "sinav",
     title: "",
     description: "",
@@ -151,6 +171,7 @@ export default function App() {
     title: "",
     description: "",
     date: "",
+    curriculum_outcome_id: "",
   });
   const [editingAssessment, setEditingAssessment] = useState(null);
   const [activeAssessmentId, setActiveAssessmentId] = useState(null);
@@ -246,14 +267,6 @@ export default function App() {
     if (!profile?.attendance_summary?.total) return "-";
     return `%${Math.round((profile.attendance_summary.present / profile.attendance_summary.total) * 100)}`;
   }, [profile]);
-  const studentOptions = useMemo(
-    () =>
-      students.map((student) => ({
-        label: `${student.first_name} ${student.last_name}`,
-        value: String(student.id),
-      })),
-    [students],
-  );
   const lessonOptions = useMemo(
     () =>
       lessons.map((lesson) => ({
@@ -261,6 +274,21 @@ export default function App() {
         value: String(lesson.id),
       })),
     [lessons],
+  );
+  const curriculumOutcomeOptionsFor = useMemo(
+    () => (lessonId, gradeLevel) =>
+      curriculumOutcomes
+        .filter(
+          (outcome) =>
+            outcome.is_active &&
+            (!lessonId || String(outcome.lesson_id) === String(lessonId)) &&
+            (!gradeLevel || outcome.grade_level === String(gradeLevel)),
+        )
+        .map((outcome) => ({
+          label: `${outcome.code ? `${outcome.code} · ` : ""}${outcome.outcome_text}`,
+          value: String(outcome.id),
+        })),
+    [curriculumOutcomes],
   );
   const classroomOptions = useMemo(
     () =>
@@ -320,12 +348,13 @@ export default function App() {
     setIsLoading(true);
     setError("");
     try {
-      const [classroomData, lessonData, gradeData, assignmentData, teachersData] = await Promise.all([
+      const [classroomData, lessonData, gradeData, assignmentData, teachersData, curriculumData] = await Promise.all([
         api.listClassrooms(teacherId),
         api.listLessons(teacherId),
         api.listGrades(),
         api.listTeacherAssignments(teacherId),
         api.listTeachers(),
+        api.listCurriculumOutcomes({ limit: 500, offset: 0, activeOnly: false }),
       ]);
       const studentPages = await Promise.all(
         classroomData.map((classroom) =>
@@ -350,6 +379,7 @@ export default function App() {
       setLessons(lessonData);
       setTeacherAssignments(assignmentData);
       setTeachersAdminList(teachersData);
+      setCurriculumOutcomes(curriculumData);
       setGrades(gradeData);
       const schedulePage = await api.listScheduleEntriesPage(teacherId, {
         limit: 500,
@@ -474,6 +504,10 @@ export default function App() {
     setAssessments(await api.listAssessments({ classroomId: selectedClassroomId, limit: 500, offset: 0 }));
   }
 
+  async function loadCurriculumOutcomes() {
+    setCurriculumOutcomes(await api.listCurriculumOutcomes({ limit: 500, offset: 0, activeOnly: false }));
+  }
+
   async function loadAttendanceSessionRecords(sessionId) {
     setIsLoadingAttendanceRecords(true);
     try {
@@ -589,6 +623,7 @@ export default function App() {
       ...form,
       classroom_id: String(entry.classroom_id),
       lesson_id: String(entry.lesson_id),
+      curriculum_outcome_id: "",
       assessment_type: typeByAction[action],
       title: "",
       description: "",
@@ -675,6 +710,11 @@ export default function App() {
     loadTeachersAdminList().catch((err) => setError(err.message));
   }, [activePage, isAdminUser]);
 
+  useEffect(() => {
+    if (activePage !== "curriculum") return;
+    setActivePage("dashboard");
+  }, [activePage]);
+
   function showNotice(message) {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2400);
@@ -687,6 +727,25 @@ export default function App() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  function requestDeleteConfirmation(options) {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        cancelLabel: "Vazgeç",
+        confirmLabel: "Sil",
+        icon: "delete",
+        ...options,
+        onCancel: () => {
+          setConfirmDialog(null);
+          resolve(false);
+        },
+        onConfirm: () => {
+          setConfirmDialog(null);
+          resolve(true);
+        },
+      });
+    });
   }
 
   async function handleCreateClassroom(event) {
@@ -734,9 +793,11 @@ export default function App() {
 
   async function handleDeleteClassroom(classroomId) {
     await runAction(async () => {
-      const shouldDelete = window.confirm(
-        "Bu sınıf silinsin mi? Sınıfa bağlı öğrenciler de silinebilir.",
-      );
+      const shouldDelete = await requestDeleteConfirmation({
+        title: "Sınıf silinsin mi?",
+        description: "Sınıfa bağlı öğrenciler de silinebilir.",
+        confirmLabel: "Sınıfı Sil",
+      });
       if (!shouldDelete) return;
 
       const nextClassroom = classrooms.find(
@@ -829,7 +890,11 @@ export default function App() {
 
   async function handleDeleteStudent(studentId) {
     await runAction(async () => {
-      const shouldDelete = window.confirm("Bu öğrenci silinsin mi?");
+      const shouldDelete = await requestDeleteConfirmation({
+        title: "Öğrenci silinsin mi?",
+        description: "Öğrenciye bağlı kayıtlar artık listelerde görünmez.",
+        confirmLabel: "Öğrenciyi Sil",
+      });
       if (!shouldDelete) return;
 
       await api.deleteStudent(studentId);
@@ -854,6 +919,30 @@ export default function App() {
       await loadClassroomStudentPage();
       await loadStudentDirectoryPage();
       showNotice("Öğrenci silindi.");
+    });
+  }
+
+  async function handleDeleteStudents(studentIds) {
+    const uniqueIds = Array.from(new Set(studentIds.map(Number))).filter(Boolean);
+    if (!uniqueIds.length) return;
+
+    await runAction(async () => {
+      const shouldDelete = await requestDeleteConfirmation({
+        title: `${uniqueIds.length} öğrenci silinsin mi?`,
+        description: "Seçili öğrenciler ve bağlı kayıtları artık listelerde görünmez.",
+        confirmLabel: "Seçili Öğrencileri Sil",
+      });
+      if (!shouldDelete) return;
+
+      await Promise.all(uniqueIds.map((studentId) => api.deleteStudent(studentId)));
+      if (uniqueIds.includes(selectedStudentId)) setSelectedStudentId(null);
+      await Promise.all([
+        loadInitialData(),
+        loadGrades(),
+        loadStudentDirectoryPage(),
+        loadClassroomStudentPage(),
+      ]);
+      showNotice(`${uniqueIds.length} öğrenci silindi.`);
     });
   }
 
@@ -891,9 +980,11 @@ export default function App() {
 
   async function handleDeleteLesson(lessonId) {
     await runAction(async () => {
-      const shouldDelete = window.confirm(
-        "Bu ders ve bağlı notlar silinsin mi?",
-      );
+      const shouldDelete = await requestDeleteConfirmation({
+        title: "Ders silinsin mi?",
+        description: "Bu ders ve bağlı notlar silinir.",
+        confirmLabel: "Dersi Sil",
+      });
       if (!shouldDelete) return;
 
       await api.deleteLesson(lessonId);
@@ -906,33 +997,13 @@ export default function App() {
     });
   }
 
-  async function handleCreateGrade(event) {
-    event.preventDefault();
-    await runAction(async () => {
-      const studentId = Number(gradeForm.student_id);
-      if (!studentId) throw new Error("Önce bir öğrenci seçmelisin.");
-      await api.createGrade({
-        student_id: studentId,
-        lesson_id: Number(gradeForm.lesson_id),
-        exam_name: gradeForm.exam_name.trim(),
-        score: gradeForm.score,
-        category: gradeForm.category,
-      });
-      setGradeForm({ student_id: "", lesson_id: "", exam_name: "", score: "", category: "sinav" });
-      setActiveModal(null);
-      setSelectedStudentId(studentId);
-      await loadGrades();
-      await loadProfile(studentId);
-      showNotice("Not kaydedildi.");
-    });
-  }
-
   async function handleCreateAssessment(event) {
     event.preventDefault();
     await runAction(async () => {
       const created = await api.createAssessment({
         classroom_id: Number(assessmentForm.classroom_id),
         lesson_id: Number(assessmentForm.lesson_id),
+        curriculum_outcome_id: assessmentForm.curriculum_outcome_id ? Number(assessmentForm.curriculum_outcome_id) : null,
         assessment_type: assessmentForm.assessment_type,
         title: assessmentForm.title.trim(),
         description: assessmentForm.description.trim() || null,
@@ -941,6 +1012,7 @@ export default function App() {
       setAssessmentForm((form) => ({
         ...form,
         lesson_id: "",
+        curriculum_outcome_id: "",
         title: "",
         description: "",
         date: "",
@@ -962,6 +1034,9 @@ export default function App() {
         title: assessmentEditForm.title.trim(),
         description: assessmentEditForm.description.trim() || null,
         date: assessmentEditForm.date,
+        curriculum_outcome_id: assessmentEditForm.curriculum_outcome_id
+          ? Number(assessmentEditForm.curriculum_outcome_id)
+          : null,
       });
       setEditingAssessment(null);
       setActiveModal(null);
@@ -972,7 +1047,11 @@ export default function App() {
 
   async function handleDeleteAssessment(assessmentId) {
     await runAction(async () => {
-      const shouldDelete = window.confirm("Bu değerlendirme ve tüm öğrenci kayıtları silinsin mi?");
+      const shouldDelete = await requestDeleteConfirmation({
+        title: "Değerlendirme silinsin mi?",
+        description: "Bu değerlendirme ve tüm öğrenci kayıtları silinir.",
+        confirmLabel: "Değerlendirmeyi Sil",
+      });
       if (!shouldDelete) return;
 
       await api.deleteAssessment(assessmentId);
@@ -1030,6 +1109,145 @@ export default function App() {
     setIsSavingAssessmentRecords(false);
   }
 
+  function curriculumPayloadFromForm() {
+    return {
+      lesson_id: Number(curriculumForm.lesson_id),
+      grade_level: curriculumForm.grade_level.trim(),
+      unit_title: curriculumForm.unit_title.trim() || null,
+      code: curriculumForm.code.trim() || null,
+      outcome_text: curriculumForm.outcome_text.trim(),
+      source_name: curriculumForm.source_name.trim() || null,
+      source_url: curriculumForm.source_url.trim() || null,
+      version_label: curriculumForm.version_label.trim() || null,
+      is_active: curriculumForm.is_active,
+    };
+  }
+
+  async function handleCreateCurriculumOutcome(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      await api.createCurriculumOutcome(curriculumPayloadFromForm());
+      setCurriculumForm({
+        lesson_id: "",
+        grade_level: "",
+        unit_title: "",
+        code: "",
+        outcome_text: "",
+        source_name: "",
+        source_url: "",
+        version_label: "",
+        is_active: true,
+      });
+      setActiveModal(null);
+      await loadCurriculumOutcomes();
+      showNotice("Kazanım eklendi.");
+    });
+  }
+
+  async function handleUpdateCurriculumOutcome(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      if (!editingCurriculumOutcome) throw new Error("Düzenlenecek kazanım bulunamadı.");
+      await api.updateCurriculumOutcome(editingCurriculumOutcome.id, curriculumPayloadFromForm());
+      setEditingCurriculumOutcome(null);
+      setActiveModal(null);
+      await loadCurriculumOutcomes();
+      await loadAssessments();
+      showNotice("Kazanım güncellendi.");
+    });
+  }
+
+  function parseCurriculumImportRows() {
+    const rows = curriculumImportText
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter(Boolean);
+    if (!rows.length) throw new Error("İçe aktarılacak satır bulunamadı.");
+    const delimiter = rows[0].includes(";") ? ";" : ",";
+    const headers = rows[0].split(delimiter).map((cell) => cell.trim().toLocaleLowerCase("tr"));
+    const aliases = {
+      lesson_id: ["lesson_id", "ders_id"],
+      grade_level: ["grade_level", "sinif", "sınıf"],
+      unit_title: ["unit_title", "unite", "ünite", "tema"],
+      code: ["code", "kod", "kazanim_kodu", "kazanım_kodu"],
+      outcome_text: ["outcome_text", "kazanim", "kazanım", "metin"],
+      source_name: ["source_name", "kaynak", "kaynak_adi", "kaynak_adı"],
+      source_url: ["source_url", "kaynak_url", "url"],
+      version_label: ["version_label", "surum", "sürüm", "yil", "yıl"],
+    };
+    const indexFor = (field) => aliases[field].map((alias) => headers.indexOf(alias)).find((index) => index >= 0);
+    const lessonIndex = indexFor("lesson_id");
+    const gradeIndex = indexFor("grade_level");
+    const textIndex = indexFor("outcome_text");
+    if (lessonIndex === undefined || gradeIndex === undefined || textIndex === undefined) {
+      throw new Error("CSV başlıklarında en az lesson_id, grade_level ve outcome_text olmalı.");
+    }
+    return rows.slice(1).map((row) => {
+      const cells = row.split(delimiter).map((cell) => cell.trim());
+      const valueFor = (field) => {
+        const index = indexFor(field);
+        return index === undefined ? "" : cells[index] || "";
+      };
+      return {
+        lesson_id: Number(cells[lessonIndex]),
+        grade_level: cells[gradeIndex],
+        unit_title: valueFor("unit_title") || null,
+        code: valueFor("code") || null,
+        outcome_text: cells[textIndex],
+        source_name: valueFor("source_name") || null,
+        source_url: valueFor("source_url") || null,
+        version_label: valueFor("version_label") || null,
+        is_active: true,
+      };
+    });
+  }
+
+  async function handleImportCurriculumOutcomes(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      const outcomes = parseCurriculumImportRows();
+      await api.bulkCreateCurriculumOutcomes(outcomes);
+      setCurriculumImportText("");
+      setActiveModal(null);
+      await loadCurriculumOutcomes();
+      showNotice(`${outcomes.length} kazanım içe aktarıldı.`);
+    });
+  }
+
+  async function handleDeleteCurriculumOutcome(outcome) {
+    const confirmed = await requestDeleteConfirmation({
+      title: "Kazanım silinsin mi?",
+      description: "Bağlı değerlendirmelerde kazanım seçimi boşalabilir.",
+      confirmLabel: "Kazanımı Sil",
+    });
+    if (!confirmed) return;
+    await runAction(async () => {
+      await api.deleteCurriculumOutcome(outcome.id);
+      await loadCurriculumOutcomes();
+      await loadAssessments();
+      showNotice("Kazanım silindi.");
+    });
+  }
+
+  async function handleDeleteCurriculumOutcomes(outcomeIds) {
+    const uniqueIds = Array.from(new Set(outcomeIds.map(Number))).filter(Boolean);
+    if (!uniqueIds.length) return;
+
+    await runAction(async () => {
+      const confirmed = await requestDeleteConfirmation({
+        title: `${uniqueIds.length} kazanım silinsin mi?`,
+        description: "Bağlı değerlendirmelerde kazanım seçimi boşalabilir.",
+        confirmLabel: "Seçili Kazanımları Sil",
+      });
+      if (!confirmed) return;
+
+      await Promise.all(uniqueIds.map((outcomeId) => api.deleteCurriculumOutcome(outcomeId)));
+      await loadCurriculumOutcomes();
+      await loadAssessments();
+      showNotice(`${uniqueIds.length} kazanım silindi.`);
+    });
+  }
+
   async function handleCreateScheduleEntry(event) {
     event.preventDefault();
     await runAction(async () => {
@@ -1078,6 +1296,13 @@ export default function App() {
 
   async function handleDeleteScheduleEntry(entryId) {
     await runAction(async () => {
+      const shouldDelete = await requestDeleteConfirmation({
+        title: "Program kaydı silinsin mi?",
+        description: "Bu ders programı kaydı takvimden kaldırılır.",
+        confirmLabel: "Kaydı Sil",
+      });
+      if (!shouldDelete) return;
+
       await api.deleteScheduleEntry(entryId);
       await loadScheduleEntries();
       showNotice("Ders programı kaydı silindi.");
@@ -1114,6 +1339,75 @@ export default function App() {
       setActiveModal(null);
       await loadTeachersAdminList();
       showNotice("Atama oluşturuldu.");
+    });
+  }
+
+  async function handleCreateTeacher(event) {
+    event.preventDefault();
+    await runAction(async () => {
+      const payload = {
+        full_name: teacherForm.full_name.trim(),
+        email: teacherForm.email.trim(),
+        role: teacherForm.role,
+      };
+      if (teacherForm.title.trim()) payload.title = teacherForm.title.trim();
+      if (teacherForm.branch.trim()) payload.branch = teacherForm.branch.trim();
+      if (teacherForm.password.trim()) payload.password = teacherForm.password.trim();
+
+      const createdTeacher = await api.createTeacher(payload);
+      setTeacherForm({ full_name: "", email: "", title: "", branch: "", role: "teacher", password: "" });
+      await loadTeachersAdminList();
+      if (createdTeacher.invitation_url) {
+        setLatestTeacherInviteLink(createdTeacher.invitation_url);
+        setActiveModal("teacherInvite");
+        showNotice("Öğretmen daveti oluşturuldu.");
+      } else {
+        setLatestTeacherInviteLink("");
+        setActiveModal(null);
+        showNotice("Öğretmen oluşturuldu.");
+      }
+    });
+  }
+
+  async function handleDeleteTeacher(teacher) {
+    if (teacher.id === currentTeacher?.id) {
+      setError("Kendi hesabını bu listeden silemezsin.");
+      return;
+    }
+    const confirmed = await requestDeleteConfirmation({
+      title: "Öğretmen silinsin mi?",
+      description: `${teacher.full_name} öğretmeni silinir ve aktif atamaları kaldırılır.`,
+      confirmLabel: "Öğretmeni Sil",
+    });
+    if (!confirmed) return;
+
+    await runAction(async () => {
+      await api.deleteTeacher(teacher.id);
+      await loadTeachersAdminList();
+      showNotice("Öğretmen silindi.");
+    });
+  }
+
+  async function handleDeleteTeachers(teacherIds) {
+    const uniqueIds = Array.from(new Set(teacherIds.map(Number))).filter(
+      (teacherId) => teacherId && teacherId !== currentTeacher?.id,
+    );
+    if (!uniqueIds.length) {
+      setError("Silinebilecek öğretmen seçilmedi.");
+      return;
+    }
+
+    await runAction(async () => {
+      const confirmed = await requestDeleteConfirmation({
+        title: `${uniqueIds.length} öğretmen silinsin mi?`,
+        description: "Seçili öğretmenlerin aktif atamaları kaldırılır.",
+        confirmLabel: "Seçili Öğretmenleri Sil",
+      });
+      if (!confirmed) return;
+
+      await Promise.all(uniqueIds.map((teacherId) => api.deleteTeacher(teacherId)));
+      await loadTeachersAdminList();
+      showNotice(`${uniqueIds.length} öğretmen silindi.`);
     });
   }
 
@@ -1171,6 +1465,7 @@ export default function App() {
     setGrades([]);
     setScheduleEntries([]);
     setAssessments([]);
+    setCurriculumOutcomes([]);
     setProfile(null);
     setSelectedClassroomId(null);
     setSelectedStudentId(null);
@@ -1191,7 +1486,7 @@ export default function App() {
         email: teacherProfileForm.email.trim(),
       };
       if (teacherProfileForm.password.trim()) {
-        payload.password_hash = teacherProfileForm.password.trim();
+        payload.password = teacherProfileForm.password.trim();
       }
       const updated = await api.updateTeacher(currentTeacher.id, payload);
       setCurrentTeacher(updated);
@@ -1210,7 +1505,10 @@ export default function App() {
     assignedLessonOptionsForClassroom,
     assignmentForm,
     currentTeacher,
+    handleCreateTeacher,
     handleCreateTeacherAssignment,
+    handleDeleteTeacher,
+    handleDeleteTeachers,
     handleRemoveTeacherAssignment,
     isAdminUser,
     setAssignmentForm,
@@ -1244,6 +1542,11 @@ export default function App() {
     gradeCategoryOptions,
     grades,
     assessments,
+    curriculumOutcomes,
+    curriculumForm,
+    curriculumImportText,
+    curriculumOutcomeOptionsFor,
+    editingCurriculumOutcome,
     assessmentForm,
     assessmentEditForm,
     editingAssessment,
@@ -1255,9 +1558,17 @@ export default function App() {
     setAssessmentEditForm,
     setEditingAssessment,
     setAssessmentRecordsDraft,
+    setCurriculumForm,
+    setCurriculumImportText,
+    setEditingCurriculumOutcome,
     handleCreateAssessment,
     handleUpdateAssessment,
     handleDeleteAssessment,
+    handleCreateCurriculumOutcome,
+    handleUpdateCurriculumOutcome,
+    handleImportCurriculumOutcomes,
+    handleDeleteCurriculumOutcome,
+    handleDeleteCurriculumOutcomes,
     openAssessmentForEntry,
     closeAssessmentEntry,
     handleSaveAssessmentRecords,
@@ -1288,7 +1599,6 @@ export default function App() {
     setEditingLesson,
     setEditingScheduleEntry,
     setEditingStudent,
-    setGradeForm,
     setIsStudentPickerOpen,
     setLessonEditForm,
     setScheduleForm,
@@ -1296,6 +1606,7 @@ export default function App() {
     setSelectedClassroomId,
     setSelectedStudentId,
     setTeacherProfileForm,
+    setTeacherForm,
     setStudentDirectoryClassroomId,
     setStudentDirectoryOffset,
     setStudentEditForm,
@@ -1305,6 +1616,7 @@ export default function App() {
     scheduleForm,
     scheduleSettings,
     teacherProfileForm,
+    teacherForm,
     weeklySummary,
     weekdayOptions,
     handleDeleteClassroom,
@@ -1312,6 +1624,7 @@ export default function App() {
     handleDeleteScheduleEntry,
     handleMoveScheduleEntry,
     handleDeleteStudent,
+    handleDeleteStudents,
     handleGenerateWeeklySummary,
   };
 
@@ -1337,8 +1650,24 @@ export default function App() {
     );
   }
 
-  const wideModalIds = new Set(["student", "editStudent", "schedule", "editSchedule", "newAssessment", "newHomework"]);
-  const standardModalIds = new Set(["grade", "editAssessment", "assignTeacher"]);
+  const wideModalIds = new Set([
+    "student",
+    "editStudent",
+    "schedule",
+    "editSchedule",
+    "newAssessment",
+    "newHomework",
+    "curriculumImport",
+  ]);
+  const standardModalIds = new Set([
+    "grade",
+    "editAssessment",
+    "teacher",
+    "teacherInvite",
+    "assignTeacher",
+    "curriculumOutcome",
+    "editCurriculumOutcome",
+  ]);
   const modalSize = wideModalIds.has(activeModal)
     ? "wide"
     : standardModalIds.has(activeModal)
@@ -1384,6 +1713,7 @@ export default function App() {
         {activePage === "attendance" && <AttendancePage {...shared} />}
         {activePage === "schedule" && <SchedulePage {...shared} />}
         {activePage === "homework" && <HomeworkPage {...shared} />}
+        {activePage === "curriculum" && <CurriculumPage {...shared} />}
         {activePage === "aiReports" && <AIReportsPage {...shared} />}
         {activePage === "profile" && <ProfilePage {...shared} />}
         {activePage === "settings" && <SettingsPage {...shared} />}
@@ -1704,86 +2034,6 @@ export default function App() {
               </FormField>
             </FormPanel>
           )}
-          {activeModal === "grade" && (
-            <FormPanel
-              description="Öğrenci için tekil not kaydı oluştur."
-              onCancel={() => setActiveModal(null)}
-              onSubmit={handleCreateGrade}
-              submitLabel="Notu Kaydet"
-              title="Not Gir"
-            >
-              <SearchableSelect
-                label="Öğrenci"
-                onChange={(value) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    student_id: value,
-                  }))
-                }
-                options={studentOptions}
-                placeholder="Öğrenci ara"
-                value={gradeForm.student_id}
-              />
-              <SearchableSelect
-                label="Ders"
-                onChange={(value) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    lesson_id: value,
-                  }))
-                }
-                // Sadece bu sınıfta atanmış olduğun dersler — madde 6:
-                // vermediğin bir ders dropdown'da bile görünmemeli.
-                options={selectedClassroomId ? assignedLessonOptionsForClassroom(selectedClassroomId) : lessonOptions}
-                placeholder="Ders ara"
-                value={gradeForm.lesson_id}
-              />
-              <div className="form-field-grid">
-                <FormField label="Başlık">
-                  <input
-                    onChange={(event) =>
-                      setGradeForm((form) => ({
-                        ...form,
-                        exam_name: event.target.value,
-                      }))
-                    }
-                    placeholder="1. Yazılı"
-                    required
-                    value={gradeForm.exam_name}
-                  />
-                </FormField>
-                <FormField label="Puan">
-                  <input
-                    max="100"
-                    min="0"
-                    onChange={(event) =>
-                      setGradeForm((form) => ({
-                        ...form,
-                        score: event.target.value,
-                      }))
-                    }
-                    placeholder="85"
-                    required
-                    step="0.1"
-                    type="number"
-                    value={gradeForm.score}
-                  />
-                </FormField>
-              </div>
-              <SearchableSelect
-                label="Kategori"
-                onChange={(value) =>
-                  setGradeForm((form) => ({
-                    ...form,
-                    category: value,
-                  }))
-                }
-                options={gradeCategoryOptions}
-                placeholder="Kategori ara"
-                value={gradeForm.category}
-              />
-            </FormPanel>
-          )}
           {activeModal === "newAssessment" && (
             <FormPanel
               description="Değerlendirme türünü seçip sınıf için sonuç girişi hazırlayın."
@@ -1796,7 +2046,12 @@ export default function App() {
                 <SearchableSelect
                   label="Sınıf"
                   onChange={(value) =>
-                    setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
+                    setAssessmentForm((form) => ({
+                      ...form,
+                      classroom_id: value,
+                      lesson_id: "",
+                      curriculum_outcome_id: "",
+                    }))
                   }
                   options={classroomOptions}
                   placeholder="Sınıf ara"
@@ -1804,7 +2059,9 @@ export default function App() {
                 />
                 <SearchableSelect
                   label="Ders"
-                  onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
+                  onChange={(value) =>
+                    setAssessmentForm((form) => ({ ...form, lesson_id: value, curriculum_outcome_id: "" }))
+                  }
                   options={
                     assessmentForm.classroom_id
                       ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
@@ -1812,6 +2069,18 @@ export default function App() {
                   }
                   placeholder="Ders ara"
                   value={assessmentForm.lesson_id}
+                />
+                <SearchableSelect
+                  label="Kazanım (opsiyonel)"
+                  onChange={(value) => setAssessmentForm((form) => ({ ...form, curriculum_outcome_id: value }))}
+                  options={curriculumOutcomeOptionsFor(
+                    assessmentForm.lesson_id,
+                    classrooms.find((classroom) => String(classroom.id) === String(assessmentForm.classroom_id))
+                      ?.grade_level,
+                  )}
+                  placeholder="Kazanım ara"
+                  required={false}
+                  value={assessmentForm.curriculum_outcome_id}
                 />
                 <SearchableSelect
                   label="Değerlendirme Türü"
@@ -1822,6 +2091,19 @@ export default function App() {
                 />
               </ModalSection>
               <ModalSection title="Değerlendirme Detayı">
+                <SearchableSelect
+                  label="Kazanım (opsiyonel)"
+                  onChange={(value) =>
+                    setAssessmentEditForm((form) => ({ ...form, curriculum_outcome_id: value }))
+                  }
+                  options={curriculumOutcomeOptionsFor(
+                    editingAssessment?.lesson_id,
+                    classrooms.find((classroom) => classroom.id === editingAssessment?.classroom_id)?.grade_level,
+                  )}
+                  placeholder="Kazanım ara"
+                  required={false}
+                  value={assessmentEditForm.curriculum_outcome_id}
+                />
                 <FormField label="Başlık">
                   <input
                     onChange={(event) => setAssessmentForm((form) => ({ ...form, title: event.target.value }))}
@@ -2022,7 +2304,12 @@ export default function App() {
                 <SearchableSelect
                   label="Sınıf"
                   onChange={(value) =>
-                    setAssessmentForm((form) => ({ ...form, classroom_id: value, lesson_id: "" }))
+                    setAssessmentForm((form) => ({
+                      ...form,
+                      classroom_id: value,
+                      lesson_id: "",
+                      curriculum_outcome_id: "",
+                    }))
                   }
                   options={classroomOptions}
                   placeholder="Sınıf ara"
@@ -2030,7 +2317,9 @@ export default function App() {
                 />
                 <SearchableSelect
                   label="Ders"
-                  onChange={(value) => setAssessmentForm((form) => ({ ...form, lesson_id: value }))}
+                  onChange={(value) =>
+                    setAssessmentForm((form) => ({ ...form, lesson_id: value, curriculum_outcome_id: "" }))
+                  }
                   options={
                     assessmentForm.classroom_id
                       ? assignedLessonOptionsForClassroom(assessmentForm.classroom_id)
@@ -2038,6 +2327,18 @@ export default function App() {
                   }
                   placeholder="Ders ara"
                   value={assessmentForm.lesson_id}
+                />
+                <SearchableSelect
+                  label="Kazanım (opsiyonel)"
+                  onChange={(value) => setAssessmentForm((form) => ({ ...form, curriculum_outcome_id: value }))}
+                  options={curriculumOutcomeOptionsFor(
+                    assessmentForm.lesson_id,
+                    classrooms.find((classroom) => String(classroom.id) === String(assessmentForm.classroom_id))
+                      ?.grade_level,
+                  )}
+                  placeholder="Kazanım ara"
+                  required={false}
+                  value={assessmentForm.curriculum_outcome_id}
                 />
               </ModalSection>
               <ModalSection title="Detay">
@@ -2066,6 +2367,235 @@ export default function App() {
                     value={assessmentForm.date}
                   />
                 </FormField>
+              </ModalSection>
+            </FormPanel>
+          )}
+          {(activeModal === "curriculumOutcome" || activeModal === "editCurriculumOutcome") && (
+            <FormPanel
+              description="Okulun kullanma hakkı olan kazanımı kaynak bilgisiyle kaydet."
+              onCancel={() => {
+                setEditingCurriculumOutcome(null);
+                setActiveModal(null);
+              }}
+              onSubmit={
+                activeModal === "curriculumOutcome"
+                  ? handleCreateCurriculumOutcome
+                  : handleUpdateCurriculumOutcome
+              }
+              submitLabel={activeModal === "curriculumOutcome" ? "Kazanımı Kaydet" : "Değişiklikleri Kaydet"}
+              title={activeModal === "curriculumOutcome" ? "Kazanım Ekle" : "Kazanımı Düzenle"}
+            >
+              <ModalSection title="Kapsam">
+                <SearchableSelect
+                  label="Ders"
+                  onChange={(value) => setCurriculumForm((form) => ({ ...form, lesson_id: value }))}
+                  options={lessonOptions}
+                  placeholder="Ders ara"
+                  value={curriculumForm.lesson_id}
+                />
+                <FormField label="Sınıf düzeyi">
+                  <input
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, grade_level: event.target.value }))}
+                    placeholder="5"
+                    required
+                    value={curriculumForm.grade_level}
+                  />
+                </FormField>
+                <FormField label="Ünite / tema">
+                  <input
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, unit_title: event.target.value }))}
+                    placeholder="Kesirler"
+                    value={curriculumForm.unit_title}
+                  />
+                </FormField>
+              </ModalSection>
+              <ModalSection title="Kazanım">
+                <FormField label="Kazanım kodu">
+                  <input
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, code: event.target.value }))}
+                    placeholder="M.5.1.2"
+                    value={curriculumForm.code}
+                  />
+                </FormField>
+                <FormField label="Kazanım metni">
+                  <textarea
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, outcome_text: event.target.value }))}
+                    placeholder="Kazanım metni"
+                    required
+                    value={curriculumForm.outcome_text}
+                  />
+                </FormField>
+              </ModalSection>
+              <ModalSection title="Kaynak">
+                <div className="form-field-grid">
+                  <FormField label="Kaynak adı">
+                    <input
+                      onChange={(event) => setCurriculumForm((form) => ({ ...form, source_name: event.target.value }))}
+                      placeholder="Okul kazanım listesi"
+                      value={curriculumForm.source_name}
+                    />
+                  </FormField>
+                  <FormField label="Sürüm / yıl">
+                    <input
+                      onChange={(event) =>
+                        setCurriculumForm((form) => ({ ...form, version_label: event.target.value }))
+                      }
+                      placeholder="2026-2027"
+                      value={curriculumForm.version_label}
+                    />
+                  </FormField>
+                </div>
+                <FormField label="Kaynak URL">
+                  <input
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, source_url: event.target.value }))}
+                    placeholder="https://..."
+                    type="url"
+                    value={curriculumForm.source_url}
+                  />
+                </FormField>
+                <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface">
+                  <input
+                    checked={curriculumForm.is_active}
+                    onChange={(event) => setCurriculumForm((form) => ({ ...form, is_active: event.target.checked }))}
+                    type="checkbox"
+                  />
+                  Aktif
+                </label>
+              </ModalSection>
+            </FormPanel>
+          )}
+          {activeModal === "curriculumImport" && (
+            <FormPanel
+              description="Excel/Sheets tablosunu CSV olarak yapıştır. Başlıklar: lesson_id, grade_level, outcome_text, code, unit_title, source_name, source_url, version_label."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleImportCurriculumOutcomes}
+              submitLabel="İçe Aktar"
+              title="Kazanımları Toplu İçe Aktar"
+            >
+              <ModalSection title="CSV">
+                <p className="field-hint">
+                  Ders ID bilgisini Kazanımlar sayfasındaki ders listesinden veya sistemdeki ders kayıtlarından alabilirsin. Noktalı virgül veya virgül ayracı desteklenir.
+                </p>
+                <FormField label="CSV içeriği">
+                  <textarea
+                    className="min-h-[260px] font-mono text-sm"
+                    onChange={(event) => setCurriculumImportText(event.target.value)}
+                    placeholder={"lesson_id;grade_level;code;unit_title;outcome_text;source_name;source_url;version_label\n1;5;M.5.1;Kesirler;Kesirleri karşılaştırır;Okul kazanım listesi;;2026-2027"}
+                    required
+                    value={curriculumImportText}
+                  />
+                </FormField>
+              </ModalSection>
+            </FormPanel>
+          )}
+          {activeModal === "teacher" && (
+            <FormPanel
+              description="Öğretmen hesabını oluştur. Şifre alanını boş bırakırsan öğretmene şifre belirleme daveti gönderilir."
+              onCancel={() => setActiveModal(null)}
+              onSubmit={handleCreateTeacher}
+              submitLabel="Öğretmeni Kaydet"
+              title="Öğretmen Davet Et"
+            >
+              <ModalSection title="Hesap">
+                <FormField label="Ad soyad">
+                  <input
+                    autoComplete="name"
+                    onChange={(event) => setTeacherForm((form) => ({ ...form, full_name: event.target.value }))}
+                    placeholder="Ayşe Yılmaz"
+                    required
+                    value={teacherForm.full_name}
+                  />
+                </FormField>
+                <FormField label="E-posta">
+                  <input
+                    autoComplete="email"
+                    onChange={(event) => setTeacherForm((form) => ({ ...form, email: event.target.value }))}
+                    placeholder="ogretmen@okul.edu.tr"
+                    required
+                    type="email"
+                    value={teacherForm.email}
+                  />
+                </FormField>
+              </ModalSection>
+              <ModalSection title="Okul Bilgileri">
+                <div className="form-field-grid">
+                  <FormField label="Unvan">
+                    <input
+                      onChange={(event) => setTeacherForm((form) => ({ ...form, title: event.target.value }))}
+                      placeholder="Sınıf Öğretmeni"
+                      value={teacherForm.title}
+                    />
+                  </FormField>
+                  <FormField label="Branş">
+                    <input
+                      onChange={(event) => setTeacherForm((form) => ({ ...form, branch: event.target.value }))}
+                      placeholder="Matematik"
+                      value={teacherForm.branch}
+                    />
+                  </FormField>
+                </div>
+                <FormField label="Rol">
+                  <select
+                    onChange={(event) => setTeacherForm((form) => ({ ...form, role: event.target.value }))}
+                    value={teacherForm.role}
+                  >
+                    <option value="teacher">Öğretmen</option>
+                    <option value="admin">Yönetici</option>
+                  </select>
+                </FormField>
+              </ModalSection>
+              <ModalSection title="Giriş">
+                <FormField label="Başlangıç şifresi">
+                  <input
+                    autoComplete="new-password"
+                    minLength={8}
+                    onChange={(event) => setTeacherForm((form) => ({ ...form, password: event.target.value }))}
+                    placeholder="Boş bırakılırsa davet linki gönderilir"
+                    type="password"
+                    value={teacherForm.password}
+                  />
+                </FormField>
+                <p className="field-hint">
+                  Şifre en az 8 karakter olmalı ve harf/rakam içermeli. Boş bırakırsan öğretmen link üzerinden kendi şifresini belirler.
+                </p>
+              </ModalSection>
+            </FormPanel>
+          )}
+          {activeModal === "teacherInvite" && (
+            <FormPanel
+              description="SMTP ayarlıysa bu bağlantı öğretmene e-posta ile gönderilir. Lokal geliştirme ortamında bağlantıyı buradan kopyalayıp paylaşabilirsin."
+              onCancel={() => {
+                setLatestTeacherInviteLink("");
+                setActiveModal(null);
+              }}
+              title="Davet Linki"
+            >
+              <ModalSection title="Şifre Belirleme Bağlantısı">
+                <FormField label="Davet linki">
+                  <input readOnly value={latestTeacherInviteLink} />
+                </FormField>
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="btn btn-secondary btn-md"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(latestTeacherInviteLink);
+                      showNotice("Davet linki kopyalandı.");
+                    }}
+                    type="button"
+                  >
+                    <Icon name="content_copy" /> Linki Kopyala
+                  </button>
+                  <button
+                    className="btn btn-primary btn-md"
+                    onClick={() => {
+                      setLatestTeacherInviteLink("");
+                      setActiveModal(null);
+                    }}
+                    type="button"
+                  >
+                    Tamam
+                  </button>
+                </div>
               </ModalSection>
             </FormPanel>
           )}
@@ -2105,10 +2635,16 @@ export default function App() {
                 }
                 options={lessonOptions}
                 placeholder="Ders ara"
+                required={false}
                 value={assignmentForm.lesson_id}
               />
             </FormPanel>
           )}
+        </Modal>
+      )}
+      {confirmDialog && (
+        <Modal onClose={confirmDialog.onCancel} size="compact">
+          <ConfirmDialog {...confirmDialog} />
         </Modal>
       )}
     </main>

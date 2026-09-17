@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import Icon from "../components/Icon";
 import Insight from "../components/Insight";
@@ -418,14 +419,9 @@ export default function DashboardPage({
           <section className="card p-6">
             <div className="section-heading">
               <h2>AI Haftalık Özet</h2>
-              <button
-                className="outline-button compact"
-                disabled={isGeneratingWeeklySummary}
-                onClick={handleGenerateWeeklySummary}
-                type="button"
-              >
+              <Button disabled={isGeneratingWeeklySummary} onClick={handleGenerateWeeklySummary} size="sm" variant="secondary">
                 {isGeneratingWeeklySummary ? "Hazırlanıyor" : "Oluştur"}
-              </button>
+              </Button>
             </div>
             {weeklySummary ? (
               <div className="flex flex-col gap-3">
@@ -441,9 +437,9 @@ export default function DashboardPage({
           <section className="card overflow-hidden">
             <div className="section-heading p-5 pb-2">
               <h2>Bugünkü Dersler</h2>
-              <button className="outline-button compact" onClick={() => setActivePage("schedule")} type="button">
+              <Button onClick={() => setActivePage("schedule")} size="sm" variant="secondary">
                 Aç
-              </button>
+              </Button>
             </div>
             <div className="flex flex-col gap-3 p-4">
               {todaySchedule.map((entry, index) => (

@@ -26,14 +26,14 @@ def get_current_teacher(
     db: Session = Depends(get_db),
 ) -> Teacher:
     if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Oturum açmanız gerekiyor.")
     payload = decode_access_token(credentials.credentials)
     if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Oturum süresi dolmuş veya geçersiz.")
     teacher_id = int(payload.get("sub", 0))
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Oturum süresi dolmuş veya geçersiz.")
     return teacher
 
 

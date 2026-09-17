@@ -10,6 +10,7 @@ from app.models import AssessmentType
 class AssessmentBase(BaseModel):
     classroom_id: int
     lesson_id: int
+    curriculum_outcome_id: int | None = None
     assessment_type: AssessmentType
     title: str = Field(min_length=1, max_length=160)
     description: str | None = None
@@ -23,6 +24,7 @@ class AssessmentCreate(AssessmentBase):
 class AssessmentUpdate(BaseModel):
     classroom_id: int | None = None
     lesson_id: int | None = None
+    curriculum_outcome_id: int | None = None
     assessment_type: AssessmentType | None = None
     title: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = None

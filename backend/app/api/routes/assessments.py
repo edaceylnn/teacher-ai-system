@@ -33,6 +33,22 @@ def _visible_assessments_condition(teacher: Teacher, db: Session):
     return or_(*conditions) if conditions else false()
 
 
+def _ensure_curriculum_outcome_matches(
+    curriculum_outcome_id: int | None,
+    lesson_id: int,
+    db: Session,
+) -> None:
+    if curriculum_outcome_id is None:
+        return
+    from app.models import CurriculumOutcome
+
+    outcome = db.get(CurriculumOutcome, curriculum_outcome_id)
+    if outcome is None or not outcome.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kazanım bulunamadı.")
+    if outcome.lesson_id != lesson_id:
+        raise HTTPException(status_code=422, detail="Kazanım seçilen dersle eşleşmiyor.")
+
+
 @router.post("", response_model=AssessmentResponse, status_code=status.HTTP_201_CREATED)
 def create_assessment(
     payload: AssessmentCreate,
@@ -40,6 +56,7 @@ def create_assessment(
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> Assessment:
     ensure_subject_write_access(current_teacher, payload.classroom_id, payload.lesson_id, db)
+    _ensure_curriculum_outcome_matches(payload.curriculum_outcome_id, payload.lesson_id, db)
     assessment = Assessment(**payload.model_dump(), teacher_id=current_teacher.id)
     db.add(assessment)
     db.commit()
@@ -102,6 +119,12 @@ def update_assessment(
     next_lesson_id = update_data.get("lesson_id", assessment.lesson_id)
     if "classroom_id" in update_data or "lesson_id" in update_data:
         ensure_subject_write_access(current_teacher, next_classroom_id, next_lesson_id, db)
+    if "lesson_id" in update_data or "curriculum_outcome_id" in update_data:
+        _ensure_curriculum_outcome_matches(
+            update_data.get("curriculum_outcome_id", assessment.curriculum_outcome_id),
+            next_lesson_id,
+            db,
+        )
 
     for field, value in update_data.items():
         setattr(assessment, field, value)

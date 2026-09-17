@@ -10,11 +10,11 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import get_current_teacher
 from app.api.routes.auth import login_rate_limiter
 from app.api.routes.teachers import registration_rate_limiter
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import AcademicYear, TeacherAssignment
+from app.models import AcademicYear, Teacher, TeacherAssignment
 
 
 @pytest.fixture(autouse=True)
@@ -58,8 +58,10 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def _register_and_login(client: TestClient, email: str) -> tuple[dict, dict]:
-    client.post("/teachers", json={"full_name": "Teacher", "email": email, "password": "demo12345"})
+def _create_and_login(client: TestClient, db_session: Session, email: str) -> tuple[dict, dict]:
+    teacher = Teacher(full_name="Teacher", email=email, password_hash=hash_password("demo12345"))
+    db_session.add(teacher)
+    db_session.commit()
     login = client.post("/auth/login", json={"email": email, "password": "demo12345"})
     token = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -69,7 +71,7 @@ def _register_and_login(client: TestClient, email: str) -> tuple[dict, dict]:
 
 @pytest.fixture()
 def owner_resources(client: TestClient, db_session: Session) -> dict:
-    owner, owner_headers = _register_and_login(client, "owner@example.com")
+    owner, owner_headers = _create_and_login(client, db_session, "owner@example.com")
 
     classroom = client.post(
         "/classrooms",
@@ -132,7 +134,7 @@ def owner_resources(client: TestClient, db_session: Session) -> dict:
         headers=owner_headers,
     ).json()
 
-    _intruder, intruder_headers = _register_and_login(client, "intruder@example.com")
+    _intruder, intruder_headers = _create_and_login(client, db_session, "intruder@example.com")
 
     return {
         "classroom": classroom,

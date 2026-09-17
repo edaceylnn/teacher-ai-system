@@ -33,6 +33,7 @@ def send_password_reset_email(email: str, reset_link: str) -> None:
             if settings.smtp_username and settings.smtp_password:
                 smtp.login(settings.smtp_username, settings.smtp_password)
             smtp.send_message(message)
+            logger.info("Password reset email sent to %s", email)
     except (smtplib.SMTPException, OSError):
         # Never let a mail-delivery failure surface to the caller: the
         # password-reset endpoint always returns 202 regardless of whether

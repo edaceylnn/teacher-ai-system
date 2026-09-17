@@ -29,5 +29,5 @@ class ScheduleEntry(TimestampMixin, Base):
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     teacher: Mapped["Teacher"] = relationship()
-    classroom: Mapped["Classroom"] = relationship()
-    lesson: Mapped["Lesson"] = relationship()
+    classroom: Mapped["Classroom"] = relationship(back_populates="schedule_entries")
+    lesson: Mapped["Lesson"] = relationship(back_populates="schedule_entries")

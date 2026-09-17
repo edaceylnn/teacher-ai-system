@@ -16,6 +16,7 @@ from app.models import (
     AttendanceStatus,
     AuditLog,
     Classroom,
+    CurriculumOutcome,
     Lesson,
     ScheduleEntry,
     Student,
@@ -38,6 +39,7 @@ def test_database_models_create_expected_tables() -> None:
         "attendance_records",
         "audit_logs",
         "classrooms",
+        "curriculum_outcomes",
         "lessons",
         "schedule_entries",
         "students",
@@ -65,10 +67,21 @@ def test_teacher_student_ai_output_relationships() -> None:
             observation_notes="Derse katilimi iyi, problem cozme pratigine ihtiyaci var.",
         )
         lesson = Lesson(name="Matematik", teacher=teacher)
+        curriculum_outcome = CurriculumOutcome(
+            lesson=lesson,
+            created_by_teacher=teacher,
+            grade_level="5",
+            unit_title="Kesirler",
+            code="M.5.1",
+            outcome_text="Kesirleri karşılaştırır.",
+            source_name="Okul kazanım listesi",
+            version_label="2026-2027",
+        )
         assessment = Assessment(
             classroom=classroom,
             lesson=lesson,
             teacher=teacher,
+            curriculum_outcome=curriculum_outcome,
             assessment_type=AssessmentType.sinav,
             title="1. Yazili",
             date=date(2026, 1, 11),
@@ -111,6 +124,7 @@ def test_teacher_student_ai_output_relationships() -> None:
                 classroom,
                 student,
                 lesson,
+                curriculum_outcome,
                 assessment,
                 assessment_record,
                 attendance_session,

@@ -31,19 +31,19 @@ export default function Sidebar({
         />
       )}
       <aside
-        className={`sidenav fixed left-0 top-0 z-40 flex h-screen w-[240px] flex-col border-r border-outline-variant bg-surface px-4 py-6 transition-transform duration-200 md:translate-x-0 ${
+        className={`sidenav fixed left-0 top-0 z-40 flex h-screen w-[240px] flex-col border-r px-4 py-6 transition-transform duration-200 md:translate-x-0 ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="mb-8 flex items-center gap-3 px-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container font-headline-md text-headline-md font-bold text-on-primary">
+          <div className="sidebar-logo-mark flex h-10 w-10 items-center justify-center rounded-full font-headline-md text-headline-md font-bold">
             T
           </div>
           <div>
-            <h1 className="font-headline-md text-headline-md font-bold leading-tight text-primary">
+            <h1 className="sidebar-brand-title font-headline-md text-headline-md font-bold leading-tight">
               Teacher AI
             </h1>
-            <p className="font-label-md text-label-md uppercase tracking-wider text-secondary">
+            <p className="sidebar-brand-subtitle font-label-md text-label-md uppercase tracking-wider">
               Eğitmen Paneli
             </p>
           </div>
@@ -54,10 +54,8 @@ export default function Sidebar({
             const isActive = activePage === item.page || item.matchAlso?.includes(activePage);
             return (
               <button
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors duration-100 ${
-                  isActive
-                    ? "bg-primary/5 font-bold text-primary"
-                    : "text-secondary hover:bg-surface-container-low"
+                className={`sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors duration-100 ${
+                  isActive ? "active font-bold" : ""
                 }`}
                 key={item.page}
                 onClick={() => setActivePage(item.page)}
@@ -70,12 +68,10 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="mt-4 flex flex-col gap-1 border-t border-outline-variant pt-4">
+        <div className="sidebar-footer mt-4 flex flex-col gap-1 border-t pt-4">
           <button
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors ${
-              activePage === "settings"
-                ? "bg-primary/5 font-bold text-primary"
-                : "text-secondary hover:bg-surface-container-low"
+            className={`sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 font-label-md text-label-md transition-colors ${
+              activePage === "settings" ? "active font-bold" : ""
             }`}
             onClick={() => setActivePage("settings")}
             type="button"
