@@ -4,7 +4,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
-  { ignores: ["dist"] },
+  { ignores: ["dist", "playwright-report", "test-results"] },
   {
     files: ["**/*.{js,jsx}"],
     languageOptions: {
@@ -31,6 +31,12 @@ export default [
       "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
+    files: ["playwright.config.js"],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ];

@@ -107,6 +107,15 @@ cd backend
 .venv/bin/python -m pytest
 ```
 
+Gerçek tarayıcı smoke testleri:
+
+```bash
+cd frontend
+npm run test:e2e
+```
+
+`test:e2e`, Playwright üzerinden backend ve frontend dev server'larını otomatik başlatır; mevcut server varsa onu kullanır.
+
 Tüm yerel kontroller:
 
 ```bash
