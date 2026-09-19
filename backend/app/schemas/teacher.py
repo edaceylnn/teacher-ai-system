@@ -31,6 +31,11 @@ class TeacherUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=120)
     branch: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    # Required whenever `password` is set — proves the caller is the account
+    # owner, not just someone holding a still-valid (possibly stolen) access
+    # token. Not itself validated for strength; it's checked against the
+    # existing hash, not stored.
+    current_password: str | None = Field(default=None)
 
     @field_validator("password")
     @classmethod

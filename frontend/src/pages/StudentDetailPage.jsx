@@ -653,31 +653,35 @@ export default function StudentDetailPage({
       {isMessageModalOpen && (
         <Modal onClose={() => setIsMessageModalOpen(false)}>
           <form className="form-panel" onSubmit={handleSendMessage}>
-            <h2>Veliye Mesaj Gönder</h2>
-            <p className="font-body-md text-body-md text-secondary">
-              Alıcı: {selectedStudent.parent_email}
-            </p>
-            <input
-              onChange={(event) =>
-                setMessageForm((form) => ({ ...form, subject: event.target.value }))
-              }
-              placeholder="Konu"
-              required
-              value={messageForm.subject}
-            />
-            <textarea
-              onChange={(event) =>
-                setMessageForm((form) => ({ ...form, message: event.target.value }))
-              }
-              placeholder="Mesajınız"
-              required
-              value={messageForm.message}
-            />
-            {messageError && <p className="form-error">{messageError}</p>}
-            {messageNotice && <p className="empty-note success-note">{messageNotice}</p>}
-            <Button disabled={isSendingMessage} size="md" type="submit" variant="primary">
-              <Icon name="send" /> {isSendingMessage ? "Gönderiliyor..." : "Gönder"}
-            </Button>
+            <div className="form-panel-header">
+              <h2>Veliye Mesaj Gönder</h2>
+              <p>Alıcı: {selectedStudent.parent_email}</p>
+            </div>
+            <div className="form-panel-body">
+              <input
+                onChange={(event) =>
+                  setMessageForm((form) => ({ ...form, subject: event.target.value }))
+                }
+                placeholder="Konu"
+                required
+                value={messageForm.subject}
+              />
+              <textarea
+                onChange={(event) =>
+                  setMessageForm((form) => ({ ...form, message: event.target.value }))
+                }
+                placeholder="Mesajınız"
+                required
+                value={messageForm.message}
+              />
+              {messageError && <p className="form-error">{messageError}</p>}
+              {messageNotice && <p className="empty-note success-note">{messageNotice}</p>}
+            </div>
+            <div className="form-panel-footer">
+              <Button disabled={isSendingMessage} size="md" type="submit" variant="primary">
+                <Icon name="send" /> {isSendingMessage ? "Gönderiliyor..." : "Gönder"}
+              </Button>
+            </div>
           </form>
         </Modal>
       )}

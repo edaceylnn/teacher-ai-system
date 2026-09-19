@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,8 @@ from app.api.deps import (
     visible_academic_scope,
     visible_lesson_ids_for_classroom,
 )
-from app.core.rate_limit import InMemoryRateLimiter
+from app.core.config import settings
+from app.core.rate_limit import GlobalWindowRateLimiter, InMemoryRateLimiter
 from app.db.session import get_db
 from app.models import (
     AIOutput,
@@ -45,8 +46,25 @@ from app.services import ai as ai_service
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 # Shared (per client IP) across all generation endpoints below (not list/update)
-# since each call is a billed OpenAI request.
+# since each call is a billed OpenAI/Gemini request.
 ai_generation_rate_limiter = InMemoryRateLimiter(max_requests=15, window_seconds=60)
+
+# Portfolio-demo cost guardrails, layered on top of the burst limiter above.
+# There's no public signup — demo visitors share one seeded teacher login —
+# so a per-teacher cap wouldn't isolate them; this caps by IP instead. The
+# global cap protects the shared free-tier AI quota from the whole demo
+# audience combined, since that quota isn't per-visitor either.
+_ONE_DAY_SECONDS = 60 * 60 * 24
+ai_daily_ip_limiter = InMemoryRateLimiter(
+    max_requests=settings.ai_daily_limit_per_ip,
+    window_seconds=_ONE_DAY_SECONDS,
+    detail_message="Bu cihaz için günlük AI kullanım limitine ulaşıldı. Lütfen yarın tekrar deneyin.",
+)
+ai_daily_global_limiter = GlobalWindowRateLimiter(
+    max_requests=settings.ai_daily_limit_global,
+    window_seconds=_ONE_DAY_SECONDS,
+    detail_message="Demo için günlük AI kullanım limitine ulaşıldı. Lütfen yarın tekrar deneyin.",
+)
 
 
 def _decimal_to_float(value: Decimal) -> float:
@@ -150,12 +168,22 @@ def _find_reusable_output(
     return None
 
 
+def _release_daily_ai_quota(request: Request) -> None:
+    """A daily-quota hit was recorded before we knew whether this request
+    would actually cost anything (FastAPI dependencies run before the
+    handler). Call this when it turns out it didn't — a cache hit or an
+    upstream failure — so demo visitors aren't charged quota for free."""
+    ai_daily_ip_limiter.release(request)
+    ai_daily_global_limiter.release(request)
+
+
 def _generate_and_save(
     payload: AIGenerateRequest,
     output_type: AIOutputType,
     generator: Callable[[dict[str, Any]], dict[str, Any]],
     db: Session,
     teacher: Teacher,
+    request: Request,
 ) -> AIOutput:
     input_payload = _build_student_payload(payload.student_id, db, teacher)
 
@@ -164,11 +192,13 @@ def _generate_and_save(
     if not payload.force_regenerate:
         reusable = _find_reusable_output(payload.student_id, output_type, input_payload, db)
         if reusable is not None:
+            _release_daily_ai_quota(request)
             return reusable
 
     try:
         output_payload = generator(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
+        _release_daily_ai_quota(request)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     ai_output = AIOutput(
@@ -410,10 +440,11 @@ def update_ai_output(
     "/report-comments",
     response_model=AIOutputResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(ai_generation_rate_limiter)],
+    dependencies=[Depends(ai_daily_global_limiter), Depends(ai_daily_ip_limiter), Depends(ai_generation_rate_limiter)],
 )
 def generate_report_comment(
     payload: AIGenerateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> AIOutput:
@@ -423,6 +454,7 @@ def generate_report_comment(
         generator=ai_service.generate_report_comment,
         db=db,
         teacher=current_teacher,
+        request=request,
     )
 
 
@@ -430,10 +462,11 @@ def generate_report_comment(
     "/parent-messages",
     response_model=AIOutputResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(ai_generation_rate_limiter)],
+    dependencies=[Depends(ai_daily_global_limiter), Depends(ai_daily_ip_limiter), Depends(ai_generation_rate_limiter)],
 )
 def generate_parent_message(
     payload: AIGenerateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> AIOutput:
@@ -443,6 +476,7 @@ def generate_parent_message(
         generator=ai_service.generate_parent_message,
         db=db,
         teacher=current_teacher,
+        request=request,
     )
 
 
@@ -450,10 +484,11 @@ def generate_parent_message(
     "/topic-analyses",
     response_model=AIOutputResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(ai_generation_rate_limiter)],
+    dependencies=[Depends(ai_daily_global_limiter), Depends(ai_daily_ip_limiter), Depends(ai_generation_rate_limiter)],
 )
 def generate_topic_analysis(
     payload: AIGenerateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> AIOutput:
@@ -463,16 +498,18 @@ def generate_topic_analysis(
         generator=ai_service.generate_topic_analysis,
         db=db,
         teacher=current_teacher,
+        request=request,
     )
 
 
 @router.post(
     "/weekly-summaries",
     response_model=AIWeeklySummaryResponse,
-    dependencies=[Depends(ai_generation_rate_limiter)],
+    dependencies=[Depends(ai_daily_global_limiter), Depends(ai_daily_ip_limiter), Depends(ai_generation_rate_limiter)],
 )
 def generate_weekly_summary(
     payload: AIWeeklySummaryRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> dict[str, Any]:
@@ -480,16 +517,18 @@ def generate_weekly_summary(
     try:
         return ai_service.generate_weekly_summary(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
+        _release_daily_ai_quota(request)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
 
 @router.post(
     "/lesson-plans",
     response_model=AILessonPlanResponse,
-    dependencies=[Depends(ai_generation_rate_limiter)],
+    dependencies=[Depends(ai_daily_global_limiter), Depends(ai_daily_ip_limiter), Depends(ai_generation_rate_limiter)],
 )
 def generate_lesson_plan(
     payload: AILessonPlanRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> dict[str, Any]:
@@ -497,4 +536,5 @@ def generate_lesson_plan(
     try:
         return ai_service.generate_lesson_plan(input_payload)
     except ai_service.AIServiceUnavailableError as exc:
+        _release_daily_ai_quota(request)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

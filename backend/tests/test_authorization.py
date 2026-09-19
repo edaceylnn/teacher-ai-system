@@ -116,8 +116,8 @@ def owner_resources(client: TestClient, db_session: Session) -> dict:
             "classroom_id": classroom["id"],
             "lesson_id": lesson["id"],
             "weekday": 0,
-            "start_time": "09:00:00",
-            "end_time": "09:40:00",
+            "start_time": "08:30:00",
+            "end_time": "09:10:00",
         },
         headers=owner_headers,
     ).json()

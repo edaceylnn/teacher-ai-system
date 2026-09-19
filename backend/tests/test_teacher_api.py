@@ -213,6 +213,53 @@ def test_admin_can_delete_another_teacher(client: TestClient, db_session: Sessio
     assert db_session.get(Teacher, teacher_id) is None
 
 
+def test_update_teacher_password_requires_correct_current_password(
+    client: TestClient, db_session: Session
+) -> None:
+    create_response = client.post(
+        "/teachers",
+        json={"full_name": "Öğretmen", "email": "ogretmen@example.com", "password": "demo12345"},
+    )
+    teacher_id = create_response.json()["id"]
+    _act_as_teacher(db_session, teacher_id)
+
+    missing = client.patch(f"/teachers/{teacher_id}", json={"password": "yeniSifre123"})
+    assert missing.status_code == 400
+
+    wrong = client.patch(
+        f"/teachers/{teacher_id}",
+        json={"password": "yeniSifre123", "current_password": "yanlisSifre"},
+    )
+    assert wrong.status_code == 400
+
+    unchanged = db_session.get(Teacher, teacher_id)
+    assert verify_password("demo12345", unchanged.password_hash)
+
+    correct = client.patch(
+        f"/teachers/{teacher_id}",
+        json={"password": "yeniSifre123", "current_password": "demo12345"},
+    )
+    assert correct.status_code == 200
+    updated = db_session.get(Teacher, teacher_id)
+    assert verify_password("yeniSifre123", updated.password_hash)
+
+
+def test_update_teacher_non_password_fields_do_not_require_current_password(
+    client: TestClient, db_session: Session
+) -> None:
+    create_response = client.post(
+        "/teachers",
+        json={"full_name": "Öğretmen", "email": "ogretmen2@example.com", "password": "demo12345"},
+    )
+    teacher_id = create_response.json()["id"]
+    _act_as_teacher(db_session, teacher_id)
+
+    response = client.patch(f"/teachers/{teacher_id}", json={"full_name": "Yeni İsim"})
+
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Yeni İsim"
+
+
 def test_admin_cannot_delete_teacher_that_owns_classroom(client: TestClient, db_session: Session) -> None:
     create_response = client.post(
         "/teachers",

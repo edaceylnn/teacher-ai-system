@@ -35,7 +35,7 @@ function NumberField({ disabled, id, label, max, min, onChange, suffix, value })
   );
 }
 
-export default function SettingsPage({ handleUpdateScheduleSettings, scheduleSettings }) {
+export default function SettingsPage({ handleUpdateScheduleSettings, isAdminUser, scheduleSettings }) {
   const [activeSection, setActiveSection] = useState("lessonHours");
 
   return (
@@ -73,7 +73,11 @@ export default function SettingsPage({ handleUpdateScheduleSettings, scheduleSet
 
         <div className="lg:col-span-3">
           {activeSection === "lessonHours" && (
-            <LessonHoursSettings onSave={handleUpdateScheduleSettings} scheduleSettings={scheduleSettings} />
+            <LessonHoursSettings
+              isAdminUser={isAdminUser}
+              onSave={handleUpdateScheduleSettings}
+              scheduleSettings={scheduleSettings}
+            />
           )}
           {activeSection === "privacy" && <PrivacyDataSettings />}
         </div>
@@ -116,7 +120,7 @@ function PrivacyDataSettings() {
   );
 }
 
-function LessonHoursSettings({ onSave, scheduleSettings }) {
+function LessonHoursSettings({ isAdminUser, onSave, scheduleSettings }) {
   const [draft, setDraft] = useState(scheduleSettings);
   const errors = useMemo(() => validateScheduleSettings(draft), [draft]);
   const isValid = errors.length === 0;
@@ -166,6 +170,12 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
           Okulunuzun günlük ders, teneffüs ve öğle arası düzenini belirleyin. Buradaki değişiklikler ders
           programına otomatik olarak uygulanır.
         </p>
+        {!isAdminUser && (
+          <p className="mt-2 flex items-center gap-2 font-label-md text-label-md text-secondary">
+            <Icon className="text-[16px]" name="lock" /> Bu ayar okul geneli geçerli olduğu için sadece yöneticiler
+            değiştirebilir.
+          </p>
+        )}
 
         <div className="settings-summary-row mt-4">
           <span className="settings-summary-chip">
@@ -181,10 +191,11 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
         </div>
 
         <div className="mt-6 flex flex-wrap items-end gap-5">
-          <div className="settings-compact-field">
+          <div className={`settings-compact-field ${isAdminUser ? "" : "is-disabled"}`}>
             <span>Gün başlangıcı</span>
             <input
               className="settings-time-input"
+              disabled={!isAdminUser}
               id="settings-day-start"
               onChange={(event) => updateField("dayStartTime", event.target.value)}
               type="time"
@@ -193,6 +204,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
           </div>
 
           <NumberField
+            disabled={!isAdminUser}
             id="settings-lesson-duration"
             label="Ders süresi"
             max={SCHEDULE_SETTINGS_LIMITS.lessonDuration.max}
@@ -203,6 +215,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
           />
 
           <NumberField
+            disabled={!isAdminUser}
             id="settings-break-duration"
             label="Teneffüs süresi"
             max={SCHEDULE_SETTINGS_LIMITS.breakDuration.max}
@@ -213,6 +226,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
           />
 
           <NumberField
+            disabled={!isAdminUser}
             id="settings-lesson-count"
             label="Günlük ders sayısı"
             max={SCHEDULE_SETTINGS_LIMITS.lessonCount.max}
@@ -233,6 +247,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
             </div>
             <Toggle
               checked={draft.lunchBreak.enabled}
+              disabled={!isAdminUser}
               id="settings-lunch-enabled"
               label="Öğle arası kullanılsın"
               onChange={(checked) => updateLunch("enabled", checked)}
@@ -240,11 +255,11 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
           </div>
 
           <div className="mt-4 flex flex-wrap items-end gap-5">
-            <div className={`settings-compact-field ${draft.lunchBreak.enabled ? "" : "is-disabled"}`}>
+            <div className={`settings-compact-field ${draft.lunchBreak.enabled && isAdminUser ? "" : "is-disabled"}`}>
               <span>Hangi dersten sonra başlasın</span>
               <select
                 className="settings-select"
-                disabled={!draft.lunchBreak.enabled}
+                disabled={!draft.lunchBreak.enabled || !isAdminUser}
                 id="settings-lunch-after"
                 onChange={(event) => updateLunch("afterLesson", Number(event.target.value))}
                 value={draft.lunchBreak.afterLesson}
@@ -258,7 +273,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
             </div>
 
             <NumberField
-              disabled={!draft.lunchBreak.enabled}
+              disabled={!draft.lunchBreak.enabled || !isAdminUser}
               id="settings-lunch-duration"
               label="Öğle arası süresi"
               max={SCHEDULE_SETTINGS_LIMITS.lunchDuration.max}
@@ -346,7 +361,7 @@ function LessonHoursSettings({ onSave, scheduleSettings }) {
             <Button onClick={handleCancel} size="md" variant="ghost">
               İptal
             </Button>
-            <Button disabled={!isValid} size="md" type="submit" variant="primary">
+            <Button disabled={!isValid || !isAdminUser} size="md" type="submit" variant="primary">
               <Icon name="save" /> Değişiklikleri Kaydet
             </Button>
           </div>

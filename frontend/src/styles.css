@@ -294,7 +294,11 @@
     background-color: rgb(var(--app-primary-hover));
   }
   .btn-secondary {
-    @apply bg-surface-container-low text-on-surface hover:bg-surface-container-high active:bg-surface-container-high;
+    /* Border matters here, not just background: in light mode
+       surface-container-low (#F1F4F9) sits only ~5 RGB units off the page
+       background (#F6F8FC) — background contrast alone made these buttons
+       (e.g. Ders Programı's "Bugün") nearly invisible against a plain page. */
+    @apply border border-outline-variant bg-surface-container-low text-on-surface hover:bg-surface-container-high active:bg-surface-container-high;
   }
   .btn-ghost {
     @apply bg-transparent text-secondary hover:bg-surface-container-low hover:text-on-surface active:bg-surface-container-low;

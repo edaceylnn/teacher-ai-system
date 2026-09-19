@@ -405,6 +405,12 @@ export const api = {
     request(`/schedule-entries/${entryId}`, {
       method: "DELETE",
     }),
+  getScheduleSettings: () => request("/school-schedule-settings"),
+  saveScheduleSettings: (payload) =>
+    request("/school-schedule-settings", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   generateReportComment: (studentId) =>
     request("/ai/report-comments", {
       method: "POST",

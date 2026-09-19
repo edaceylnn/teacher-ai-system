@@ -7,6 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.deps import get_current_teacher
+from app.api.routes import students as students_routes
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -199,3 +201,105 @@ def test_students_can_be_paginated_and_searched(client: TestClient, teacher: Tea
     assert [student["first_name"] for student in search_response.json()["items"]] == [
         "Zeynep",
     ]
+
+
+def test_send_parent_message_calls_email_with_correct_recipient_and_content(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, teacher: Teacher
+) -> None:
+    classroom = client.post(
+        "/classrooms", json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"}
+    ).json()
+    student = client.post(
+        "/students",
+        json={
+            "classroom_id": classroom["id"],
+            "first_name": "Ada",
+            "last_name": "Yilmaz",
+            "parent_email": "ayse@example.com",
+        },
+    ).json()
+
+    sent_calls = []
+    monkeypatch.setattr(
+        students_routes,
+        "send_parent_message_email",
+        lambda email, subject, message: sent_calls.append((email, subject, message)),
+    )
+
+    response = client.post(
+        f"/students/{student['id']}/message",
+        json={"subject": "Karne hakkında", "message": "Ada bu hafta çok iyi ilerledi."},
+    )
+
+    assert response.status_code == 202
+    assert sent_calls == [("ayse@example.com", "Karne hakkında", "Ada bu hafta çok iyi ilerledi.")]
+
+
+def test_send_parent_message_requires_parent_email_on_file(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, teacher: Teacher
+) -> None:
+    classroom = client.post(
+        "/classrooms", json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"}
+    ).json()
+    student = client.post(
+        "/students",
+        json={"classroom_id": classroom["id"], "first_name": "Ada", "last_name": "Yilmaz"},
+    ).json()
+
+    sent_calls = []
+    monkeypatch.setattr(
+        students_routes,
+        "send_parent_message_email",
+        lambda *args: sent_calls.append(args),
+    )
+
+    response = client.post(
+        f"/students/{student['id']}/message",
+        json={"subject": "Konu", "message": "Mesaj"},
+    )
+
+    assert response.status_code == 400
+    assert "veli e-postası yok" in response.json()["detail"]
+    assert sent_calls == []
+
+
+def test_send_parent_message_rejects_teacher_without_classroom_access(
+    client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch, teacher: Teacher
+) -> None:
+    classroom = client.post(
+        "/classrooms", json={"teacher_id": teacher.id, "name": "5-A", "grade_level": "5"}
+    ).json()
+    student = client.post(
+        "/students",
+        json={
+            "classroom_id": classroom["id"],
+            "first_name": "Ada",
+            "last_name": "Yilmaz",
+            "parent_email": "ayse@example.com",
+        },
+    ).json()
+
+    other_teacher = Teacher(full_name="Ahmet Yılmaz", email="ahmet@example.com", password_hash="hashed-password")
+    db_session.add(other_teacher)
+    db_session.commit()
+    db_session.refresh(other_teacher)
+
+    sent_calls = []
+    monkeypatch.setattr(
+        students_routes,
+        "send_parent_message_email",
+        lambda *args: sent_calls.append(args),
+    )
+
+    default_override = app.dependency_overrides[get_current_teacher]
+    app.dependency_overrides[get_current_teacher] = lambda: other_teacher
+    try:
+        response = client.post(
+            f"/students/{student['id']}/message",
+            json={"subject": "Konu", "message": "Mesaj"},
+        )
+    finally:
+        app.dependency_overrides[get_current_teacher] = default_override
+
+    assert response.status_code == 404
+    assert sent_calls == []

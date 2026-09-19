@@ -8,11 +8,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_current_teacher
+from app.api.routes.ai import ai_daily_global_limiter, ai_daily_ip_limiter, ai_generation_rate_limiter
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import AIOutput, AIOutputType, AcademicYear, Teacher, TeacherAssignment
 from app.services import ai as ai_service
+
+
+@pytest.fixture(autouse=True)
+def _reset_ai_rate_limiters() -> None:
+    ai_generation_rate_limiter.reset()
+    ai_daily_ip_limiter.reset()
+    ai_daily_global_limiter.reset()
 
 
 def _assign_subject(db_session: Session, *, teacher_id: int, classroom_id: int, lesson_id: int) -> None:
@@ -370,6 +378,56 @@ def test_generate_ai_output_returns_404_for_missing_student(client: TestClient, 
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Student not found"
+
+
+def test_cached_output_does_not_consume_daily_ai_quota(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    # The first call is a genuine (billable) generation and legitimately
+    # keeps its quota slot; every call after that is a cache hit and must
+    # give its slot straight back — otherwise a teacher repeatedly revisiting
+    # the same unchanged report burns demo quota for free. Two slots is the
+    # minimum that lets a real generation coexist with a revolving cache-hit
+    # slot released after each request.
+    monkeypatch.setattr(ai_daily_ip_limiter, "max_requests", 2)
+    monkeypatch.setattr(ai_daily_global_limiter, "max_requests", 2)
+    monkeypatch.setattr(
+        ai_service,
+        "generate_report_comment",
+        lambda input_payload: {
+            "title": "Karne Yorumu",
+            "comment": "Ada iyi ilerliyor.",
+            "strengths": [],
+            "growth_areas": [],
+            "teacher_actions": [],
+        },
+    )
+
+    for _ in range(6):
+        response = client.post("/ai/report-comments", json={"student_id": student["id"]})
+        assert response.status_code == 201
+
+
+def test_failed_generation_does_not_consume_daily_ai_quota(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    student: dict,
+) -> None:
+    # An upstream 503 also costs nothing, so a run of transient AI-provider
+    # failures shouldn't lock a demo visitor out for the rest of the day.
+    monkeypatch.setattr(ai_daily_ip_limiter, "max_requests", 1)
+    monkeypatch.setattr(ai_daily_global_limiter, "max_requests", 1)
+
+    def unavailable(_: dict) -> dict:
+        raise ai_service.AIServiceUnavailableError("Gemini API hata döndürdü: 503.")
+
+    monkeypatch.setattr(ai_service, "generate_report_comment", unavailable)
+
+    for _ in range(5):
+        response = client.post("/ai/report-comments", json={"student_id": student["id"]})
+        assert response.status_code == 503
 
 
 def test_generate_ai_output_returns_503_when_service_unavailable(

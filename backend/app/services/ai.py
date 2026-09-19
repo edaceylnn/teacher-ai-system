@@ -8,6 +8,16 @@ class AIServiceUnavailableError(RuntimeError):
     """Raised when AI generation cannot run in the current environment."""
 
 
+SYSTEM_INSTRUCTION_TR = (
+    "Sen öğretmenler için güvenilir bir eğitim asistanısın. "
+    "Varsayım uydurma; yalnızca verilen öğrenci verilerine dayan. "
+    "Notlardaki 'category' alanı Sınav, Ders İçi Performans, Performans Ödevi "
+    "veya Ödev türünü belirtir; değerlendirmeni bu türlere göre ayır (ör. sınavlarda "
+    "güçlü ama ders içi performansta zayıf gibi net ayrımlar yap). "
+    "Dil sıcak, profesyonel ve Türkçe olsun."
+)
+
+
 REPORT_COMMENT_SCHEMA: dict[str, Any] = {
     "type": "json_schema",
     "name": "report_comment_output",
@@ -160,6 +170,16 @@ def _generate_structured_output(
     output_schema: dict[str, Any],
     task: str,
 ) -> dict[str, Any]:
+    if settings.ai_provider == "gemini":
+        return _generate_via_gemini(input_payload, output_schema, task)
+    return _generate_via_openai(input_payload, output_schema, task)
+
+
+def _generate_via_openai(
+    input_payload: dict[str, Any],
+    output_schema: dict[str, Any],
+    task: str,
+) -> dict[str, Any]:
     if not settings.openai_api_key:
         raise AIServiceUnavailableError("OPENAI_API_KEY tanımlı değil.")
 
@@ -173,17 +193,7 @@ def _generate_structured_output(
         response = client.responses.create(
             model=settings.openai_model,
             input=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Sen öğretmenler için güvenilir bir eğitim asistanısın. "
-                        "Varsayım uydurma; yalnızca verilen öğrenci verilerine dayan. "
-                        "Notlardaki 'category' alanı Sınav, Ders İçi Performans, Performans Ödevi "
-                        "veya Ödev türünü belirtir; değerlendirmeni bu türlere göre ayır (ör. sınavlarda "
-                        "güçlü ama ders içi performansta zayıf gibi net ayrımlar yap). "
-                        "Dil sıcak, profesyonel ve Türkçe olsun."
-                    ),
-                },
+                {"role": "system", "content": SYSTEM_INSTRUCTION_TR},
                 {
                     "role": "user",
                     "content": f"{task}\n\nÖğrenci verisi:\n{json.dumps(input_payload, ensure_ascii=False)}",
@@ -206,4 +216,55 @@ def _generate_structured_output(
     try:
         return json.loads(response.output_text)
     except (AttributeError, json.JSONDecodeError) as exc:
+        raise AIServiceUnavailableError("AI yanıtı beklenen JSON formatında değil.") from exc
+
+
+def _strip_additional_properties(node: Any) -> Any:
+    """Gemini's response_schema is an OpenAPI 3.0 subset that doesn't
+    recognize 'additionalProperties' — drop it recursively rather than
+    maintaining a second copy of every schema above just for Gemini."""
+    if isinstance(node, dict):
+        return {key: _strip_additional_properties(value) for key, value in node.items() if key != "additionalProperties"}
+    if isinstance(node, list):
+        return [_strip_additional_properties(item) for item in node]
+    return node
+
+
+def _generate_via_gemini(
+    input_payload: dict[str, Any],
+    output_schema: dict[str, Any],
+    task: str,
+) -> dict[str, Any]:
+    if not settings.gemini_api_key:
+        raise AIServiceUnavailableError("GEMINI_API_KEY tanımlı değil.")
+
+    try:
+        from google import genai
+        from google.genai import errors as genai_errors
+        from google.genai import types
+    except ImportError as exc:
+        raise AIServiceUnavailableError("Google Gemini SDK kurulu değil.") from exc
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    try:
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=f"{task}\n\nÖğrenci verisi:\n{json.dumps(input_payload, ensure_ascii=False)}",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION_TR,
+                response_mime_type="application/json",
+                response_schema=_strip_additional_properties(output_schema["schema"]),
+            ),
+        )
+    except genai_errors.APIError as exc:
+        status_code = getattr(exc, "code", None)
+        if status_code == 429:
+            raise AIServiceUnavailableError("Gemini API kota veya hız limitine takıldı.") from exc
+        if status_code in (401, 403):
+            raise AIServiceUnavailableError("Gemini API anahtarı geçersiz veya yetkisiz.") from exc
+        raise AIServiceUnavailableError(f"Gemini API hata döndürdü: {status_code}.") from exc
+
+    try:
+        return json.loads(response.text)
+    except (AttributeError, TypeError, json.JSONDecodeError) as exc:
         raise AIServiceUnavailableError("AI yanıtı beklenen JSON formatında değil.") from exc

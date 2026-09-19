@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.deps import get_current_teacher
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -287,8 +288,8 @@ def test_schedule_entry_crud_and_conflict(
         "classroom_id": classroom_id,
         "lesson_id": lesson["id"],
         "weekday": 0,
-        "start_time": "09:00",
-        "end_time": "09:40",
+        "start_time": "08:30",
+        "end_time": "09:10",
         "location": "Derslik 2",
     }
 
@@ -301,7 +302,7 @@ def test_schedule_entry_crud_and_conflict(
 
     conflict_response = client.post(
         "/schedule-entries",
-        json={**payload, "start_time": "09:20", "end_time": "10:00"},
+        json={**payload, "start_time": "08:50", "end_time": "09:10"},
     )
     assert conflict_response.status_code == 409
 
@@ -318,6 +319,92 @@ def test_schedule_entry_crud_and_conflict(
 
     delete_response = client.delete(f"/schedule-entries/{created['id']}")
     assert delete_response.status_code == 204
+
+
+def test_schedule_entry_conflicts_with_another_teacher_in_same_classroom(
+    client: TestClient, db_session: Session, teacher: Teacher, student: dict
+) -> None:
+    # A classroom's students can't be in two lessons at once, regardless of
+    # who's teaching either one — this is the gap _ensure_no_conflict used
+    # to have (it only ever checked the same teacher's own overlaps).
+    classroom_id = student["classroom_id"]
+    matematik = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=classroom_id, lesson_id=matematik["id"])
+
+    other_teacher = Teacher(full_name="Ahmet Yılmaz", email="ahmet@example.com", password_hash="hashed-password")
+    db_session.add(other_teacher)
+    db_session.commit()
+    db_session.refresh(other_teacher)
+
+    # POST /lessons requires payload.teacher_id == the authenticated teacher
+    # (see lessons.py), so creating Ahmet's lesson needs the override active.
+    # Restore (not pop) afterwards — conftest's authenticated_routes fixture
+    # relies on its own default override staying in place between requests.
+    default_override = app.dependency_overrides[get_current_teacher]
+    app.dependency_overrides[get_current_teacher] = lambda: other_teacher
+    try:
+        turkce = client.post("/lessons", json={"teacher_id": other_teacher.id, "name": "Türkçe"}).json()
+    finally:
+        app.dependency_overrides[get_current_teacher] = default_override
+    _assign_subject(db_session, teacher_id=other_teacher.id, classroom_id=classroom_id, lesson_id=turkce["id"])
+
+    first = client.post(
+        "/schedule-entries",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": classroom_id,
+            "lesson_id": matematik["id"],
+            "weekday": 0,
+            "start_time": "08:30",
+            "end_time": "09:10",
+        },
+    )
+    assert first.status_code == 201
+
+    app.dependency_overrides[get_current_teacher] = lambda: other_teacher
+    try:
+        second = client.post(
+            "/schedule-entries",
+            json={
+                "teacher_id": other_teacher.id,
+                "classroom_id": classroom_id,
+                "lesson_id": turkce["id"],
+                "weekday": 0,
+                "start_time": "08:50",
+                "end_time": "09:10",
+            },
+        )
+    finally:
+        app.dependency_overrides[get_current_teacher] = default_override
+
+    assert second.status_code == 409
+    assert "başka bir öğretmen" in second.json()["detail"]
+
+
+def test_schedule_entry_rejects_overlap_with_break_window(
+    client: TestClient, db_session: Session, teacher: Teacher, student: dict
+) -> None:
+    classroom_id = student["classroom_id"]
+    lesson = client.post("/lessons", json={"teacher_id": teacher.id, "name": "Matematik"}).json()
+    _assign_subject(db_session, teacher_id=teacher.id, classroom_id=classroom_id, lesson_id=lesson["id"])
+
+    # Default settings (see app/services/schedule_settings.py): day starts
+    # 08:30, 40-minute lessons, 15-minute breaks — the first teneffüs is
+    # 09:10-09:25.
+    response = client.post(
+        "/schedule-entries",
+        json={
+            "teacher_id": teacher.id,
+            "classroom_id": classroom_id,
+            "lesson_id": lesson["id"],
+            "weekday": 0,
+            "start_time": "09:00",
+            "end_time": "09:20",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "teneffüs" in response.json()["detail"]
 
 
 def test_homework_crud_flow(client: TestClient, db_session: Session, teacher: Teacher, student: dict) -> None:

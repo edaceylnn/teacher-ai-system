@@ -17,6 +17,7 @@ from app.api.routes import (
     homework,
     lessons,
     schedule,
+    schedule_settings,
     students,
     teacher_assignments,
     teachers,
@@ -24,9 +25,11 @@ from app.api.routes import (
 from app.core.audit import AuditLogMiddleware
 from app.core.config import settings
 from app.core.security import (
+    ensure_cors_origins_do_not_use_wildcard,
     ensure_email_is_configured_in_production,
     ensure_secret_key_is_not_default,
     ensure_single_worker_in_production,
+    warn_if_forwarded_allow_ips_are_default,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,6 +39,8 @@ def create_app() -> FastAPI:
     ensure_secret_key_is_not_default()
     ensure_single_worker_in_production()
     ensure_email_is_configured_in_production()
+    ensure_cors_origins_do_not_use_wildcard()
+    warn_if_forwarded_allow_ips_are_default()
 
     is_production = settings.environment == "production"
     app = FastAPI(
@@ -69,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(grades.router)
     app.include_router(attendance.router)
     app.include_router(schedule.router)
+    app.include_router(schedule_settings.router)
     app.include_router(homework.router)
     app.include_router(assessments.router)
     app.include_router(attendance_sessions.router)

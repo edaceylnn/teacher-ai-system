@@ -44,12 +44,21 @@ eda@example.com / demo12345
 
 ## AI Configuration
 
-AI endpoints use the OpenAI Responses API when `OPENAI_API_KEY` is set.
+AI endpoints support two providers, selected with `AI_PROVIDER`:
 
 ```bash
+# OpenAI Responses API (paid, used when there's a budget for it)
+AI_PROVIDER="openai"
 OPENAI_API_KEY="your-api-key"
 OPENAI_MODEL="gpt-5"
+
+# Google Gemini (free tier — what the public portfolio demo runs on)
+AI_PROVIDER="gemini"
+GEMINI_API_KEY="your-api-key"
+GEMINI_MODEL="gemini-3.5-flash-lite"
 ```
+
+Since there's no public signup and demo visitors share one seeded login, `/ai/*` generation endpoints are also capped by `AI_DAILY_LIMIT_PER_IP` (default 3/day, protects against one visitor) and `AI_DAILY_LIMIT_GLOBAL` (default 150/day, protects the shared free-tier quota from the whole demo audience combined) — see `app/api/routes/ai.py`.
 
 ## Health Check
 

@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models import ScheduleEntry, Teacher
 from app.schemas.pagination import PageResponse
 from app.schemas.schedule import ScheduleEntryCreate, ScheduleEntryResponse, ScheduleEntryUpdate
+from app.services.schedule_settings import find_overlapping_break, get_or_create_settings
 
 router = APIRouter(prefix="/schedule-entries", tags=["schedule"])
 
@@ -25,22 +26,44 @@ def _visible_schedule_condition(teacher: Teacher, db: Session):
 
 def _ensure_no_conflict(
     teacher_id: int,
+    classroom_id: int,
     weekday: int,
     start_time: time,
     end_time: time,
     db: Session,
     exclude_id: int | None = None,
 ) -> None:
+    # Same teacher double-booked, OR the same classroom double-booked by a
+    # different teacher — a classroom's students can't be in two lessons at
+    # once regardless of who's teaching either one.
     statement = select(ScheduleEntry).where(
-        ScheduleEntry.teacher_id == teacher_id,
         ScheduleEntry.weekday == weekday,
         ScheduleEntry.start_time < end_time,
         ScheduleEntry.end_time > start_time,
+        or_(ScheduleEntry.teacher_id == teacher_id, ScheduleEntry.classroom_id == classroom_id),
     )
     if exclude_id is not None:
         statement = statement.where(ScheduleEntry.id != exclude_id)
-    if db.scalar(statement.limit(1)) is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Schedule time conflicts with another lesson")
+    conflict = db.scalar(statement.limit(1))
+    if conflict is not None:
+        detail = (
+            "Bu saatte zaten başka bir dersiniz var."
+            if conflict.teacher_id == teacher_id
+            else "Bu sınıf o saatte başka bir öğretmen tarafından kullanılıyor."
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
+def _ensure_not_during_break(db: Session, start_time: time, end_time: time) -> None:
+    settings = get_or_create_settings(db)
+    overlapping_break = find_overlapping_break(settings, start_time, end_time)
+    if overlapping_break is not None:
+        break_start, break_end = overlapping_break
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Bu saat aralığı teneffüs/öğle arasıyla ({break_start.strftime('%H:%M')}-"
+            f"{break_end.strftime('%H:%M')}) çakışıyor.",
+        )
 
 
 @router.post("", response_model=ScheduleEntryResponse, status_code=status.HTTP_201_CREATED)
@@ -50,7 +73,10 @@ def create_schedule_entry(
     current_teacher: Teacher = Depends(get_current_teacher),
 ) -> ScheduleEntry:
     ensure_subject_write_access(current_teacher, payload.classroom_id, payload.lesson_id, db)
-    _ensure_no_conflict(current_teacher.id, payload.weekday, payload.start_time, payload.end_time, db)
+    _ensure_not_during_break(db, payload.start_time, payload.end_time)
+    _ensure_no_conflict(
+        current_teacher.id, payload.classroom_id, payload.weekday, payload.start_time, payload.end_time, db
+    )
     entry = ScheduleEntry(**{**payload.model_dump(), "teacher_id": current_teacher.id})
     db.add(entry)
     db.commit()
@@ -100,7 +126,10 @@ def update_schedule_entry(
     next_end = update_data.get("end_time", entry.end_time)
     if next_end <= next_start:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end_time must be after start_time")
-    _ensure_no_conflict(entry.teacher_id, next_weekday, next_start, next_end, db, exclude_id=entry.id)
+    _ensure_not_during_break(db, next_start, next_end)
+    _ensure_no_conflict(
+        entry.teacher_id, next_classroom_id, next_weekday, next_start, next_end, db, exclude_id=entry.id
+    )
 
     for field, value in update_data.items():
         setattr(entry, field, value)

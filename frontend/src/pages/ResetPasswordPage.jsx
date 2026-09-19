@@ -2,7 +2,7 @@ import { useState } from "react";
 import Button from "../components/Button";
 import Icon from "../components/Icon";
 import { api } from "../api";
-import logo from "../assets/teacher-ai-logo.png";
+import logo from "../assets/teacher-ai-icon-dark.png";
 
 export default function ResetPasswordPage({ token, onDone }) {
   const [password, setPassword] = useState("");
@@ -41,8 +41,8 @@ export default function ResetPasswordPage({ token, onDone }) {
     <main className="flex min-h-screen items-center justify-center bg-background p-4 antialiased">
       <div className="w-full max-w-md px-container-padding py-section-margin">
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest shadow-sm">
-            <img alt="Teacher AI Logo" className="h-full w-full object-cover" src={logo} />
+          <div className="mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-outline-variant bg-surface-container-lowest shadow-sm">
+            <img alt="Teacher AI Logo" className="h-full w-full object-contain p-2.5" src={logo} />
           </div>
           <p className="mb-2 font-label-md text-label-md uppercase tracking-wider text-primary">Teacher AI</p>
           <h1 className="font-headline-lg text-headline-lg-mobile text-center text-on-surface md:text-headline-lg">

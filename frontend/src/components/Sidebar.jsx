@@ -1,3 +1,4 @@
+import logoMark from "../assets/teacher-ai-icon-white.png";
 import Icon from "./Icon";
 
 const NAV_ITEMS = [
@@ -36,8 +37,8 @@ export default function Sidebar({
         }`}
       >
         <div className="mb-8 flex items-center gap-3 px-2">
-          <div className="sidebar-logo-mark flex h-10 w-10 items-center justify-center rounded-full font-headline-md text-headline-md font-bold">
-            T
+          <div className="sidebar-logo-mark flex h-10 w-10 items-center justify-center rounded-full p-2">
+            <img alt="Teacher AI" className="h-full w-full object-contain" src={logoMark} />
           </div>
           <div>
             <h1 className="sidebar-brand-title font-headline-md text-headline-md font-bold leading-tight">

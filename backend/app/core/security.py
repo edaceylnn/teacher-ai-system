@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -7,6 +8,8 @@ from typing import Any
 import jwt
 
 from app.core.config import settings
+
+logger = logging.getLogger("app.security")
 
 
 HASH_PREFIX = "pbkdf2_sha256"
@@ -113,6 +116,22 @@ def ensure_secret_key_is_not_default() -> None:
         raise RuntimeError("SECRET_KEY must be at least 32 characters in production.")
 
 
+def ensure_cors_origins_do_not_use_wildcard() -> None:
+    """main.py always sets allow_credentials=True on CORSMiddleware (needed
+    for the refresh-token cookie) — combined with a "*" origin that's a
+    textbook CORS misconfiguration: browsers themselves refuse to honor a
+    wildcard alongside credentials, so the practical effect is just a broken
+    frontend, but relying on the browser to save you from a server
+    misconfiguration is fragile. Checked in every environment, not just
+    production — there's no legitimate reason to ever set this."""
+    if "*" in settings.cors_origin_list:
+        raise RuntimeError(
+            'CORS_ORIGINS must not contain "*" — this app sends credentials '
+            "(the refresh-token cookie), which browsers refuse to combine with "
+            "a wildcard origin. List the exact allowed origins instead."
+        )
+
+
 def ensure_single_worker_in_production() -> None:
     """The rate limiter in app/core/rate_limit.py keeps its hit counters in
     process memory. Running more than one uvicorn worker would give each
@@ -135,4 +154,30 @@ def ensure_email_is_configured_in_production() -> None:
         raise RuntimeError(
             "SMTP_HOST must be configured in production — without it, "
             "password reset emails are only logged, not delivered."
+        )
+
+
+def warn_if_forwarded_allow_ips_are_default() -> None:
+    """Every per-IP rate limiter (login, registration, the AI daily caps)
+    and the audit log's client_ip both key off request.client.host, which is
+    only the real visitor IP when nothing sits in front of this process — the
+    moment a reverse proxy is added (needed for HTTPS in any real deployment),
+    every request looks like it comes from the proxy's own address unless
+    uvicorn is told to trust and rewrite it from X-Forwarded-For.
+
+    Unlike the other ensure_* guards, this can't be a hard failure: whether a
+    proxy is even in front of this process, and what its address is, isn't
+    something the app can determine on its own. It's a nudge, not a gate —
+    log once at startup so it's not a silent footgun, and let the operator
+    verify the real deployment topology (see backend/README.md)."""
+    if settings.environment != "production":
+        return
+    if settings.forwarded_allow_ips == "127.0.0.1":
+        logger.warning(
+            "FORWARDED_ALLOW_IPS is still the default (127.0.0.1). If a reverse "
+            "proxy sits in front of this server (needed for HTTPS) and isn't "
+            "reachable from exactly that address inside the container network, "
+            "every visitor will collapse into one shared rate-limit/audit-log "
+            "identity. Verify and set FORWARDED_ALLOW_IPS to the proxy's real "
+            "address — see backend/README.md."
         )

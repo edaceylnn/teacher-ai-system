@@ -1,9 +1,10 @@
+import argparse
 import os
 from datetime import date
 from datetime import time
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -11,13 +12,16 @@ from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
 from app.models import (
     AcademicYear,
+    AIOutput,
     Assessment,
     AssessmentRecord,
     AssessmentType,
     AttendanceRecord,
     AttendanceSession,
     AttendanceStatus,
+    AuditLog,
     Classroom,
+    CurriculumOutcome,
     Lesson,
     ScheduleEntry,
     Student,
@@ -25,6 +29,28 @@ from app.models import (
     Teacher,
     TeacherAssignment,
     TeacherRole,
+)
+
+# Child-to-parent FK order — every table a teacher/visitor can populate
+# through the app, so a reset always lands on a truly clean slate rather
+# than whatever the ORM's per-entity delete cascades happen to leave behind
+# (those are tuned for "delete one teacher", not "wipe the demo"). Deliberately
+# excludes AcademicYear (the migration-seeded current year seed_demo_data
+# depends on) and alembic_version.
+_RESET_TABLES_CHILD_FIRST = (
+    AIOutput,
+    AuditLog,
+    AssessmentRecord,
+    AttendanceRecord,
+    Assessment,
+    AttendanceSession,
+    ScheduleEntry,
+    TeacherAssignment,
+    CurriculumOutcome,
+    Student,
+    Lesson,
+    Classroom,
+    Teacher,
 )
 
 
@@ -333,7 +359,35 @@ def seed_demo_data(db: Session) -> None:
     db.commit()
 
 
-def main() -> None:
+def reset_demo_data(db: Session) -> None:
+    """Wipes every table a logged-in visitor could have touched, then
+    reseeds fresh. Unlike seed_demo_data (which only ever adds/repairs),
+    this also clears out anything a demo visitor created or vandalized —
+    extra classrooms, deleted students, garbage curriculum outcomes, a
+    hijacked password — so a public demo self-heals on a schedule instead
+    of staying broken until someone notices and intervenes by hand."""
+    for model in _RESET_TABLES_CHILD_FIRST:
+        db.execute(delete(model))
+    db.commit()
+    # The bulk deletes above go around the ORM, so any object this session
+    # already had loaded (e.g. a caller that fetched a Teacher before
+    # resetting) is now a stale identity-map entry for a deleted row — clear
+    # it so seed_demo_data's inserts don't collide with a reused primary key.
+    db.expunge_all()
+    seed_demo_data(db)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Seed (or reset) the demo dataset.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Wipe all teacher/classroom/student/assessment data first, then reseed fresh. "
+        "Use this for a public demo that visitors can edit or delete — run it on a schedule "
+        "(cron) so the demo self-heals instead of staying broken.",
+    )
+    args = parser.parse_args(argv)
+
     # This creates/resets a teacher with a publicly known demo password
     # (DEMO_TEACHER_PASSWORD above). Running it against a production database
     # by accident would plant a working backdoor account, so production
@@ -345,7 +399,10 @@ def main() -> None:
             "if you really intend to seed this database."
         )
     with SessionLocal() as db:
-        seed_demo_data(db)
+        if args.reset:
+            reset_demo_data(db)
+        else:
+            seed_demo_data(db)
 
 
 if __name__ == "__main__":

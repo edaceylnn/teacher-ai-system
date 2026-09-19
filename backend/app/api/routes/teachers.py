@@ -8,7 +8,7 @@ from app.api.deps import get_current_teacher, require_admin
 from app.core.config import settings
 from app.core.email import send_password_reset_email
 from app.core.rate_limit import InMemoryRateLimiter
-from app.core.security import create_password_reset_token, hash_password
+from app.core.security import create_password_reset_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models import (
     AIOutput,
@@ -162,12 +162,21 @@ def update_teacher(
     teacher = current_teacher
 
     update_data = payload.model_dump(exclude_unset=True)
+    current_password = update_data.pop("current_password", None)
     email = update_data.get("email")
     if email is not None:
         update_data["email"] = str(email)
         _ensure_email_is_available(update_data["email"], db, teacher_id=teacher.id)
     password = update_data.pop("password", None)
     if password is not None:
+        # A still-valid access token isn't proof the caller knows the
+        # password — requiring it here caps what a stolen/leaked token can
+        # do to "hijack this session" rather than "take the account".
+        if current_password is None or not verify_password(current_password, teacher.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Şifrenizi değiştirmek için mevcut şifrenizi doğru girmelisiniz.",
+            )
         update_data["password_hash"] = hash_password(password)
 
     for field, value in update_data.items():

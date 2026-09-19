@@ -103,6 +103,42 @@ def test_ensure_secret_key_is_not_default_accepts_strong_key_in_production(
     security.ensure_secret_key_is_not_default()  # should not raise
 
 
+def test_ensure_cors_origins_do_not_use_wildcard_accepts_explicit_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "cors_origins", "https://app.example.com,https://admin.example.com")
+
+    security.ensure_cors_origins_do_not_use_wildcard()  # should not raise
+
+
+def test_ensure_cors_origins_do_not_use_wildcard_rejects_wildcard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "cors_origins", "*")
+
+    with pytest.raises(RuntimeError, match="CORS_ORIGINS must not contain"):
+        security.ensure_cors_origins_do_not_use_wildcard()
+
+
+def test_ensure_cors_origins_do_not_use_wildcard_rejects_wildcard_mixed_with_real_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "cors_origins", "https://app.example.com,*")
+
+    with pytest.raises(RuntimeError, match="CORS_ORIGINS must not contain"):
+        security.ensure_cors_origins_do_not_use_wildcard()
+
+
+def test_ensure_cors_origins_do_not_use_wildcard_enforced_outside_production_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "cors_origins", "*")
+
+    with pytest.raises(RuntimeError, match="CORS_ORIGINS must not contain"):
+        security.ensure_cors_origins_do_not_use_wildcard()
+
+
 def test_ensure_single_worker_in_production_only_enforced_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -157,3 +193,38 @@ def test_ensure_email_is_configured_in_production_accepts_configured_smtp(
     monkeypatch.setattr(settings, "smtp_host", "smtp.example.com")
 
     security.ensure_email_is_configured_in_production()  # should not raise
+
+
+def test_warn_if_forwarded_allow_ips_are_default_only_enforced_in_production(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "forwarded_allow_ips", "127.0.0.1")
+
+    security.warn_if_forwarded_allow_ips_are_default()
+
+    assert "FORWARDED_ALLOW_IPS" not in caplog.text
+
+
+def test_warn_if_forwarded_allow_ips_are_default_warns_on_default_value(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "forwarded_allow_ips", "127.0.0.1")
+
+    with caplog.at_level("WARNING", logger="app.security"):
+        security.warn_if_forwarded_allow_ips_are_default()
+
+    assert "FORWARDED_ALLOW_IPS" in caplog.text
+
+
+def test_warn_if_forwarded_allow_ips_are_default_silent_when_overridden(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "forwarded_allow_ips", "172.18.0.5")
+
+    with caplog.at_level("WARNING", logger="app.security"):
+        security.warn_if_forwarded_allow_ips_are_default()
+
+    assert "FORWARDED_ALLOW_IPS" not in caplog.text

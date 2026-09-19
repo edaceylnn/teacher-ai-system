@@ -7,6 +7,7 @@ from app.models.classroom import Classroom
 from app.models.curriculum import CurriculumOutcome
 from app.models.lesson import Lesson
 from app.models.schedule import ScheduleEntry
+from app.models.schedule_settings import SchoolScheduleSettings
 from app.models.student import Student, StudentEnrollmentStatus
 from app.models.teacher import Teacher, TeacherRole
 from app.models.teacher_assignment import TeacherAssignment
@@ -27,6 +28,7 @@ __all__ = [
     "CurriculumOutcome",
     "Lesson",
     "ScheduleEntry",
+    "SchoolScheduleSettings",
     "Student",
     "StudentEnrollmentStatus",
     "Teacher",

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api, setAuthToken } from "./api";
 import { DEMO_TEACHER_ID, TABLE_PAGE_SIZE, emptyStudentEditForm, emptyStudentForm, gradeCategoryLabels, gradeCategoryOptions, gradeLevelOptions, schoolWeekdayOptions, sectionOptions, weekdayOptions } from "./constants";
 import { buildClassroomName, formatLocalDate, scheduleSlotValue, splitScheduleSlot } from "./utils/helpers";
-import { buildLessonSlots, loadStoredScheduleSettings, persistScheduleSettings, validateScheduleSettings } from "./utils/scheduleSettings";
+import { DEFAULT_SCHEDULE_SETTINGS, buildLessonSlots, fromApiResponse, toApiPayload, validateScheduleSettings } from "./utils/scheduleSettings";
 import { assignedLessonsForClassroom, isAdmin as isAdminTeacher } from "./utils/permissions";
 import AIReportsPage from "./pages/AIReportsPage";
 import AttendancePage from "./pages/AttendancePage";
@@ -64,6 +64,7 @@ export default function App() {
     full_name: "",
     email: "",
     password: "",
+    current_password: "",
   });
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
@@ -187,11 +188,7 @@ export default function App() {
     location: "",
   });
   const [editingScheduleEntry, setEditingScheduleEntry] = useState(null);
-  const [scheduleSettings, setScheduleSettings] = useState(() => loadStoredScheduleSettings());
-
-  useEffect(() => {
-    persistScheduleSettings(scheduleSettings);
-  }, [scheduleSettings]);
+  const [scheduleSettings, setScheduleSettings] = useState(DEFAULT_SCHEDULE_SETTINGS);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -348,14 +345,16 @@ export default function App() {
     setIsLoading(true);
     setError("");
     try {
-      const [classroomData, lessonData, gradeData, assignmentData, teachersData, curriculumData] = await Promise.all([
-        api.listClassrooms(teacherId),
-        api.listLessons(teacherId),
-        api.listGrades(),
-        api.listTeacherAssignments(teacherId),
-        api.listTeachers(),
-        api.listCurriculumOutcomes({ limit: 500, offset: 0, activeOnly: false }),
-      ]);
+      const [classroomData, lessonData, gradeData, assignmentData, teachersData, curriculumData, scheduleSettingsData] =
+        await Promise.all([
+          api.listClassrooms(teacherId),
+          api.listLessons(teacherId),
+          api.listGrades(),
+          api.listTeacherAssignments(teacherId),
+          api.listTeachers(),
+          api.listCurriculumOutcomes({ limit: 500, offset: 0, activeOnly: false }),
+          api.getScheduleSettings(),
+        ]);
       const studentPages = await Promise.all(
         classroomData.map((classroom) =>
           api.listStudentsPage(classroom.id, { limit: 500, offset: 0 }),
@@ -381,6 +380,7 @@ export default function App() {
       setTeachersAdminList(teachersData);
       setCurriculumOutcomes(curriculumData);
       setGrades(gradeData);
+      setScheduleSettings(fromApiResponse(scheduleSettingsData));
       const schedulePage = await api.listScheduleEntriesPage(teacherId, {
         limit: 500,
         offset: 0,
@@ -1472,10 +1472,13 @@ export default function App() {
     setActivePage("dashboard");
   }
 
-  function handleUpdateScheduleSettings(nextSettings) {
+  async function handleUpdateScheduleSettings(nextSettings) {
     if (validateScheduleSettings(nextSettings).length > 0) return;
-    setScheduleSettings(nextSettings);
-    showNotice("Ders saatleri başarıyla güncellendi.");
+    await runAction(async () => {
+      const saved = await api.saveScheduleSettings(toApiPayload(nextSettings));
+      setScheduleSettings(fromApiResponse(saved));
+      showNotice("Ders saatleri başarıyla güncellendi.");
+    });
   }
 
   async function handleUpdateTeacherProfile(event) {
@@ -1487,6 +1490,7 @@ export default function App() {
       };
       if (teacherProfileForm.password.trim()) {
         payload.password = teacherProfileForm.password.trim();
+        payload.current_password = teacherProfileForm.current_password;
       }
       const updated = await api.updateTeacher(currentTeacher.id, payload);
       setCurrentTeacher(updated);
@@ -1494,6 +1498,7 @@ export default function App() {
         full_name: updated.full_name,
         email: updated.email,
         password: "",
+        current_password: "",
       });
       showNotice("Profil güncellendi.");
     });

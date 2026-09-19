@@ -139,6 +139,34 @@ export default function ProfilePage({
               <p className="mt-2 font-mono-sm text-mono-sm text-secondary">
                 Şifreni değiştirmek istemiyorsan boş bırak. En az 8 karakter, harf ve rakam içermeli.
               </p>
+
+              {teacherProfileForm.password.trim() !== "" && (
+                <div className="mt-4">
+                  <label
+                    className="mb-2 block font-label-md text-label-md text-on-surface"
+                    htmlFor="profile-current-password"
+                  >
+                    Mevcut Parola
+                  </label>
+                  <input
+                    className={inputClass}
+                    id="profile-current-password"
+                    onChange={(event) =>
+                      setTeacherProfileForm((form) => ({
+                        ...form,
+                        current_password: event.target.value,
+                      }))
+                    }
+                    placeholder="••••••••"
+                    required
+                    type="password"
+                    value={teacherProfileForm.current_password}
+                  />
+                  <p className="mt-2 font-mono-sm text-mono-sm text-secondary">
+                    Parola değişikliğini onaylamak için mevcut parolanı gir.
+                  </p>
+                </div>
+              )}
             </section>
 
             <div className="flex justify-end">

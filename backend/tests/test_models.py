@@ -42,6 +42,7 @@ def test_database_models_create_expected_tables() -> None:
         "curriculum_outcomes",
         "lessons",
         "schedule_entries",
+        "school_schedule_settings",
         "students",
         "teacher_assignments",
         "teachers",

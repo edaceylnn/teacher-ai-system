@@ -26,8 +26,6 @@ export const SCHEDULE_SETTINGS_LIMITS = {
 
 const TIME_FORMAT_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-const STORAGE_KEY = "teacherAi.schoolScheduleSettings";
-
 // Builds the full daily period list (lessons + teneffüs + öğle arası) from
 // the settings above — the same shape the calendar previously hard-coded.
 // Every boundary is computed in minutes and converted back with
@@ -118,25 +116,37 @@ export function validateScheduleSettings(settings) {
   return errors;
 }
 
-// No backend endpoint for this yet (see project notes) — persisted to
-// localStorage for now so the setting survives a reload, behind the same
-// function names a future `api.getScheduleSettings()/saveScheduleSettings()`
-// pair would use, so swapping the storage layer later touches only this file.
-export function loadStoredScheduleSettings() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SCHEDULE_SETTINGS;
-    const parsed = JSON.parse(raw);
-    return validateScheduleSettings(parsed).length === 0 ? parsed : DEFAULT_SCHEDULE_SETTINGS;
-  } catch {
-    return DEFAULT_SCHEDULE_SETTINGS;
-  }
+// Backend-persisted now (GET/PUT /school-schedule-settings, school-wide —
+// see backend/app/models/schedule_settings.py) so schedule-entry conflict
+// checks on the server validate against the same timetable the UI shows,
+// instead of a setting only the browser knew about. These adapters translate
+// between this file's camelCase shape (unchanged, still what every consumer
+// here — buildLessonSlots, validateScheduleSettings, App.jsx — expects) and
+// the API's snake_case wire format.
+export function fromApiResponse(response) {
+  return {
+    dayStartTime: response.day_start_time.slice(0, 5),
+    lessonDuration: response.lesson_duration_minutes,
+    breakDuration: response.break_duration_minutes,
+    lessonCount: response.lesson_count,
+    lunchBreak: {
+      enabled: response.lunch_break_enabled,
+      afterLesson: response.lunch_break_after_lesson,
+      duration: response.lunch_break_duration_minutes,
+    },
+  };
 }
 
-export function persistScheduleSettings(settings) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Best-effort only (e.g. private browsing can throw on write).
-  }
+export function toApiPayload(settings) {
+  return {
+    day_start_time: settings.dayStartTime,
+    lesson_duration_minutes: settings.lessonDuration,
+    break_duration_minutes: settings.breakDuration,
+    lesson_count: settings.lessonCount,
+    lunch_break: {
+      enabled: settings.lunchBreak.enabled,
+      after_lesson: settings.lunchBreak.afterLesson,
+      duration_minutes: settings.lunchBreak.duration,
+    },
+  };
 }

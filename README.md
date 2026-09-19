@@ -12,15 +12,16 @@ Proje; öğretmenin girdiği öğrenci verilerini kullanarak karne yorumu ve vel
 - Değerlendirme bazlı toplu not/ödev sonucu girişi
 - Searchable select/input bileşenleri
 - Backend destekli pagination
-- OpenAI API ile AI karne yorumu ve veli mesajı üretimi
+- OpenAI veya Google Gemini ile AI karne yorumu, veli mesajı, haftalık özet, eksik konu analizi ve ders planı üretimi (bkz. `backend/README.md` → AI Configuration)
 - Üretilen AI çıktılarının düzenlenip kaydedilmesi
+- Demo kullanımı için IP başına ve genel günlük AI üretim limiti
 
 ## Kullanılan Teknolojiler
 
 - Frontend: React, Vite, CSS
 - Backend: FastAPI, SQLAlchemy, Alembic
 - Database: PostgreSQL
-- AI: OpenAI API
+- AI: OpenAI API / Google Gemini API (sağlayıcı `AI_PROVIDER` ile seçilir)
 - Test: Pytest
 
 ## Proje Yapısı
@@ -96,9 +97,15 @@ Demo giriş bilgileri:
 - `SECRET_KEY` en az 32 karakterlik güçlü ve ortama özel bir değer olmalı.
 - `POSTGRES_PASSWORD`, `CORS_ORIGINS`, `FRONTEND_BASE_URL` ve build-time `VITE_API_BASE_URL` gerçek ortama göre ayarlanmalı.
 - Şifre sıfırlama için `SMTP_HOST` ve `SMTP_FROM_EMAIL` üretimde zorunludur; SMTP hesabı gerçek gönderimle test edilmeli.
-- AI özellikleri kullanılacaksa `OPENAI_API_KEY` tanımlanmalı; kurum/veli veri paylaşımı onay süreci uygulama dışında işletilmelidir.
+- AI özellikleri için `AI_PROVIDER` ile sağlayıcı seçilip ilgili API anahtarı (`OPENAI_API_KEY` veya `GEMINI_API_KEY`) tanımlanmalı; kurum/veli veri paylaşımı onay süreci uygulama dışında işletilmelidir. Public demo'da `AI_DAILY_LIMIT_PER_IP`/`AI_DAILY_LIMIT_GLOBAL` ile günlük üretim sınırlandırılmalıdır.
 - Yayın ortamında HTTPS, veritabanı yedekleme, log saklama ve veri silme/iade prosedürleri netleştirilmeli.
 - `alembic upgrade head`, backend container başlangıcında otomatik çalışır; canlı veri taşıma gerektiren migration'lar ayrıca prova edilmelidir.
+- **Public demo giriş bilgileri gerçek, tam yetkili bir hesaptır** — herkes bu bilgilerle giriş yapıp sınıf/öğrenci silebilir, kendi şifresini değiştirip hesabı kilitleyebilir veya kendi hesabını (`DELETE /teachers/{id}`) silebilir. Bunu kabul edilebilir kılan şey, demoyu düzenli olarak sıfırlayan bir zamanlanmış görevdir — sunucunuzda crontab'a şunun gibi bir satır ekleyin (Docker Compose ile çalıştırıyorsanız):
+  ```
+  0 3 * * * cd /path/to/teacher-ai-system && docker compose -f docker-compose.prod.yml exec -T -e ALLOW_PROD_SEED=true backend python -m app.db.seed --reset >> /var/log/teacher-ai-reset.log 2>&1
+  ```
+  Bu, ziyaretçilerin sildiği/değiştirdiği/kirlettiği her şeyi (dahil demo şifresi) her gece sıfırlar — bkz. `backend/app/db/seed.py`'deki `reset_demo_data`.
+- **HTTPS için önünüze bir reverse proxy koyduğunuzda `FORWARDED_ALLOW_IPS`'i doğrulayın.** Login/kayıt/AI günlük limitleri ve audit log'daki `client_ip` hepsi "isteğin geldiği IP"ye göre çalışır (`app/core/rate_limit.py`, `app/core/audit.py`) — proxy araya girince bu, gerçek ziyaretçi IP'si yerine proxy'nin kendi adresi olur ve **tüm ziyaretçiler tek bir kimlikte toplanır** (biri diğerini kilitleyebilir). uvicorn varsayılan olarak sadece `127.0.0.1`'den gelen `X-Forwarded-For` başlığına güvenir (`docker-entrypoint.sh`) — bu proxy'nizin container'dan görünen gerçek adresi değilse (ör. host seviyesinde aaPanel/nginx, Docker'ın published port'una bağlanıyorsa genelde Docker bridge gateway IP'si görünür, `127.0.0.1` değil), `FORWARDED_ALLOW_IPS` ortam değişkenini doğru adrese ayarlamanız gerekir. `ENVIRONMENT=production` iken bu hâlâ varsayılandaysa başlangıçta bir log uyarısı görürsünüz (`warn_if_forwarded_allow_ips_are_default`, `app/core/security.py`) — üretim log'larında bunu arayın.
 
 ## Test
 
